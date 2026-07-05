@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+
+echo "Running quality checks..."
+
+pnpm turbo run typecheck lint test
