@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { statusCode, successResponse } from "@irctc/http";
+import { errorResponse, statusCode, successResponse } from "@irctc/http";
 import { HealthService } from "@services";
 import { logger } from "@irctc/logger";
 
@@ -21,10 +21,12 @@ export const readyCheck = async (
     const allHealthy = Object.values(checks).every((v) => v === true);
 
     if (!allHealthy) {
-      res.status(statusCode.serviceUnavailable).json({
-        status: "unhealthy",
-        checks,
-      });
+      res.status(statusCode.serviceUnavailable).json(
+        errorResponse("Service is unhealthy", {
+          status: "unhealthy",
+          checks,
+        }),
+      );
       return;
     }
 

@@ -313,13 +313,11 @@ export class AuthController {
     const data = req.body as ForgotPasswordRequestDto;
     const sessionId = await this.service.forgotPassword(data);
 
-    return res
-      .status(statusCode.success)
-      .json(
-        successResponse("OTP sent successfully to your registered email", {
-          sessionId,
-        }),
-      );
+    return res.status(statusCode.success).json(
+      successResponse("OTP sent successfully to your registered email", {
+        sessionId,
+      }),
+    );
   }
 
   /**

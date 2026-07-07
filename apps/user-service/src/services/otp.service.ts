@@ -38,8 +38,10 @@ export class OtpService {
     const rateKey = REDIS_KEYS.otpRate(email);
     const nextCount = await redis.incr(rateKey);
 
-    // 1. If this is the first OTP request, set an expiration for the rate limit key.
-    if (nextCount === 1) {
+    // 1. Ensure the rate-limit key always has a TTL, even if a prior
+    // crash left it without one.
+    const ttl = await redis.ttl(rateKey);
+    if (ttl === -1) {
       await redis.expire(rateKey, this.OTP_RATE_LIMIT_WINDOW);
     }
 

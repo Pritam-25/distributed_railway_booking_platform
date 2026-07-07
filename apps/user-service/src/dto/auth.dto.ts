@@ -39,7 +39,7 @@ export const RegisterSchema = z
       .string()
       .trim()
       .min(2, "Last name must be at least 2 characters long"),
-    email: z.email("Invalid email format").trim(),
+    email: z.email("Invalid email format").trim().toLowerCase(),
     password: passwordSchema,
     confirmPassword: passwordSchema,
   })
@@ -55,7 +55,7 @@ export const RegisterSchema = z
  * - Password must meet the passwordSchema requirements
  */
 export const LoginSchema = z.object({
-  email: z.email("Invalid email format").trim(),
+  email: z.email("Invalid email format").trim().toLowerCase(),
   password: passwordSchema,
 });
 
@@ -84,7 +84,7 @@ export interface AuthResponseDto {
  * Forgot Password Schema for requesting OTP
  */
 export const ForgotPasswordRequestSchema = z.object({
-  email: z.email("Invalid email format").trim(),
+  email: z.email("Invalid email format").trim().toLowerCase(),
 });
 
 /**

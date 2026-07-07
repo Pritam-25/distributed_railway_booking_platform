@@ -47,12 +47,11 @@ const withTimeout = async <T>(
 const shutdown = async (signal: NodeJS.Signals, exitCode = 0) => {
   if (isShuttingDown) return;
   isShuttingDown = true;
-
+  let hadError = false;
   logger.info(
     { module: "server" },
     `Received ${signal}, shutting down gracefully...`,
   );
-
   // 1. Stop HTTP server (drain requests)
   if (server) {
     try {
@@ -73,7 +72,6 @@ const shutdown = async (signal: NodeJS.Signals, exitCode = 0) => {
       );
     }
   }
-
   // 2. Disconnect Kafka
   try {
     await withTimeout("Kafka disconnect", disconnectKafka());
@@ -83,8 +81,8 @@ const shutdown = async (signal: NodeJS.Signals, exitCode = 0) => {
       { module: "server", err: error },
       "Error occurred while disconnecting Kafka.",
     );
+    hadError = true;
   }
-
   // 3. Disconnect Redis
   try {
     await withTimeout("Redis disconnect", disconnectRedis());
@@ -94,8 +92,8 @@ const shutdown = async (signal: NodeJS.Signals, exitCode = 0) => {
       { module: "server", err: error },
       "Error occurred while disconnecting Redis.",
     );
+    hadError = true;
   }
-
   // 4. Disconnect Prisma
   try {
     await withTimeout("Prisma disconnect", prisma.$disconnect());
@@ -105,8 +103,8 @@ const shutdown = async (signal: NodeJS.Signals, exitCode = 0) => {
       { module: "server", err: error },
       "Error occurred while disconnecting Prisma.",
     );
+    hadError = true;
   }
-
   // 5. Shutdown telemetry
   try {
     await withTimeout("Telemetry shutdown", shutdownTelemetry());
@@ -116,10 +114,17 @@ const shutdown = async (signal: NodeJS.Signals, exitCode = 0) => {
       { module: "server", err: error },
       "Error occurred while shutting down telemetry.",
     );
+    hadError = true;
   }
-
-  process.exit(exitCode);
+  process.exit(hadError ? Math.max(exitCode, 1) : exitCode);
 };
+
+process.on("SIGINT", () => {
+  void shutdown("SIGINT", 0);
+});
+process.on("SIGTERM", () => {
+  void shutdown("SIGTERM", 0);
+});
 
 const startServer = async () => {
   registerErrorMessages(ERROR_MESSAGES);
@@ -127,9 +132,9 @@ const startServer = async () => {
   logger.info({ module: "server" }, "Bootstrapping dependencies...");
 
   // Sequential initialization of dependencies to ensure ordered readiness
-  await prisma.$connect();
-  await initRedis();
-  await initKafka();
+  await withTimeout("Prisma connect", prisma.$connect());
+  await withTimeout("Redis connect", initRedis());
+  await withTimeout("Kafka connect", initKafka());
 
   logger.info({ module: "server" }, "All dependencies connected successfully.");
 
@@ -140,13 +145,6 @@ const startServer = async () => {
       { module: "server" },
       `server listening at http://localhost:${PORT} (${env.NODE_ENV})`,
     );
-  });
-
-  process.on("SIGINT", () => {
-    void shutdown("SIGINT", 0);
-  });
-  process.on("SIGTERM", () => {
-    void shutdown("SIGTERM", 0);
   });
 
   return server;

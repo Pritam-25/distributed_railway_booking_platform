@@ -69,24 +69,31 @@ const probeRedis = async (): Promise<boolean> => {
  * even when `connect()` failed or the broker has since become unreachable.
  */
 
-const probeKafka = async (): Promise<boolean> => {
-  const probe = async (): Promise<boolean> => {
-    try {
-      const admin = kafka.admin();
-      try {
-        await admin.connect();
-        await admin.listTopics();
-        return true;
-      } finally {
-        await admin.disconnect().catch(() => {
-          // Disconnect failures are non-fatal for a readiness probe.
-        });
-      }
-    } catch (err) {
-      logger.warn({ module: "health", err }, "Kafka readiness probe failed");
-      return false;
+let activeKafkaProbe: Promise<boolean> | null = null;
+
+const runKafkaProbe = async (): Promise<boolean> => {
+  let admin = null;
+  try {
+    admin = kafka.admin();
+    await admin.connect();
+    await admin.listTopics();
+    return true;
+  } catch (err) {
+    logger.warn({ module: "health", err }, "Kafka readiness probe failed");
+    return false;
+  } finally {
+    if (admin) {
+      await admin.disconnect().catch(() => {
+        // Disconnect failures are non-fatal for a readiness probe.
+      });
     }
-  };
+  }
+};
+
+const probeKafka = async (): Promise<boolean> => {
+  activeKafkaProbe ??= runKafkaProbe().finally(() => {
+    activeKafkaProbe = null;
+  });
 
   let timeoutHandle: NodeJS.Timeout | undefined;
   const timeout = new Promise<boolean>((resolve) => {
@@ -97,7 +104,7 @@ const probeKafka = async (): Promise<boolean> => {
   });
 
   try {
-    return await Promise.race([probe(), timeout]);
+    return await Promise.race([activeKafkaProbe, timeout]);
   } finally {
     if (timeoutHandle) clearTimeout(timeoutHandle);
   }

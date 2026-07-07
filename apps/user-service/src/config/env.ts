@@ -19,7 +19,7 @@ export const env = createEnv({
       },
     ),
     CORS_ORIGINS: z
-      .url()
+      .string()
       .default("http://localhost:3000")
       .transform((value) =>
         value
