@@ -1,0 +1,64 @@
+name: irctc-dev
+
+services:
+  # --- Messaging Layer (KRaft Mode) ---
+  kafka:
+    image: confluentinc/cp-kafka:7.8.0
+    container_name: irctc-kafka-dev
+    restart: unless-stopped
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@irctc-kafka-dev:9093"
+      KAFKA_LISTENERS: "EXTERNAL://:9092,INTERNAL://:29092,CONTROLLER://:9093"
+      KAFKA_ADVERTISED_LISTENERS: "EXTERNAL://localhost:9092,INTERNAL://irctc-kafka-dev:29092"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "INTERNAL"
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    volumes:
+      - kafka_dev_data:/var/lib/kafka/data
+    networks:
+      - irctc-dev-network
+
+  kafka-ui:
+    image: ghcr.io/kafbat/kafka-ui:v1.5.0
+    container_name: irctc-kafka-ui-dev
+    restart: unless-stopped
+    depends_on:
+      - kafka
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: irctc-dev-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: irctc-kafka-dev:29092
+    networks:
+      - irctc-dev-network
+
+  # --- Topic Initialization ---
+  kafka-init:
+    build:
+      context: .
+      dockerfile: infra/kafka-init/Dockerfile
+    container_name: irctc-kafka-init-dev
+    depends_on:
+      - kafka
+    restart: "no"
+    networks:
+      - irctc-dev-network
+    environment:
+      KAFKA_BROKERS: irctc-kafka-dev:29092
+
+networks:
+  irctc-dev-network:
+    driver: bridge
+
+volumes:
+  kafka_dev_data:
