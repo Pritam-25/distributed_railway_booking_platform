@@ -1,4 +1,5 @@
 import type { AuthService } from "@services";
+import type { RefreshTokenPayload } from "@middleware";
 import type {
   LoginRequestDto,
   RegisterRequestDto,
@@ -11,6 +12,7 @@ import type { Response, Request } from "express";
 import { getDeviceFingerprint } from "@utils";
 import { ApiError } from "@irctc/errors";
 import { ERROR_CODES } from "@utils/errors";
+import jwt from "jsonwebtoken";
 
 /**
  * Controller handling authentication-related HTTP requests.
@@ -145,5 +147,159 @@ export class AuthController {
     res
       .status(statusCode.success)
       .json(successResponse("Login successful", authResponse.user));
+  }
+  /*
+   * Refreshes the access token using the refresh token cookie.
+   */
+  async refresh(req: Request, res: Response) {
+    const refreshToken = req.cookies[COOKIE_NAMES.REFRESH_TOKEN];
+
+    if (!refreshToken) {
+      throw new ApiError(
+        statusCode.unauthorized,
+        ERROR_CODES.REFRESH_TOKEN_MISSING,
+      );
+    }
+
+    const fingerprint = getDeviceFingerprint(req);
+    const authResponse = await this.service.refresh(refreshToken, fingerprint);
+
+    this.setCookie(
+      res,
+      COOKIE_NAMES.ACCESS_TOKEN,
+      authResponse.tokens.accessToken,
+      COOKIE_MAX_AGE.ACCESS_TOKEN,
+    );
+    this.setCookie(
+      res,
+      COOKIE_NAMES.REFRESH_TOKEN,
+      authResponse.tokens.refreshToken,
+      COOKIE_MAX_AGE.REFRESH_TOKEN,
+    );
+
+    return res
+      .status(statusCode.success)
+      .json(
+        successResponse("Tokens refreshed successfully", authResponse.user),
+      );
+  }
+
+  /**
+   * Retrieves all active sessions for the authenticated user.
+   */
+  async getSessions(req: Request, res: Response) {
+    const userId = req.user!.userId;
+    const sessions = await this.service.getSessions(userId);
+
+    return res
+      .status(statusCode.success)
+      .json(successResponse("Active sessions retrieved", sessions));
+  }
+
+  /**
+   * Revokes a specific session by ID.
+   */
+  async revokeSession(req: Request, res: Response) {
+    const { sessionId } = req.params;
+    const userId = req.user!.userId;
+
+    if (!sessionId) {
+      throw new ApiError(
+        statusCode.badRequest,
+        ERROR_CODES.SESSION_ID_REQUIRED,
+      );
+    }
+
+    await this.service.revokeSession(sessionId, userId);
+
+    return res
+      .status(statusCode.success)
+      .json(successResponse("Session revoked successfully", {}));
+  }
+
+  /**
+   * Logs out the current device.
+   */
+  async logout(req: Request, res: Response) {
+    const refreshToken = req.cookies[COOKIE_NAMES.REFRESH_TOKEN];
+
+    if (!refreshToken) {
+      throw new ApiError(
+        statusCode.unauthorized,
+        ERROR_CODES.REFRESH_TOKEN_MISSING,
+      );
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(refreshToken, env.JWT_SECRET) as RefreshTokenPayload;
+    } catch (error) {
+      throw new ApiError(
+        statusCode.unauthorized,
+        ERROR_CODES.REFRESH_TOKEN_INVALID,
+        "Provided refresh token is invalid or has expired",
+        error,
+      );
+    }
+
+    const { sub: userId, sessionId, type } = decoded;
+    if (type !== "refresh" || !userId || !sessionId) {
+      throw new ApiError(
+        statusCode.unauthorized,
+        ERROR_CODES.REFRESH_TOKEN_INVALID,
+      );
+    }
+
+    await this.service.logout(sessionId, userId);
+
+    res.clearCookie(COOKIE_NAMES.ACCESS_TOKEN, { path: "/" });
+    res.clearCookie(COOKIE_NAMES.REFRESH_TOKEN, { path: "/" });
+
+    return res
+      .status(statusCode.success)
+      .json(successResponse("Logged out successfully", {}));
+  }
+
+  /**
+   * Logs out all devices for the user.
+   */
+  async logoutAll(req: Request, res: Response) {
+    const refreshToken = req.cookies[COOKIE_NAMES.REFRESH_TOKEN];
+
+    if (!refreshToken) {
+      throw new ApiError(
+        statusCode.unauthorized,
+        ERROR_CODES.REFRESH_TOKEN_INVALID,
+      );
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(refreshToken, env.JWT_SECRET) as RefreshTokenPayload;
+    } catch (error) {
+      throw new ApiError(
+        statusCode.unauthorized,
+        ERROR_CODES.REFRESH_TOKEN_INVALID,
+        "Provided refresh token is invalid or has expired",
+        error,
+      );
+    }
+
+    const { sub: userId, type } = decoded;
+    if (type !== "refresh" || !userId) {
+      throw new ApiError(
+        statusCode.unauthorized,
+        ERROR_CODES.REFRESH_TOKEN_INVALID,
+      );
+    }
+
+    await this.service.logoutAll(userId);
+
+    res.clearCookie(COOKIE_NAMES.ACCESS_TOKEN, { path: "/" });
+    res.clearCookie(COOKIE_NAMES.REFRESH_TOKEN, { path: "/" });
+
+    return res
+      .status(statusCode.success)
+      .json(successResponse("Logged out from all devices", {}));
   }
 }

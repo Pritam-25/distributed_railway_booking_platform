@@ -2,7 +2,6 @@ import type {
   AuthResponseDto,
   LoginRequestDto,
   RegisterRequestDto,
-  UserResponseDto,
   VerifyOtpRequestDto,
 } from "@dto";
 import type { UserRepository } from "@repository";
@@ -22,21 +21,8 @@ import type {
 } from "@publishers";
 import { ERROR_CODES as COMMON_ERROR_CODES, ApiError } from "@irctc/errors";
 import { AUTH_DURATIONS, REDIS_KEYS } from "@utils/constants";
-import { UserMapper } from "@mappers";
 import { AuthMapper } from "../mappers/auth.mapper.js";
-
-export interface AccessTokenPayload {
-  sub: string;
-  email: string;
-  sessionId: string;
-  type: "access";
-}
-
-export interface RefreshTokenPayload {
-  sub: string;
-  sessionId: string;
-  type: "refresh";
-}
+import type { RefreshTokenPayload } from "@middleware";
 
 /**
  * Service handling authentication-related business logic, including registration flows,
@@ -369,5 +355,236 @@ export class AuthService {
     }
 
     return authResponse;
+  }
+
+  /**
+   * Issues a new access token and refresh token for an existing session.
+   *
+   * Security protections:
+   * - Session existence validation
+   * - Device fingerprint verification
+   * - Refresh token rotation
+   * - Refresh token reuse detection
+   *
+   * If refresh token reuse is detected, all active sessions belonging to
+   * the user are revoked as a defensive security measure.
+   *
+   * @param refreshToken Existing refresh token.
+   * @param fingerprint Device fingerprint associated with the session.
+   * @returns Newly issued access and refresh tokens.
+   *
+   * @throws {ApiError}
+   * - INVALID_REFRESH_TOKEN
+   * - SESSION_EXPIRED_OR_REVOKED
+   * - DEVICE_FINGERPRINT_MISMATCH
+   */
+  async refresh(
+    refreshToken: string,
+    fingerprint: string,
+  ): Promise<AuthResponseDto> {
+    try {
+      const decoded = jwt.verify(
+        refreshToken,
+        env.JWT_SECRET,
+      ) as RefreshTokenPayload;
+      const { sub: userId, sessionId } = decoded;
+
+      if (decoded.type !== "refresh") {
+        throw new ApiError(
+          statusCode.unauthorized,
+          ERROR_CODES.INVALID_TOKEN_TYPE,
+        );
+      }
+
+      // 1. Load session from Redis
+      const sessionKey = REDIS_KEYS.authSession(sessionId);
+      const sessionJson = await redis.get(sessionKey);
+      if (!sessionJson) {
+        logger.warn(
+          { module: "auth", sessionId },
+          "Refresh token rotation failed: Session not found",
+        );
+        throw new ApiError(
+          statusCode.unauthorized,
+          ERROR_CODES.SESSION_EXPIRED_OR_REVOKED,
+        );
+      }
+
+      const session = JSON.parse(sessionJson);
+
+      // 2. Verify Fingerprint
+      if (session.fingerprint !== fingerprint) {
+        logger.warn(
+          { module: "auth", userId },
+          "Fingerprint mismatch detected",
+        );
+        await this.logout(sessionId, userId);
+        throw new ApiError(
+          statusCode.unauthorized,
+          ERROR_CODES.DEVICE_FINGERPRINT_MISMATCH,
+        );
+      }
+
+      // 3. Hash incoming refresh token and compare (Reuse Detection)
+      const incomingHash = createHash("sha256")
+        .update(refreshToken)
+        .digest("hex");
+
+      if (session.refreshTokenHash !== incomingHash) {
+        logger.error(
+          { module: "auth", userId },
+          "Refresh token reuse detected! Revoking all sessions.",
+        );
+        await this.logoutAll(userId);
+        throw new ApiError(
+          statusCode.unauthorized,
+          ERROR_CODES.REFRESH_TOKEN_INVALID,
+        );
+      }
+
+      // 4. Generate NEW tokens (Rotation)
+      const user = await this.repo.findById(userId);
+      if (!user)
+        throw new ApiError(statusCode.notFound, ERROR_CODES.USER_NOT_FOUND);
+
+      const accessToken = this.generateAccessToken(
+        user.id,
+        sessionId,
+        user.email,
+      );
+      const newRefreshToken = this.generateRefreshToken(user.id, sessionId);
+      const newRefreshTokenHash = createHash("sha256")
+        .update(newRefreshToken)
+        .digest("hex");
+
+      // 5. Update session in Redis
+      session.refreshTokenHash = newRefreshTokenHash;
+      session.lastUsedAt = new Date().toISOString();
+
+      await redis.set(
+        sessionKey,
+        JSON.stringify(session),
+        "EX",
+        AUTH_DURATIONS.SESSION_TTL_SECONDS,
+      );
+
+      logger.info({ module: "auth", userId }, "Token refreshed successfully");
+      return AuthMapper.toAuthResponseDto(user, accessToken, newRefreshToken);
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      throw new ApiError(
+        statusCode.unauthorized,
+        ERROR_CODES.INVALID_REFRESH_TOKEN,
+      );
+    }
+  }
+
+  /**
+   * Retrieves all active sessions belonging to a user.
+   *
+   * Sensitive fields such as refresh token hashes are excluded
+   * from the returned payload.
+   *
+   * @param userId User identifier.
+   * @returns Active session metadata.
+   */
+  async getSessions(userId: string): Promise<any[]> {
+    const sessionsKey = REDIS_KEYS.userSessions(userId);
+    const sessionIds = await redis.smembers(sessionsKey);
+
+    const sessions = await Promise.all(
+      sessionIds.map(async (id) => {
+        const data = await redis.get(REDIS_KEYS.authSession(id));
+        if (!data) return null;
+        const parsed = JSON.parse(data);
+        // exclude sensitive data from response (refresh token hash)
+        const { refreshTokenHash, ...safeSession } = parsed;
+        return { sessionId: id, ...safeSession };
+      }),
+    );
+
+    return sessions.filter(Boolean);
+  }
+
+  /**
+   * Revokes a specific session owned by the user.
+   *
+   * Ownership validation is performed before deletion to prevent
+   * one user from revoking another user's session.
+   *
+   * @param sessionId Session identifier.
+   * @param userId Current authenticated user.
+   *
+   * @throws {ApiError}
+   * - SESSION_OWNERSHIP_INVALID
+   */
+  async revokeSession(sessionId: string, userId: string): Promise<void> {
+    const sessionKey = REDIS_KEYS.authSession(sessionId);
+    const sessionJson = await redis.get(sessionKey);
+
+    if (!sessionJson) return;
+
+    const session = JSON.parse(sessionJson);
+    if (session.userId !== userId) {
+      logger.warn(
+        { module: "auth", userId, ownerId: session.userId },
+        "Unauthorized session revocation attempt",
+      );
+      throw new ApiError(
+        statusCode.forbidden,
+        ERROR_CODES.SESSION_OWNERSHIP_INVALID,
+      );
+    }
+
+    await redis.del(sessionKey);
+    await redis.srem(REDIS_KEYS.userSessions(userId), sessionId);
+    logger.info({ module: "auth", userId }, "Session revoked");
+  }
+
+  /**
+   * Logs out the current device by removing the associated session.
+   *
+   * Both the session record and the user's session index
+   * are cleaned up from Redis.
+   *
+   * @param sessionId Session identifier.
+   * @param userId User identifier.
+   */
+  async logout(sessionId: string, userId: string): Promise<void> {
+    logger.info({ module: "auth", userId }, "Logging out current device");
+
+    await redis.del(REDIS_KEYS.authSession(sessionId));
+    await redis.srem(REDIS_KEYS.userSessions(userId), sessionId);
+
+    logger.info({ module: "auth", userId }, "Session deleted successfully");
+  }
+
+  /**
+   * Revokes every active session belonging to the user.
+   *
+   * This operation is used for:
+   * - Explicit logout-all requests
+   * - Refresh token reuse detection
+   * - Security incident response
+   *
+   * @param userId User identifier.
+   */
+  async logoutAll(userId: string): Promise<void> {
+    logger.info({ module: "auth", userId }, "Logging out all devices");
+
+    const sessionsKey = REDIS_KEYS.userSessions(userId);
+    const sessions = await redis.smembers(sessionsKey);
+
+    if (sessions.length > 0) {
+      const sessionKeys = sessions.map((id) => REDIS_KEYS.authSession(id));
+      await redis.del(...sessionKeys);
+    }
+
+    await redis.del(sessionsKey);
+
+    logger.info(
+      { module: "auth", userId, sessionCount: sessions.length },
+      "All user sessions deleted",
+    );
   }
 }
