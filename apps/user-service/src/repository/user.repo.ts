@@ -47,4 +47,17 @@ export class UserRepository {
       },
     });
   }
+
+  /**
+   * Updates an existing user record.
+   * @param id - User ID to update.
+   * @param data - The fields to update.
+   * @returns The updated User record.
+   */
+  async update(id: string, data: Prisma.UserUpdateInput): Promise<User> {
+    return this.prisma.user.update({
+      where: { id },
+      data,
+    });
+  }
 }

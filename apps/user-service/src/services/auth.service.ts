@@ -3,6 +3,9 @@ import type {
   LoginRequestDto,
   RegisterRequestDto,
   VerifyOtpRequestDto,
+  ForgotPasswordRequestDto,
+  VerifyResetOtpRequestDto,
+  ResetPasswordRequestDto,
 } from "@dto";
 import type { UserRepository } from "@repository";
 import { logger } from "@irctc/logger";
@@ -585,6 +588,178 @@ export class AuthService {
     logger.info(
       { module: "auth", userId, sessionCount: sessions.length },
       "All user sessions deleted",
+    );
+  }
+
+  /**
+   * Initiates the forgot password workflow.
+   *
+   * Workflow:
+   * 1. Validate that the email is associated with an existing user.
+   * 2. Generate a random 6-digit OTP.
+   * 3. Store the OTP in Redis via OtpService (rate-limited).
+   * 4. Save the forgot password email session in Redis.
+   * 5. Publish an OTPRequestedV1 event to Kafka for async dispatch.
+   *
+   * @param data - Forgot password request DTO containing the user's email.
+   * @returns A promise resolving to the password reset session ID.
+   * @throws {ApiError}
+   * - USER_NOT_FOUND
+   * - KAFKA_PUBLISH_FAILED
+   */
+  async forgotPassword(data: ForgotPasswordRequestDto): Promise<string> {
+    const user = await this.repo.findUserByEmail(data.email);
+    if (!user) {
+      logger.warn(
+        { module: "auth" },
+        "Forgot password request failed: User not found",
+      );
+      throw new ApiError(statusCode.notFound, ERROR_CODES.USER_NOT_FOUND);
+    }
+
+    const otp = generateOtp();
+    const sessionId = await OtpService.storeOtp(data.email, otp);
+
+    // Save the email associated with the session in Redis
+    await redis.set(
+      REDIS_KEYS.forgotPasswordSession(sessionId),
+      data.email,
+      "EX",
+      env.OTP_TTL,
+    );
+
+    const event: OTPRequestedV1Type = {
+      eventId: randomUUID(),
+      email: data.email,
+      otp,
+      createdAt: new Date(),
+    };
+
+    try {
+      await this.otpPublisher.publishOtpRequested(event);
+    } catch (err) {
+      logger.error(
+        { module: "auth", err, eventId: event.eventId },
+        "Forgot password OTP publish failed; rolling back Redis state",
+      );
+      await redis.del(
+        REDIS_KEYS.otp(sessionId),
+        REDIS_KEYS.forgotPasswordSession(sessionId),
+      );
+      throw new ApiError(
+        statusCode.badGateway,
+        COMMON_ERROR_CODES.KAFKA_PUBLISH_FAILED,
+        `Kafka Published Failed for Forgot Password OTP Delivery`,
+        { cause: err },
+      );
+    }
+
+    return sessionId;
+  }
+
+  /**
+   * Verifies the OTP sent for password reset and issues a temporary token.
+   *
+   * Workflow:
+   * 1. Retrieve the email linked to the session from Redis.
+   * 2. Verify the OTP using OtpService.
+   * 3. Issue a short-lived random password reset token (10 minutes).
+   * 4. Clean up the verification OTP and session from Redis.
+   *
+   * @param data - The session ID and OTP.
+   * @returns A promise resolving to the password reset token.
+   * @throws {ApiError}
+   * - OTP_SESSION_NOT_FOUND
+   * - OTP_INVALID or OTP_LOCKED
+   */
+  async verifyResetOtp(data: VerifyResetOtpRequestDto): Promise<string> {
+    const email = await redis.get(
+      REDIS_KEYS.forgotPasswordSession(data.sessionId),
+    );
+    if (!email) {
+      logger.warn(
+        { module: "auth", sessionId: data.sessionId },
+        "OTP verification failed: forgot password session not found or expired",
+      );
+      throw new ApiError(
+        statusCode.unauthorized,
+        ERROR_CODES.OTP_SESSION_NOT_FOUND,
+        "Forgot password session not found or expired",
+      );
+    }
+
+    // Verify OTP (throws if invalid or locked due to excess attempts)
+    await OtpService.verifyOtp(data.sessionId, data.otp);
+
+    // Generate short-lived password reset token
+    const token = randomUUID();
+    await redis.set(
+      REDIS_KEYS.passwordResetToken(token),
+      email,
+      "EX",
+      AUTH_DURATIONS.PASSWORD_RESET_TOKEN_TTL_SECONDS,
+    );
+
+    // Clean up OTP session data since OTP has been verified
+    await redis.del(
+      REDIS_KEYS.otp(data.sessionId),
+      REDIS_KEYS.forgotPasswordSession(data.sessionId),
+    );
+
+    logger.info(
+      { module: "auth", sessionId: data.sessionId },
+      "OTP verified, reset token issued",
+    );
+    return token;
+  }
+
+  /**
+   * Completes the forgot password workflow by resetting the user's password.
+   *
+   * Workflow:
+   * 1. Retrieve the email linked to the password reset token from Redis.
+   * 2. Hash the new password and update the database record.
+   * 3. Revoke all active sessions for the user as a security measure.
+   * 4. Clean up the password reset token from Redis.
+   *
+   * @param data - Reset password request DTO containing the reset token and new password.
+   * @throws {ApiError}
+   * - OTP_SESSION_NOT_FOUND
+   * - USER_NOT_FOUND
+   */
+  async resetPassword(data: ResetPasswordRequestDto): Promise<void> {
+    const email = await redis.get(
+      REDIS_KEYS.passwordResetToken(data.passwordResetToken),
+    );
+    if (!email) {
+      logger.warn(
+        { module: "auth", token: data.passwordResetToken },
+        "Password reset failed: reset token not found or expired",
+      );
+      throw new ApiError(
+        statusCode.unauthorized,
+        ERROR_CODES.OTP_SESSION_NOT_FOUND,
+        "Password reset token is invalid or has expired",
+      );
+    }
+
+    const user = await this.repo.findUserByEmail(email);
+    if (!user) {
+      throw new ApiError(statusCode.notFound, ERROR_CODES.USER_NOT_FOUND);
+    }
+
+    const hashedPassword = await bcrypt.hash(data.password, 10);
+    await this.repo.update(user.id, { password: hashedPassword });
+
+    // Revoke all existing active sessions for security
+    await this.logoutAll(user.id);
+
+    // Clean up reset token
+    await redis.del(REDIS_KEYS.passwordResetToken(data.passwordResetToken));
+
+    logger.info(
+      { module: "auth", userId: user.id },
+      "Password reset successfully and active sessions revoked",
     );
   }
 }

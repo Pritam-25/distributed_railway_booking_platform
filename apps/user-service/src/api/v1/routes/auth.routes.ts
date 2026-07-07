@@ -1,5 +1,12 @@
 import { authController } from "@container";
-import { LoginSchema, RegisterSchema, VerifyOtpRequestSchema } from "@dto";
+import {
+  LoginSchema,
+  RegisterSchema,
+  VerifyOtpRequestSchema,
+  ForgotPasswordRequestSchema,
+  VerifyResetOtpRequestSchema,
+  ResetPasswordRequestSchema,
+} from "@dto";
 import { validateSchema, asyncHandler } from "@irctc/middleware";
 import { Router } from "express";
 import { sessionMiddleware, requireUser } from "@middleware";
@@ -91,6 +98,36 @@ router.post(
   requireUser,
   sessionMiddleware,
   asyncHandler((req, res) => authController.logoutAll(req, res)),
+);
+
+/**
+ * POST /api/v1/auth/forgot-password
+ * Request a password reset OTP using registered email
+ */
+router.post(
+  "/forgot-password",
+  validateSchema(ForgotPasswordRequestSchema),
+  asyncHandler((req, res) => authController.forgotPassword(req, res)),
+);
+
+/**
+ * POST /api/v1/auth/verify-reset-otp
+ * Verify password reset OTP and obtain reset token
+ */
+router.post(
+  "/verify-reset-otp",
+  validateSchema(VerifyResetOtpRequestSchema),
+  asyncHandler((req, res) => authController.verifyResetOtp(req, res)),
+);
+
+/**
+ * POST /api/v1/auth/reset-password
+ * Reset user password with verified reset token
+ */
+router.post(
+  "/reset-password",
+  validateSchema(ResetPasswordRequestSchema),
+  asyncHandler((req, res) => authController.resetPassword(req, res)),
 );
 
 export default router;

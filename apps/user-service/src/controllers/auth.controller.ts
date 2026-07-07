@@ -4,6 +4,9 @@ import type {
   LoginRequestDto,
   RegisterRequestDto,
   VerifyOtpRequestDto,
+  ForgotPasswordRequestDto,
+  VerifyResetOtpRequestDto,
+  ResetPasswordRequestDto,
 } from "@dto";
 import { env } from "@config";
 import { COOKIE_MAX_AGE, COOKIE_NAMES } from "@utils/constants";
@@ -301,5 +304,56 @@ export class AuthController {
     return res
       .status(statusCode.success)
       .json(successResponse("Logged out from all devices", {}));
+  }
+
+  /**
+   * Initiates the password reset workflow.
+   */
+  async forgotPassword(req: Request, res: Response) {
+    const data = req.body as ForgotPasswordRequestDto;
+    const sessionId = await this.service.forgotPassword(data);
+
+    return res
+      .status(statusCode.success)
+      .json(
+        successResponse("OTP sent successfully to your registered email", {
+          sessionId,
+        }),
+      );
+  }
+
+  /**
+   * Verifies the OTP and issues a short-lived password reset token.
+   */
+  async verifyResetOtp(req: Request, res: Response) {
+    const data = req.body as VerifyResetOtpRequestDto;
+    const passwordResetToken = await this.service.verifyResetOtp(data);
+
+    return res
+      .status(statusCode.success)
+      .json(
+        successResponse("OTP verified successfully", { passwordResetToken }),
+      );
+  }
+
+  /**
+   * Resets the user's password using a verified password reset token.
+   */
+  async resetPassword(req: Request, res: Response) {
+    const data = req.body as ResetPasswordRequestDto;
+    await this.service.resetPassword(data);
+
+    // Clear authentication cookies upon successful password reset
+    res.clearCookie(COOKIE_NAMES.ACCESS_TOKEN, { path: "/" });
+    res.clearCookie(COOKIE_NAMES.REFRESH_TOKEN, { path: "/" });
+
+    return res
+      .status(statusCode.success)
+      .json(
+        successResponse(
+          "Password reset successfully. Please login with your new credentials.",
+          {},
+        ),
+      );
   }
 }

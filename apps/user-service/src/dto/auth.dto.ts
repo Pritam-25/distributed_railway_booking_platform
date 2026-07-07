@@ -79,3 +79,42 @@ export interface AuthResponseDto {
     refreshToken: string;
   };
 }
+
+/**
+ * Forgot Password Schema for requesting OTP
+ */
+export const ForgotPasswordRequestSchema = z.object({
+  email: z.email("Invalid email format").trim(),
+});
+
+/**
+ * Schema to verify OTP submitted during the password reset workflow.
+ */
+export const VerifyResetOtpRequestSchema = z.object({
+  sessionId: z.uuid("Invalid session identifier"),
+  otp: z.string().regex(/^\d{6}$/, "OTP must be a 6-digit number"),
+});
+
+/**
+ * Reset Password Schema for resetting user password using a verified token
+ */
+export const ResetPasswordRequestSchema = z
+  .object({
+    passwordResetToken: z.uuid("Invalid password reset token"),
+    password: passwordSchema,
+    confirmPassword: passwordSchema,
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
+
+export type ForgotPasswordRequestDto = z.infer<
+  typeof ForgotPasswordRequestSchema
+>;
+export type VerifyResetOtpRequestDto = z.infer<
+  typeof VerifyResetOtpRequestSchema
+>;
+export type ResetPasswordRequestDto = z.infer<
+  typeof ResetPasswordRequestSchema
+>;

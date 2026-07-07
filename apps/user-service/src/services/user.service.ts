@@ -1,4 +1,5 @@
 import type { UserRepository } from "@repository";
+import type { UserUpdateDto } from "@dto";
 
 /**
  * Service handling business logic related to Users.
@@ -20,11 +21,19 @@ export class UserService {
   }
 
   /**
-   * Retrieves a user by their email address.
-   * @param email - The email address of the user.
-   * @returns The user object if found, or null otherwise.
+   * Updates a user's profile.
+   * @param id - The ID of the user to update.
+   * @param update - The data to update the user with.
+   * @returns The updated user object.
    */
-  async getUserByEmail(email: string) {
-    return this.repo.findUserByEmail(email);
+  async updateProfile(id: string, update: UserUpdateDto) {
+    const updateData: { firstName?: string; lastName?: string } = {};
+    if (update.firstName !== undefined) {
+      updateData.firstName = update.firstName;
+    }
+    if (update.lastName !== undefined) {
+      updateData.lastName = update.lastName;
+    }
+    return this.repo.update(id, updateData);
   }
 }
