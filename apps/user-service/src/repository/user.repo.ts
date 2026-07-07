@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@generated/prisma/client.js";
+import type { Prisma, PrismaClient, User } from "@generated/prisma/client.js";
 
 /**
  * Repository handling user-related database queries and persistence.
@@ -29,6 +29,22 @@ export class UserRepository {
   async findById(id: string) {
     return this.prisma.user.findUnique({
       where: { id },
+    });
+  }
+
+  /**
+   * Creates a new user.
+   * @param data - Prisma UserCreateInput
+   * @returns The created User record
+   */
+  async createUser(data: Prisma.UserCreateInput): Promise<User> {
+    return this.prisma.user.create({
+      data: {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        password: data.password,
+      },
     });
   }
 }
