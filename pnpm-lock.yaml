@@ -79,16 +79,25 @@ importers:
       "@types/node":
         specifier: ^22.19.21
         version: 22.20.0
+      bcryptjs:
+        specifier: ^3.0.3
+        version: 3.0.3
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
       helmet:
         specifier: ^8.2.0
         version: 8.2.0
+      otp-generator:
+        specifier: ^4.0.1
+        version: 4.0.1
       zod:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      "@types/otp-generator":
+        specifier: ^4.0.2
+        version: 4.0.2
       express:
         specifier: ^5.2.1
         version: 5.2.1
@@ -2026,6 +2035,12 @@ packages:
         integrity: sha512-kK1eBS/Adeyis+3OlBDMeQQuasIDLUYXsi2T15ccNJ0iyUpQ4xDF7svFu3+bGVrI0CMBUclPciz+lsQR3JX3TQ==,
       }
 
+  "@types/otp-generator@4.0.2":
+    resolution:
+      {
+        integrity: sha512-9+qqWzuFb332hXPbLgjUyOXlbcaTQkmkmqQjTduvNuOmPV5fW+iLv70JsVEhdUy0DWi4kY34++HDCaWl6N0AYg==,
+      }
+
   "@types/pg-pool@2.0.7":
     resolution:
       {
@@ -2353,6 +2368,13 @@ packages:
       {
         integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==,
       }
+
+  bcryptjs@3.0.3:
+    resolution:
+      {
+        integrity: sha512-GlF5wPWnSa/X5LKM1o0wz0suXIINz1iHRLvTS+sLyi7XPbe5ycmYI3DlZqVGZZtDgl4DmasFg7gOB3JYbphV5g==,
+      }
+    hasBin: true
 
   better-result@2.9.2:
     resolution:
@@ -4296,6 +4318,13 @@ packages:
         integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==,
       }
     engines: { node: ">= 0.8.0" }
+
+  otp-generator@4.0.1:
+    resolution:
+      {
+        integrity: sha512-2TJ52vUftA0+J3eque4wwVtpaL4/NdIXDL0gFWFJFVUAZwAN7+9tltMhL7GCNYaHJtuONoier8Hayyj4HLbSag==,
+      }
+    engines: { node: ">=14.10.0" }
 
   own-keys@1.0.1:
     resolution:
@@ -6840,6 +6869,8 @@ snapshots:
     dependencies:
       "@types/node": 25.9.4
 
+  "@types/otp-generator@4.0.2": {}
+
   "@types/pg-pool@2.0.7":
     dependencies:
       "@types/pg": 8.15.6
@@ -7092,6 +7123,8 @@ snapshots:
   aws-ssl-profiles@1.1.2: {}
 
   balanced-match@1.0.2: {}
+
+  bcryptjs@3.0.3: {}
 
   better-result@2.9.2: {}
 
@@ -8338,6 +8371,8 @@ snapshots:
       prelude-ls: 1.2.1
       type-check: 0.4.0
       word-wrap: 1.2.5
+
+  otp-generator@4.0.1: {}
 
   own-keys@1.0.1:
     dependencies:

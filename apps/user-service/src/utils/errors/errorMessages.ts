@@ -26,6 +26,4 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
     "Cannot revoke another user's session.",
   [ERROR_CODES.DEVICE_FINGERPRINT_MISMATCH]:
     "Device mismatch detected. Please login again.",
-  [ERROR_CODES.KAFKA_PUBLISH_FAILED]:
-    "Failed to enqueue OTP delivery. Please try again.",
 };

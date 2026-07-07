@@ -1,8 +1,9 @@
-import { AuthRepository, UserRepository } from "@repository";
+import { UserRepository } from "@repository";
 import { AuthService, UserService } from "@services";
 import { AuthController, UserController } from "@controllers";
 import { prisma, getProducerSync } from "@config";
 import { logger } from "@irctc/logger";
+import { OtpEventPublisher } from "@publishers";
 
 /**
  * Dependency injection container for user-service.
@@ -20,14 +21,14 @@ export class UserContainer {
 
   private constructor() {
     // 1. Repositories
-    const authRepository = new AuthRepository(prisma);
     const userRepository = new UserRepository(prisma);
 
     // 2. Event Publishers
     const producer = getProducerSync();
+    const otpPublisher = new OtpEventPublisher(producer);
 
     // 3. Services
-    const authService = new AuthService(authRepository);
+    const authService = new AuthService(userRepository, otpPublisher);
     const userService = new UserService(userRepository);
 
     // 4. Controllers
