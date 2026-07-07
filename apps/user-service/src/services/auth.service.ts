@@ -216,19 +216,21 @@ export class AuthService {
       ).toISOString(), // 30 days
     };
 
-    await redis.set(
-      REDIS_KEYS.authSession(sessionId),
-      JSON.stringify(sessionData),
-      "EX",
-      AUTH_DURATIONS.SESSION_TTL_SECONDS, // 30 days in seconds
-    );
-
-    // Track session for this user to support logout-all
-    await redis.sadd(REDIS_KEYS.userSessions(user.id), sessionId);
-    await redis.expire(
-      REDIS_KEYS.userSessions(user.id),
-      AUTH_DURATIONS.SESSION_TTL_SECONDS,
-    );
+    // Store session record and track user sessions index atomically
+    await redis
+      .multi()
+      .set(
+        REDIS_KEYS.authSession(sessionId),
+        JSON.stringify(sessionData),
+        "EX",
+        AUTH_DURATIONS.SESSION_TTL_SECONDS,
+      )
+      .sadd(REDIS_KEYS.userSessions(user.id), sessionId)
+      .expire(
+        REDIS_KEYS.userSessions(user.id),
+        AUTH_DURATIONS.SESSION_TTL_SECONDS,
+      )
+      .exec();
 
     logger.info(
       { module: "auth", userId: user.id },
