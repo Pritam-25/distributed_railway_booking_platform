@@ -21,7 +21,9 @@ async function run() {
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      logger.info(`Connecting to Kafka broker (attempt ${attempt}/${maxAttempts})...`);
+      logger.info(
+        `Connecting to Kafka broker (attempt ${attempt}/${maxAttempts})...`,
+      );
       await admin.connect();
       connected = true;
       break;
@@ -29,7 +31,7 @@ async function run() {
       const message = err instanceof Error ? err.message : String(err);
       logger.warn(
         { err: message },
-        `Kafka not ready yet, retrying in ${attemptDelayMs / 1000}s...`
+        `Kafka not ready yet, retrying in ${attemptDelayMs / 1000}s...`,
       );
       await new Promise((resolve) => setTimeout(resolve, attemptDelayMs));
     }
@@ -43,10 +45,13 @@ async function run() {
   try {
     // List existing topics
     const existingTopics = await admin.listTopics();
-    logger.info({ count: existingTopics.length }, "Discovered existing Kafka topics");
+    logger.info(
+      { count: existingTopics.length },
+      "Discovered existing Kafka topics",
+    );
 
     const topicsToCreate = TOPIC_DEFINITIONS.filter(
-      (def) => !existingTopics.includes(def.name)
+      (def) => !existingTopics.includes(def.name),
     );
 
     if (topicsToCreate.length === 0) {
@@ -56,7 +61,7 @@ async function run() {
 
     logger.info(
       { topics: topicsToCreate.map((t) => t.name) },
-      `Creating ${topicsToCreate.length} missing topics...`
+      `Creating ${topicsToCreate.length} missing topics...`,
     );
 
     await admin.createTopics({
@@ -72,7 +77,10 @@ async function run() {
 
     logger.info("Kafka topics created successfully.");
   } catch (error) {
-    logger.error({ error: error instanceof Error ? error.message : error }, "Error creating Kafka topics");
+    logger.error(
+      { error: error instanceof Error ? error.message : error },
+      "Error creating Kafka topics",
+    );
     process.exit(1);
   } finally {
     await admin.disconnect();
