@@ -35,6 +35,7 @@
       "@services": ["./src/services/index.js"],
       "@consumers": ["./src/consumers/index.js"],
       "@controllers": ["./src/controllers/index.js"],
+      "@templates": ["./src/templates/index.js"],
       "@utils/errors": ["./src/utils/errors/index.js"],
       "@utils/constants": ["./src/utils/constants/index.js"],
       "@utils": ["./src/utils/index.ts"]

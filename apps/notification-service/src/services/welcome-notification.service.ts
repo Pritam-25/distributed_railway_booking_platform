@@ -3,6 +3,7 @@ import { UserLoggedInV1, type UserLoggedInV1Type } from "@irctc/contracts";
 import { PROCESSING_STATUS, type ProcessingStatus } from "@irctc/kafka";
 import { logger as irctcLogger } from "@irctc/logger";
 import { IdempotencyRepository } from "@irctc/redis";
+import { getWelcomeEmailTemplate } from "@templates";
 import type { EmailService } from "./email.service.js";
 
 /**
@@ -34,6 +35,9 @@ export class WelcomeNotificationService {
 
   /**
    * Validates the incoming raw event object against the UserLoggedInV1 Zod schema.
+   * Returns null instead of throwing on validation failure to ensure malformed
+   * payload/validation errors are skipped and logged as poison messages, preventing
+   * infinite retries in the consumer queue.
    *
    * @param event - Raw Kafka message value.
    * @returns The parsed and typed event payload, or null if validation fails.
@@ -87,19 +91,11 @@ export class WelcomeNotificationService {
 
     try {
       const subject = "Welcome Back to IRCTC!";
-      const htmlContent = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
-          <h2 style="color: #198754; text-align: center;">Welcome Back!</h2>
-          <p>Hello <strong>${parsed.firstName} ${parsed.lastName}</strong>,</p>
-          <p>You have successfully logged into your IRCTC account.</p>
-          <div style="margin: 20px 0; padding: 15px; background-color: #f8f9fa; border-radius: 4px; color: #555;">
-            <strong>Login Time:</strong> ${parsed.loggedInAt.toLocaleString()}
-          </div>
-          <p>If you did not log in at this time, please contact our support team immediately.</p>
-          <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
-          <p style="font-size: 12px; color: #999; text-align: center;">Distributed Railway Booking Platform &copy; 2026</p>
-        </div>
-      `;
+      const htmlContent = getWelcomeEmailTemplate(
+        parsed.firstName,
+        parsed.lastName,
+        parsed.loggedInAt,
+      );
 
       // Trigger outbound email delivery
       await this.emailService.sendEmail(parsed.email, subject, htmlContent);
