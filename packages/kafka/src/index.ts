@@ -12,4 +12,5 @@ export * from "./consumer-runner/index.js";
 export * from "./retry/index.js";
 export * from "./headers/index.js";
 export * from "./outbox/index.js";
-export type { Kafka, Producer } from "kafkajs";
+export type { Kafka, Producer, Consumer } from "kafkajs";
+export type { EachMessagePayload } from "kafkajs";

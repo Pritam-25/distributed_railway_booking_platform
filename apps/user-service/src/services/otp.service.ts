@@ -22,9 +22,18 @@ interface RegistrationSessionData {
  * rate limiting, and temporary pre-registration session storage in Redis.
  */
 export class OtpService {
+  /**
+   * Rate limit for OTP requests. (max 5 otp attempt per email per hour)
+   */
   private static readonly OTP_RATE_LIMIT_MAX = 5;
+  /**
+   * Window for OTP rate limit. (1 hour)
+   */
   private static readonly OTP_RATE_LIMIT_WINDOW = 3600; // 1 hour in seconds
-  private static readonly OTP_ATTEMPT_LIMIT = 3;
+  /**
+   * Maximum number of attempts for OTP verification. (5 attempts)
+   */
+  private static readonly OTP_ATTEMPT_LIMIT = 5;
 
   /**
    * Stores a hashed OTP in Redis and handles rate limiting.
