@@ -1,3 +1,4 @@
+import { env } from "@config";
 import { UserLoggedInV1, type UserLoggedInV1Type } from "@irctc/contracts";
 import { PROCESSING_STATUS, type ProcessingStatus } from "@irctc/kafka";
 import { logger as irctcLogger } from "@irctc/logger";
@@ -35,10 +36,9 @@ export class WelcomeNotificationService {
    * Validates the incoming raw event object against the UserLoggedInV1 Zod schema.
    *
    * @param event - Raw Kafka message value.
-   * @returns The parsed and typed event payload.
-   * @throws {Error} - If schema validation fails.
+   * @returns The parsed and typed event payload, or null if validation fails.
    */
-  private validateEvent(event: unknown): UserLoggedInV1Type {
+  private validateEvent(event: unknown): UserLoggedInV1Type | null {
     const result = UserLoggedInV1.safeParse(event);
 
     if (!result.success) {
@@ -46,9 +46,7 @@ export class WelcomeNotificationService {
         { issues: result.error.issues },
         "UserLoggedInV1 schema validation failed",
       );
-      throw new Error("Invalid UserLoggedInV1 event", {
-        cause: result.error,
-      });
+      return null;
     }
 
     return result.data;
@@ -66,6 +64,16 @@ export class WelcomeNotificationService {
     const parsed = this.validateEvent(event);
 
     if (!parsed) return PROCESSING_STATUS.INVALID;
+
+    // Check if the welcome event is stale based on WELCOME_TTL_SECONDS
+    const ageMs = Date.now() - parsed.loggedInAt.getTime();
+    if (ageMs > env.WELCOME_TTL_SECONDS * 1000) {
+      this.logger.warn(
+        { eventId: parsed.eventId, ageMs },
+        "Welcome email event expired. Skipping delivery.",
+      );
+      return PROCESSING_STATUS.INVALID;
+    }
 
     // Check and reserve eventId to guarantee exactly-once processing
     const reserved = await this.idempotency.reserveIfNew(parsed.eventId);

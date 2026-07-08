@@ -1,3 +1,4 @@
+import { env } from "@config";
 import { OTPRequestedV1, type OTPRequestedV1Type } from "@irctc/contracts";
 import { PROCESSING_STATUS, type ProcessingStatus } from "@irctc/kafka";
 import { logger as irctcLogger } from "@irctc/logger";
@@ -35,10 +36,9 @@ export class OtpNotificationService {
    * Validates the incoming raw event object against the OTPRequestedV1 Zod schema.
    *
    * @param event - Raw Kafka message value.
-   * @returns The parsed and typed event payload.
-   * @throws {Error} - If schema validation fails.
+   * @returns The parsed and typed event payload, or null if validation fails.
    */
-  private validateEvent(event: unknown): OTPRequestedV1Type {
+  private validateEvent(event: unknown): OTPRequestedV1Type | null {
     const result = OTPRequestedV1.safeParse(event);
 
     if (!result.success) {
@@ -46,9 +46,7 @@ export class OtpNotificationService {
         { issues: result.error.issues },
         "OTPRequestedV1 schema validation failed",
       );
-      throw new Error("Invalid OTP requested event", {
-        cause: result.error,
-      });
+      return null;
     }
 
     return result.data;
@@ -66,6 +64,16 @@ export class OtpNotificationService {
     const parsed = this.validateEvent(event);
 
     if (!parsed) return PROCESSING_STATUS.INVALID;
+
+    // Check if the event has expired based on OTP_TTL_SECONDS
+    const ageMs = Date.now() - parsed.createdAt.getTime();
+    if (ageMs > env.OTP_TTL_SECONDS * 1000) {
+      this.logger.warn(
+        { eventId: parsed.eventId, ageMs },
+        "OTP request event expired. Skipping delivery.",
+      );
+      return PROCESSING_STATUS.INVALID;
+    }
 
     // Check and reserve eventId to guarantee exactly-once processing
     const reserved = await this.idempotency.reserveIfNew(parsed.eventId);

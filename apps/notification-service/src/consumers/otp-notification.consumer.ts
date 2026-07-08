@@ -36,19 +36,34 @@ export class OtpRequestedConsumer {
       const event = JSON.parse(message.value.toString("utf8"));
       await this.service.process(event);
     } catch (err) {
-      // Catch and swallow all errors (parse errors, validation failures, email send failures)
-      // to commit the offset and prevent queue stalling. High priority log is written instead.
-      this.logger.error(
-        {
-          module: "otp-requested-consumer",
-          err:
-            err instanceof Error
-              ? { message: err.message, stack: err.stack }
-              : err,
-          messageKey: message.key?.toString("utf8"),
-        },
-        "Failed to process OTP requested notification. Committing offset and discarding.",
-      );
+      const isParseError = err instanceof SyntaxError;
+
+      if (isParseError) {
+        this.logger.error(
+          {
+            module: "otp-requested-consumer",
+            err:
+              err instanceof Error
+                ? { message: err.message, stack: err.stack }
+                : err,
+            messageKey: message.key?.toString("utf8"),
+          },
+          "Failed to parse OTP requested notification payload (non-retryable). Committing offset and discarding.",
+        );
+      } else {
+        this.logger.error(
+          {
+            module: "otp-requested-consumer",
+            err:
+              err instanceof Error
+                ? { message: err.message, stack: err.stack }
+                : err,
+            messageKey: message.key?.toString("utf8"),
+          },
+          "Transient error processing OTP requested notification. Rethrowing for retry.",
+        );
+        throw err;
+      }
     } finally {
       await heartbeat();
     }

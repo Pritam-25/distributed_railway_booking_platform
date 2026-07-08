@@ -36,19 +36,34 @@ export class UserLoggedInConsumer {
       const event = JSON.parse(message.value.toString("utf8"));
       await this.service.process(event);
     } catch (err) {
-      // Catch and swallow all errors (parse errors, validation failures, email send failures)
-      // to commit the offset and prevent queue stalling. High priority log is written instead.
-      this.logger.error(
-        {
-          module: "user-logged-in-consumer",
-          err:
-            err instanceof Error
-              ? { message: err.message, stack: err.stack }
-              : err,
-          messageKey: message.key?.toString("utf8"),
-        },
-        "Failed to process user logged in welcome notification. Committing offset and discarding.",
-      );
+      const isParseError = err instanceof SyntaxError;
+
+      if (isParseError) {
+        this.logger.error(
+          {
+            module: "user-logged-in-consumer",
+            err:
+              err instanceof Error
+                ? { message: err.message, stack: err.stack }
+                : err,
+            messageKey: message.key?.toString("utf8"),
+          },
+          "Failed to parse user logged in welcome notification payload (non-retryable). Committing offset and discarding.",
+        );
+      } else {
+        this.logger.error(
+          {
+            module: "user-logged-in-consumer",
+            err:
+              err instanceof Error
+                ? { message: err.message, stack: err.stack }
+                : err,
+            messageKey: message.key?.toString("utf8"),
+          },
+          "Transient error processing user logged in welcome notification. Rethrowing for retry.",
+        );
+        throw err;
+      }
     } finally {
       await heartbeat();
     }
