@@ -43,7 +43,11 @@ export class OtpService {
    * @returns A promise that resolves to the generated session ID.
    * @throws {ApiError} - If the OTP request rate limit is exceeded.
    */
-  static async storeOtp(email: string, otp: string): Promise<string> {
+  static async storeOtp(
+    email: string,
+    otp: string,
+    ttlSeconds: number,
+  ): Promise<string> {
     const rateKey = REDIS_KEYS.otpRate(email);
     const nextCount = await redis.incr(rateKey);
 
@@ -70,8 +74,8 @@ export class OtpService {
     const sessionId = randomUUID();
     const hashedOtp = await bcrypt.hash(otp, 10);
 
-    // EX means expire, and env.OTP_TTL is the time-to-live for the OTP in seconds.
-    await redis.set(REDIS_KEYS.otp(sessionId), hashedOtp, "EX", env.OTP_TTL);
+    // EX means expire, and ttlSeconds is the time-to-live for the OTP in seconds.
+    await redis.set(REDIS_KEYS.otp(sessionId), hashedOtp, "EX", ttlSeconds);
 
     return sessionId;
   }
@@ -90,7 +94,7 @@ export class OtpService {
       REDIS_KEYS.registrationSession(sessionId),
       JSON.stringify(data),
       "EX",
-      env.OTP_TTL,
+      env.REGISTRATION_OTP_TTL,
     );
   }
 
@@ -146,7 +150,10 @@ export class OtpService {
     const attempts = await redis.incr(attemptKey);
 
     if (attempts === 1) {
-      await redis.expire(attemptKey, env.OTP_TTL);
+      const remainingTtl = await redis.ttl(REDIS_KEYS.otp(sessionId));
+      const expireTtl =
+        remainingTtl > 0 ? remainingTtl : env.REGISTRATION_OTP_TTL;
+      await redis.expire(attemptKey, expireTtl);
     }
 
     if (attempts > this.OTP_ATTEMPT_LIMIT) {

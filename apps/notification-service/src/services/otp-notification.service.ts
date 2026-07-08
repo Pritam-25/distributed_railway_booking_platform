@@ -1,4 +1,3 @@
-import { env } from "@config";
 import { OTPRequestedV1, type OTPRequestedV1Type } from "@irctc/contracts";
 import { PROCESSING_STATUS, type ProcessingStatus } from "@irctc/kafka";
 import { logger as irctcLogger } from "@irctc/logger";
@@ -68,9 +67,9 @@ export class OtpNotificationService {
 
     if (!parsed) return PROCESSING_STATUS.INVALID;
 
-    // Check if the event has expired based on OTP_TTL_SECONDS
+    // Check if the event has expired based on the event's dynamic TTL configuration
     const ageMs = Date.now() - parsed.createdAt.getTime();
-    if (ageMs > env.OTP_TTL_SECONDS * 1000) {
+    if (ageMs > parsed.ttlSeconds * 1000) {
       this.logger.warn(
         { eventId: parsed.eventId, ageMs },
         "OTP request event expired. Skipping delivery.",
@@ -93,6 +92,8 @@ export class OtpNotificationService {
       const emailOptions = renderOtpEmail({
         email: parsed.email,
         otp: parsed.otp,
+        purpose: parsed.purpose,
+        ttlSeconds: parsed.ttlSeconds,
       });
 
       // Trigger outbound email delivery

@@ -66,7 +66,7 @@ export class AuthController {
       res,
       COOKIE_NAMES.OTP_SESSION,
       sessionId,
-      env.OTP_TTL * 1000,
+      env.REGISTRATION_OTP_TTL * 1000,
     );
 
     res

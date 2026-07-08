@@ -16,7 +16,11 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { env, redis } from "@config";
 import { OtpService } from "./otp.service.js";
-import type { OTPRequestedV1Type, UserLoggedInV1Type } from "@irctc/contracts";
+import {
+  OtpPurpose,
+  type OTPRequestedV1Type,
+  type UserLoggedInV1Type,
+} from "@irctc/contracts";
 import { generateOtp } from "@utils";
 import type {
   OtpEventPublisher,
@@ -106,7 +110,11 @@ export class AuthService {
 
     // 2. Generate and store OTP
     const otp = generateOtp();
-    const sessionId = await OtpService.storeOtp(data.email, otp);
+    const sessionId = await OtpService.storeOtp(
+      data.email,
+      otp,
+      env.REGISTRATION_OTP_TTL,
+    );
 
     // 3. Hash password and store registration session in Redis
     const hashedPassword = await bcrypt.hash(data.password, 10);
@@ -124,6 +132,8 @@ export class AuthService {
       email: data.email,
       otp,
       createdAt: new Date(),
+      purpose: OtpPurpose.REGISTRATION,
+      ttlSeconds: env.REGISTRATION_OTP_TTL,
     };
 
     try {
@@ -620,14 +630,18 @@ export class AuthService {
     }
 
     const otp = generateOtp();
-    const sessionId = await OtpService.storeOtp(data.email, otp);
+    const sessionId = await OtpService.storeOtp(
+      data.email,
+      otp,
+      env.FORGOT_PASSWORD_OTP_TTL,
+    );
 
     // Save the email associated with the session in Redis
     await redis.set(
       REDIS_KEYS.forgotPasswordSession(sessionId),
       data.email,
       "EX",
-      env.OTP_TTL,
+      env.FORGOT_PASSWORD_OTP_TTL,
     );
 
     const event: OTPRequestedV1Type = {
@@ -635,6 +649,8 @@ export class AuthService {
       email: data.email,
       otp,
       createdAt: new Date(),
+      purpose: OtpPurpose.FORGOT_PASSWORD,
+      ttlSeconds: env.FORGOT_PASSWORD_OTP_TTL,
     };
 
     try {

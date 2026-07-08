@@ -37,7 +37,6 @@ export const env = createEnv({
     EMAIL_VENDOR: z.enum(["SENDGRID"]).default("SENDGRID"),
     SENDGRID_API_KEY: z.string().default("SG.mock_key"),
     SENDGRID_SENDER: z.email().default("no-reply@example.com"),
-    OTP_TTL_SECONDS: z.coerce.number().int().positive().default(300),
     WELCOME_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
 
     IDEMPOTENCY_TTL_SECONDS: z.coerce
