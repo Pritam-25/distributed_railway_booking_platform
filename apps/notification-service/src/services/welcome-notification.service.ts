@@ -3,8 +3,8 @@ import { UserLoggedInV1, type UserLoggedInV1Type } from "@irctc/contracts";
 import { PROCESSING_STATUS, type ProcessingStatus } from "@irctc/kafka";
 import { logger as irctcLogger } from "@irctc/logger";
 import { IdempotencyRepository } from "@irctc/redis";
-import { getWelcomeEmailTemplate } from "@templates";
-import type { EmailService } from "./email.service.js";
+import { renderWelcomeEmail } from "@templates";
+import type { EmailProvider } from "@email";
 
 /**
  * Service managing the processing and delivery of "Welcome back" notifications.
@@ -20,12 +20,12 @@ export class WelcomeNotificationService {
    * Creates an instance of WelcomeNotificationService.
    *
    * @param idempotency - Repository utilized to enforce idempotency keys.
-   * @param emailService - Service used to dispatch outbound emails.
+   * @param emailProvider - Provider used to dispatch outbound emails.
    * @param logger - Parent logger context.
    */
   constructor(
     private readonly idempotency: IdempotencyRepository,
-    private readonly emailService: EmailService,
+    private readonly emailProvider: EmailProvider,
     logger: typeof irctcLogger,
   ) {
     this.logger = logger.child({
@@ -90,15 +90,16 @@ export class WelcomeNotificationService {
     }
 
     try {
-      const subject = "Welcome Back to IRCTC!";
-      const htmlContent = getWelcomeEmailTemplate(
-        parsed.firstName,
-        parsed.lastName,
-        parsed.loggedInAt,
-      );
+      // Render welcome email parameters (subject, text, and html) using the template generator
+      const emailOptions = renderWelcomeEmail({
+        email: parsed.email,
+        firstName: parsed.firstName,
+        lastName: parsed.lastName,
+        loggedInAt: parsed.loggedInAt,
+      });
 
       // Trigger outbound email delivery
-      await this.emailService.sendEmail(parsed.email, subject, htmlContent);
+      await this.emailProvider.send(emailOptions);
     } catch (err) {
       // Release reservation on failure to allow subsequent consumption retries
       await this.idempotency.release(parsed.eventId).catch((releaseErr) => {

@@ -25,6 +25,7 @@
     "@irctc/redis": "workspace:^",
     "@irctc/telemetry": "workspace:*",
     "@repo/typescript-config": "workspace:*",
+    "@sendgrid/mail": "^8.1.6",
     "@t3-oss/env-core": "^0.13.11",
     "@types/node": "^22.19.21",
     "dotenv": "^17.4.2",

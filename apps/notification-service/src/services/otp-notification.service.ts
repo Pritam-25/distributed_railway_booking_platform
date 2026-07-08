@@ -3,8 +3,8 @@ import { OTPRequestedV1, type OTPRequestedV1Type } from "@irctc/contracts";
 import { PROCESSING_STATUS, type ProcessingStatus } from "@irctc/kafka";
 import { logger as irctcLogger } from "@irctc/logger";
 import { IdempotencyRepository } from "@irctc/redis";
-import { getOtpEmailTemplate } from "@templates";
-import type { EmailService } from "./email.service.js";
+import { renderOtpEmail } from "@templates";
+import type { EmailProvider } from "@email";
 
 /**
  * Service managing the processing and delivery of One-Time Password (OTP) notifications.
@@ -20,12 +20,12 @@ export class OtpNotificationService {
    * Creates an instance of OtpNotificationService.
    *
    * @param idempotency - Repository utilized to enforce idempotency keys.
-   * @param emailService - Service used to dispatch outbound emails.
+   * @param emailProvider - Provider used to dispatch outbound emails.
    * @param logger - Parent logger context.
    */
   constructor(
     private readonly idempotency: IdempotencyRepository,
-    private readonly emailService: EmailService,
+    private readonly emailProvider: EmailProvider,
     logger: typeof irctcLogger,
   ) {
     this.logger = logger.child({
@@ -89,11 +89,14 @@ export class OtpNotificationService {
     }
 
     try {
-      const subject = "Your IRCTC One-Time Password (OTP)";
-      const htmlContent = getOtpEmailTemplate(parsed.otp);
+      // Render OTP email options (subject, text, and html) using the template generator
+      const emailOptions = renderOtpEmail({
+        email: parsed.email,
+        otp: parsed.otp,
+      });
 
       // Trigger outbound email delivery
-      await this.emailService.sendEmail(parsed.email, subject, htmlContent);
+      await this.emailProvider.send(emailOptions);
     } catch (err) {
       // Release reservation on failure to allow subsequent consumption retries
       await this.idempotency.release(parsed.eventId).catch((releaseErr) => {

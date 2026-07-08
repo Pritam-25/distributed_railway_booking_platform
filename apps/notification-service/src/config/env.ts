@@ -34,6 +34,7 @@ export const env = createEnv({
         message: "KAFKA_BROKERS must include at least one broker",
       }),
     KAFKA_CLIENT_ID: z.string().default("notification-service"),
+    EMAIL_VENDOR: z.enum(["SENDGRID"]).default("SENDGRID"),
     SENDGRID_API_KEY: z.string().default("SG.mock_key"),
     SENDGRID_SENDER: z.email().default("no-reply@example.com"),
     OTP_TTL_SECONDS: z.coerce.number().int().positive().default(300),

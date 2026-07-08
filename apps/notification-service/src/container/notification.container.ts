@@ -1,4 +1,4 @@
-import { kafka, redis, env } from "@config";
+import { kafka, redis, env, getEmailVendor } from "@config";
 import { OtpRequestedConsumer, UserLoggedInConsumer } from "@consumers";
 import { CONSUMER_GROUPS, KAFKA_TOPICS } from "@irctc/contracts";
 import {
@@ -8,11 +8,8 @@ import {
 } from "@irctc/kafka";
 import { logger } from "@irctc/logger";
 import { IdempotencyRepository } from "@irctc/redis";
-import {
-  EmailService,
-  OtpNotificationService,
-  WelcomeNotificationService,
-} from "@services";
+import { OtpNotificationService, WelcomeNotificationService } from "@services";
+import { EmailProviderFactory, type EmailProvider } from "@email";
 
 /**
  * Dependency injection container for notification-service.
@@ -43,8 +40,14 @@ export class NotificationContainer {
    * Initializes all required services, repositories, and registers/starts consumer loops.
    */
   private constructor() {
-    const emailService = new EmailService();
+    // 1. Initialize the configured email provider strategy.
+    const email: EmailProvider = EmailProviderFactory.create(getEmailVendor(), {
+      apiKey: env.SENDGRID_API_KEY,
+      sender: env.SENDGRID_SENDER,
+      logger: logger,
+    });
 
+    // 2. Initialize the idempotency repositories to guarantee exactly-once processing.
     const otpIdempotency = new IdempotencyRepository(
       redis,
       env.IDEMPOTENCY_PROCESSING_LEASE_SECONDS,
@@ -59,35 +62,44 @@ export class NotificationContainer {
       KAFKA_TOPICS.USER_LOGGED_IN,
     );
 
+    // 3. Initialize notification application services with their respective dependencies.
     const otpService = new OtpNotificationService(
       otpIdempotency,
-      emailService,
+      email,
       logger,
     );
     const welcomeService = new WelcomeNotificationService(
       loginIdempotency,
-      emailService,
+      email,
       logger,
     );
 
+    // 4. Configure consumer retry policy.
     const retryPolicy = RetryPolicies.aggressive();
 
+    /**
+     * 5. Initialize the Kafka consumers
+     * - OTP requested topic
+     * - User logged in topic
+     */
     const otpKafkaConsumer = createConsumer(
       kafka,
       CONSUMER_GROUPS.NOTIFICATION_OTP,
       retryPolicy,
     );
-
-    const otpRunner = new KafkaConsumerRunner(otpKafkaConsumer, logger);
-
     const welcomeKafkaConsumer = createConsumer(
       kafka,
       CONSUMER_GROUPS.NOTIFICATION_WELCOME,
       retryPolicy,
     );
 
+    /**
+     * 6. Wrap the Kafka consumers in runners.
+     */
+    const otpRunner = new KafkaConsumerRunner(otpKafkaConsumer, logger);
     const welcomeRunner = new KafkaConsumerRunner(welcomeKafkaConsumer, logger);
 
+    // 7. Instantiate the high-level orchestrating consumers to execute business logic.
     this.otpConsumer = new OtpRequestedConsumer(otpRunner, otpService, logger);
     this.welcomeConsumer = new UserLoggedInConsumer(
       welcomeRunner,
