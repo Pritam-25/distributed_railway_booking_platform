@@ -135,6 +135,12 @@ export function startTelemetry(options: TelemetryOptions): NodeSDK {
         // fs is too noisy for service-level traces; the cost outweighs the
         // value once a service is past the bootstrap phase.
         "@opentelemetry/instrumentation-fs": { enabled: false },
+        // pino instrumentation wraps the pino transport worker pipe, which
+        // mangles ANSI escape sequences in pretty-printed dev output. Trace
+        // correlation for logs is already provided by the `mixin()` in
+        // `@irctc/logger` (see packages/logger/src/logger.ts), so disabling
+        // this auto-instrumentation preserves both spans and live colors.
+        "@opentelemetry/instrumentation-pino": { enabled: false },
       }),
     ],
   });

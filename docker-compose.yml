@@ -1,20 +1,53 @@
-name: irctc-dev
-
 services:
-  # --- Messaging Layer (KRaft Mode) ---
+  # --- Infrastructure Layer ---
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: irctc-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: irctc_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - irctc-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: irctc-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - irctc-network
+
+  # --- Messaging Layer (KRaft Mode - Using Confluent Image for stability) ---
+  # Two listeners because Kafka clients resolve advertised addresses against
+  # their OWN network namespace. `localhost` means the client container (or
+  # host), not the broker. Splitting EXTERNAL (host) from INTERNAL (docker
+  # network) keeps both client classes happy with one broker.
+  #   EXTERNAL :9092  -> advertised as localhost:9092     (host-side `pnpm dev`)
+  #   INTERNAL :29092 -> advertised as irctc-kafka:29092  (other containers)
+
   kafka:
     image: confluentinc/cp-kafka:7.8.0
-    container_name: irctc-kafka-dev
-    restart: unless-stopped
+    container_name: irctc-kafka
+    restart: always
     ports:
       - "9092:9092"
       - "29092:29092"
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: "broker,controller"
-      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@irctc-kafka-dev:9093"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@irctc-kafka:9093"
       KAFKA_LISTENERS: "EXTERNAL://:9092,INTERNAL://:29092,CONTROLLER://:9093"
-      KAFKA_ADVERTISED_LISTENERS: "EXTERNAL://localhost:9092,INTERNAL://irctc-kafka-dev:29092"
+      KAFKA_ADVERTISED_LISTENERS: "EXTERNAL://localhost:9092,INTERNAL://irctc-kafka:29092"
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT"
       KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
       KAFKA_INTER_BROKER_LISTENER_NAME: "INTERNAL"
@@ -24,41 +57,101 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
     volumes:
-      - kafka_dev_data:/var/lib/kafka/data
+      - kafka_data:/var/lib/kafka/data
     networks:
-      - irctc-dev-network
+      - irctc-network
 
   kafka-ui:
     image: ghcr.io/kafbat/kafka-ui:v1.5.0
-    container_name: irctc-kafka-ui-dev
-    restart: unless-stopped
+    container_name: irctc-kafka-ui
+    restart: always
     depends_on:
       - kafka
     ports:
       - "8080:8080"
     environment:
-      KAFKA_CLUSTERS_0_NAME: irctc-dev-cluster
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: irctc-kafka-dev:29092
+      KAFKA_CLUSTERS_0_NAME: irctc-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: irctc-kafka:29092
     networks:
-      - irctc-dev-network
+      - irctc-network
 
-  # --- Topic Initialization ---
+  # --- Management Tools ---
+
+  pgadmin:
+    image: dpage/pgadmin4:9.15.0
+    container_name: irctc-pgadmin
+    restart: always
+    ports:
+      - "8081:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@irctc.com
+      PGADMIN_DEFAULT_PASSWORD: password
+    networks:
+      - irctc-network
+
+  redis-insight:
+    image: redis/redisinsight:3.4.2
+    container_name: irctc-redis-insight
+    restart: always
+    ports:
+      - "8001:8001"
+    networks:
+      - irctc-network
+
+  # --- Application Layer ---
+
+  # Creates the OTP and DLQ topics once at stack startup. Topics are not
+  # auto-created (allowAutoTopicCreation: false on the producer) so this
+  # sidecar is the only source of topic creation. The container exits
+  # successfully after the topics are created; restart is "no" so it
+  # does not loop.
+
   kafka-init:
     build:
       context: .
       dockerfile: infra/kafka-init/Dockerfile
-    container_name: irctc-kafka-init-dev
+    container_name: irctc-kafka-init
     depends_on:
       - kafka
-    restart: "no"
     networks:
-      - irctc-dev-network
+      - irctc-network
+    restart: "no"
     environment:
-      KAFKA_BROKERS: irctc-kafka-dev:29092
+      KAFKA_BROKERS: irctc-kafka:29092
+
+  user-service:
+    build:
+      context: .
+      dockerfile: apps/user-service/Dockerfile
+    container_name: irctc-user-service
+    restart: always
+    command: sh -c "npx prisma migrate deploy && node --import @irctc/telemetry/instrumentation dist/server.js"
+    environment:
+      PORT: 4001
+      DATABASE_URL: postgresql://admin:password@irctc-postgres:5432/irctc_db
+      REDIS_URL: redis://irctc-redis:6379
+      KAFKA_BROKERS: irctc-kafka:29092
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 7d
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      SERVICE_NAME: user-service
+    expose:
+      - "4001"
+    networks:
+      - irctc-network
+    depends_on:
+      - postgres
+      - redis
+      - kafka
 
 networks:
-  irctc-dev-network:
+  irctc-network:
     driver: bridge
 
 volumes:
-  kafka_dev_data:
+  postgres_data:
+  redis_data:
+  kafka_data:
+  tempo_data:
+  grafana_data:
