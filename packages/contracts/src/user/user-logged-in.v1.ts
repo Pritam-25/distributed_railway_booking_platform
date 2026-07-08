@@ -25,6 +25,7 @@ export const UserLoggedInV1 = z.object({
   userId: z.uuid(),
   email: z.email(),
   firstName: z.string(),
+  lastName: z.string(),
   loggedInAt: z.coerce.date(),
 });
 

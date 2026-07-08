@@ -1,0 +1,160 @@
+@baseUrl = http://localhost:4001/api/v1
+@auth = {{baseUrl}}/auth
+@users = {{baseUrl}}/users
+
+# Fallback Variables (used if running request in isolation instead of full sequential flow)
+@fallbackOtp = 123456
+@fallbackSessionId = session-id-goes-here
+@fallbackRecoverySessionId = recovery-session-id-goes-here
+@fallbackPasswordResetToken = reset-token-goes-here
+
+# Helper dynamic variables resolving to auto-captured response data OR fallback variables
+@userId = {{login.response.body.data.id}}
+@activeSessionId = {{getSessions.response.body.data[0].sessionId}}
+@recoverySessionId = {{forgotPassword.response.body.data.sessionId}}
+@passwordResetToken = {{verifyResetOtp.response.body.data.passwordResetToken}}
+
+# ==============================================================================
+# 1. Diagnostics & Health Check
+# ==============================================================================
+
+### Root Endpoint (Basic Connectivity Check)
+GET http://localhost:4001/
+
+### Health Probe (Check DB, Redis, and Kafka Connectivity)
+
+#### Liveness Probe
+GET {{baseUrl}}/health/live
+
+#### Readiness Probe
+GET {{baseUrl}}/health/ready
+
+
+###
+# ==============================================================================
+# 2. Registration & Verification Workflow (with OTP)
+# ==============================================================================
+
+### Step 1: Request OTP for User Registration
+# @name sendOtp
+POST {{auth}}/send-otp
+Content-Type: application/json
+
+{
+  "firstName": "John",
+  "lastName": "Doe",
+  "email": "maityp394@example.com",
+  "password": "Password@123",
+  "confirmPassword": "Password@123"
+}
+
+### Step 2: Verify OTP & Complete Registration
+# Uses the session cookie set by send-otp automatically
+# @name verifyOtp
+POST {{auth}}/verify-otp
+Content-Type: application/json
+
+{
+  "otp": "{{fallbackOtp}}"
+}
+
+
+###
+# ==============================================================================
+# 3. User Authentication
+# ==============================================================================
+
+### Login User
+# @name login
+POST {{auth}}/login
+Content-Type: application/json
+
+{
+  "email": "maityp394@example.com",
+  "password": "Password@123"
+}
+
+### Refresh Access/Refresh Tokens (Refresh Token Rotation)
+# Uses the refreshToken cookie set during login
+POST {{auth}}/refresh
+Content-Type: application/json
+
+### Logout User (Current Device Session)
+# Revokes the current session and clears auth cookies
+POST {{auth}}/logout
+Content-Type: application/json
+
+### Logout User from All Devices
+# Revokes all active sessions for the user and clears auth cookies
+POST {{auth}}/logout-all
+Content-Type: application/json
+
+
+###
+# ==============================================================================
+# 4. Session Management
+# ==============================================================================
+
+### Get All Active Sessions for Logged In User
+# @name getSessions
+GET {{auth}}/sessions
+Content-Type: application/json
+
+### Revoke Specific Session by ID
+DELETE {{auth}}/sessions/{{activeSessionId}}
+Content-Type: application/json
+
+
+###
+# ==============================================================================
+# 5. User Profile Management
+# ==============================================================================
+
+### Get Logged In User's Profile
+GET {{users}}/me
+Content-Type: application/json
+
+### Update User's Profile
+PUT {{users}}/me
+Content-Type: application/json
+
+{
+  "firstName": "Johnny",
+  "lastName": "Doel"
+}
+
+
+###
+# ==============================================================================
+# 6. Password Recovery (Two-Phase Flow)
+# ==============================================================================
+
+### Phase 1: Request Password Reset OTP
+# @name forgotPassword
+POST {{auth}}/forgot-password
+Content-Type: application/json
+
+{
+  "email": "johndoe@example.com"
+}
+
+### Phase 2: Verify Password Reset OTP
+# @name verifyResetOtp
+POST {{auth}}/verify-reset-otp
+Content-Type: application/json
+
+{
+  "sessionId": "{{recoverySessionId}}",
+  "otp": "{{fallbackOtp}}"
+}
+
+### Phase 3: Reset Password using Token
+# Also logs out all active sessions for security
+POST {{auth}}/reset-password
+Content-Type: application/json
+
+{
+  "passwordResetToken": "{{passwordResetToken}}",
+  "password": "NewPassword@123",
+  "confirmPassword": "NewPassword@123"
+}

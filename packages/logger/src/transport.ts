@@ -88,4 +88,5 @@ const transport = (opts: Record<string, unknown>) =>
       );
     },
   });
+
 export default transport;
