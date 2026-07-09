@@ -141,7 +141,7 @@ export class AuthService {
     } catch (err) {
       // Pre-registration flow has no userId; log eventId only.
       logger.error(
-        { module: "auth", err, eventId: event.eventId },
+        { module: "auth", err, eventId: event.eventId, purpose: event.purpose },
         "OTP publish failed; rolling back Redis state",
       );
       await OtpService.deleteRegistrationSession(sessionId);

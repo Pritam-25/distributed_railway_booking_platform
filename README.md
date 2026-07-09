@@ -1,159 +1,280 @@
-# Turborepo starter
+# Distributed Railway Booking Platform
 
-This Turborepo starter is maintained by the Turborepo core team.
+> A single repository (monorepo) with multiple microservices for a distributed IRCTC-style railway
+> booking platform. TypeScript end-to-end, pnpm workspaces, Turborepo.
 
-## Using this example
+## Architecture at a glance
 
-Run the following command:
+```mermaid
+flowchart LR
+  C[Browser / Mobile] -- HTTPS --> WEB["web (Next.js)"]
+  WEB -- HTTPS --> GW[api-gateway]
+  C -. HTTPS .-> GW
+  GW -- internal HTTP --> US[user-service]
+  GW -- internal HTTP --> INV[inventory-service]
+  GW -- internal HTTP --> BK[booking-service]
+  GW -- internal HTTP --> PAY[payment-service]
+  GW -- internal HTTP --> SR[search-service]
 
-```sh
-npx create-turbo@latest
+  GW -- internal HTTP --> AD[admin-service]
+
+  US -- auth/session/OTP --> R[(Redis)]
+  US -- user records --> PG[(Postgres)]
+  INV -- schedules/seats --> PG
+  BK -- reservations --> PG
+  BK -- payment intent --> PAY
+  PAY -- txn records --> PG
+  NS[notification-service] -- consumes events --> K{{Kafka}}
+  US -- emits events --> K
+  INV -- emits events --> K
+  BK -- emits events --> K
+  K -- consumers --> NS
+  K -- consumers --> SR
+  SR -- indexes --> ES[(Elasticsearch)]
+
+  AD -- audit/admin ops --> PG
 ```
 
-## What's inside?
+The platform is a constellation of small, single-responsibility
+microservices that talk over two channels:
 
-This Turborepo includes the following packages/apps:
+- **Synchronous request/response** — HTTPS in, internal HTTP between
+  services. `api-gateway` is the only thing the public internet sees.
+- **Asynchronous events** — Kafka topics, with versioned Zod schemas
+  in `packages/contracts`. Every service is both a producer (of
+  domain events) and a consumer (of events it cares about).
 
-### Apps and Packages
+Each service owns its own Postgres schema (where applicable), its own
+Redis namespace, and its own Kafka consumer group. There is no shared
+database and no service-to-service HTTP coupling on the write path —
+state changes flow through Kafka and get fanned out.
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+## Tech stack
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+| Layer               | Choice                                                                          |
+| ------------------- | ------------------------------------------------------------------------------- |
+| Language            | TypeScript (Node 22, ESM)                                                       |
+| Package manager     | pnpm workspaces + Turborepo                                                     |
+| API transport       | HTTPS / HTTP/JSON (Express in services, Next.js Route Handlers in `web`)        |
+| Inter-service       | Internal HTTP through `api-gateway`                                             |
+| Eventing            | Apache Kafka (KRaft mode)                                                       |
+| Event contracts     | Zod schemas in `@irctc/contracts`                                               |
+| Auth                | JWT (HS256) cookies, bcrypt-hashed passwords + OTPs in Redis                    |
+| Datastores          | Postgres (records), Redis (sessions, OTPs, idempotency), Elasticsearch (search) |
+| Observability       | OpenTelemetry → OTLP, Pino → Loki                                               |
+| Transactional email | SendGrid (pluggable `EmailProvider` strategy in `notification-service`)         |
+| Local dev stack     | Docker Compose                                                                  |
 
-### Utilities
+## Repository layout
 
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo build
+```text
+.
+├── apps/
+│   ├── web/                    # (planned) Next.js frontend
+│   ├── api-gateway/            # (planned) HTTPS termination, JWT validation, routing
+│   ├── user-service/           # ✅ auth, registration, sessions, OTP
+│   ├── notification-service/   # ✅ Kafka consumer, transactional email
+│   ├── inventory-service/      # (planned) trains, schedules, seat availability
+│   ├── booking-service/        # (planned) reservations, PNR, holds
+│   ├── payment-service/        # (planned) payment intents, reconciliation
+│   ├── search-service/         # (planned) Elasticsearch query layer
+│   └── admin-service/          # (planned) back-office / audit
+├── packages/
+│   ├── contracts/              # Zod event schemas + topic / consumer-group constants
+│   ├── kafka/                  # producer/consumer factories, runner, retry policies
+│   ├── redis/                  # singleton client, IdempotencyRepository
+│   ├── http/                   # response envelope, request context
+│   ├── logger/                 # Pino child logger
+│   ├── telemetry/              # OpenTelemetry SDK + Kafka header propagation
+│   ├── middleware/             # shared Express middleware (helmet, CORS, request-id)
+│   ├── errors/                 # canonical error codes
+│   ├── eslint-config/          # workspace ESLint config
+│   └── typescript-config/      # workspace tsconfig bases
+├── infra/
+│   └── kafka-init/             # topic-creation sidecar for local dev
+├── scripts/                    # repo-level scripts
+├── docker-compose.yml          # local dev stack
+├── turbo.json
+├── pnpm-workspace.yaml
+└── package.json
 ```
 
-Without global `turbo`, use your package manager:
+✅ = implemented today. (planned) = on the roadmap below.
 
-```sh
-cd my-turborepo
-npx turbo build
-pnpm dlx turbo build
-pnpm exec turbo build
+## Services
+
+### Implemented
+
+- **`user-service`** — registration, login, JWT issuance, multi-device
+  session management, password recovery. Owns the `User` table, the
+  Redis session/OTP keyspace, and produces `user.otp-requested.v1`
+  and `user.logged-in.v1`.
+- **`notification-service`** — headless Kafka consumer that turns
+  events into emails (OTP, welcome back). Pluggable `EmailProvider`
+  with a SendGrid implementation.
+
+### Planned
+
+- **`api-gateway`** — single ingress. TLS termination, JWT validation,
+  rate limiting, request-id propagation, request routing, CORS.
+- **`inventory-service`** — trains, schedules, stations, seat
+  availability. Source of truth for what _can_ be booked. Emits
+  inventory events that feed `search-service` and `booking-service`.
+- **`booking-service`** — reservation lifecycle: hold → confirm →
+  cancel, PNR generation, fare calculation. Orchestrates
+  `inventory-service` (seat allocation) and `payment-service`
+  (payment intent). Emits booking events for `notification-service`
+  and `search-service`.
+- **`payment-service`** — payment-intent creation, webhook
+  ingestion, reconciliation. Owns no business state beyond the
+  payment record itself; everything else is `booking-service`'s
+  concern.
+- **`search-service`** — read-only query layer over Elasticsearch.
+  Consumes inventory + booking events and projects them into ES
+  indices; serves search and filter queries to `api-gateway`.
+- **`admin-service`** — internal-only back-office. Operator
+  workflows, audit, fraud review. Never exposed publicly.
+- **`web`** — Next.js frontend (App Router). Talks only to
+  `api-gateway`; never directly to internal services. Server
+  components for SEO, client components for the booking flow.
+
+## Shared packages
+
+| Package                   | Purpose                                                                                                                        |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `@irctc/contracts`        | Zod schemas for every Kafka event, plus `KAFKA_TOPICS` / `CONSUMER_GROUPS` constants. Versioned per event (`.v1`, `.v2`, …).   |
+| `@irctc/kafka`            | `createKafkaClient`, `createConsumer`, `KafkaProducerManager`, `KafkaConsumerRunner`, retry policies, OTel header propagation. |
+| `@irctc/redis`            | Singleton client factory + `IdempotencyRepository` (the `PROCESSING` / `PROCESSED` state machine).                             |
+| `@irctc/http`             | `successResponse` / `errorResponse` envelope, request context.                                                                 |
+| `@irctc/logger`           | Pino-based child logger; every consumer/service creates a named child.                                                         |
+| `@irctc/telemetry`        | OpenTelemetry SDK init, Kafka header → trace-context extraction.                                                               |
+| `@irctc/middleware`       | Shared Express middleware.                                                                                                     |
+| `@irctc/errors`           | Canonical error codes shared across services.                                                                                  |
+| `@repo/eslint-config`     | Workspace ESLint config.                                                                                                       |
+| `@repo/typescript-config` | `tsconfig` bases for the monorepo.                                                                                             |
+
+## Kafka contracts
+
+The full source of truth for event shapes lives in
+`packages/contracts/src/`. Producers and consumers both depend on the
+same Zod schemas, so a contract change is a typed compile error
+rather than a runtime surprise.
+
+Versioning policy: a breaking payload change is a new schema
+(`OTPRequestedV2`) **on a new topic** (`user.otp-requested.v2`).
+Consumers must `safeParse` and route parse failures to a poison log;
+they never silently drop.
+
+## Getting started
+
+### Prerequisites
+
+- Node.js ≥ 22
+- pnpm ≥ 9
+- Docker + Docker Compose (for the local dev stack)
+
+### One-shot local dev
+
+```bash
+# 1. Bring up Postgres, Redis, Kafka (+ UIs), Elasticsearch, and the topic-init sidecar
+docker compose up -d
+
+# 2. Install workspace deps
+pnpm install
+
+# 3. Generate the Prisma client and apply the user-service schema
+pnpm --filter user-service prisma:generate
+pnpm --filter user-service prisma:migrate:dev
+
+# 4. Copy the env templates (defaults already match docker-compose)
+cp apps/user-service/.env.example apps/user-service/.env
+cp apps/notification-service/.env.example apps/notification-service/.env
+
+# 5. Start the workers
+pnpm --filter user-service dev
+pnpm --filter notification-service dev
 ```
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+### What `docker compose up` gives you
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+| Service                | Host port       | Container                    | Purpose                                                          |
+| ---------------------- | --------------- | ---------------------------- | ---------------------------------------------------------------- |
+| `postgres`             | `5432`          | `irctc-postgres`             | App DB. `admin` / `password` / `irctc_db`.                       |
+| `redis`                | `6379`          | `irctc-redis`                | Sessions, OTPs, rate limits, idempotency.                        |
+| `kafka`                | `9092`, `29092` | `irctc-kafka`                | KRaft broker. `9092` for the host, `29092` for other containers. |
+| `kafka-ui`             | `8080`          | `irctc-kafka-ui`             | Browse topics, consumer groups, messages.                        |
+| `kafka-init`           | —               | `irctc-kafka-init`           | One-shot sidecar that pre-creates the `user.*` topics.           |
+| `elasticsearch`        | `9200`          | `irctc-elasticsearch`        | Search index store.                                              |
+| `pgadmin`              | `8081`          | `irctc-pgadmin`              | Browse Postgres.                                                 |
+| `redis-insight`        | `8001`          | `irctc-redis-insight`        | Browse Redis keys and TTLs.                                      |
+| `user-service`         | `4001`          | `irctc-user-service`         | The auth API.                                                    |
+| `notification-service` | —               | `irctc-notification-service` | Headless email worker. No HTTP listener.                         |
 
-```sh
-turbo build --filter=docs
+> **Heads-up on `KAFKA_BROKERS`.** The dev script runs on the **host**
+> and reaches Kafka at `localhost:9092`. Containers reach it at
+> `irctc-kafka:29092`. Both are wired in `docker-compose.yml`.
+
+Tear down:
+
+```bash
+docker compose down      # stop, keep volumes
+docker compose down -v   # stop, wipe all data (full reset)
 ```
 
-Without global `turbo`:
+## Daily commands
 
-```sh
-npx turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
+```bash
+# Run a single service in watch mode
+pnpm --filter user-service dev
+
+# Build everything (packages first, then apps)
+pnpm build
+
+# Typecheck, lint, format
+pnpm typecheck
+pnpm lint
+pnpm format
 ```
 
-### Develop
+## Project conventions
 
-To develop all apps and packages, run the following command:
+- **Conventional commits** (`feat:`, `fix:`, `refactor:`, …) enforced
+  by `commitlint` + husky `commit-msg` hook.
+- **Pre-commit** runs ESLint and Prettier via `lint-staged`.
+- **Workspace deps** are referenced as `"@irctc/contracts":
+"workspace:*"`. No version pinning for first-party packages.
+- **TypeScript strict mode** is on for every workspace; shared
+  `tsconfig` bases in `@repo/typescript-config`.
+- **No service-to-service HTTP on the write path.** Writes go
+  through `api-gateway`; cross-service state changes propagate
+  through Kafka events.
+- **No shared database.** Each service owns its own Postgres
+  schemas/tables and its own Redis keyspace.
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+## Roadmap
 
-```sh
-cd my-turborepo
-turbo dev
-```
+The service roadmap, in roughly the order it makes sense to build
+them:
 
-Without global `turbo`, use your package manager:
+1. ✅ `user-service` — auth foundation
+2. ✅ `notification-service` — fan-out to email
+3. ⏭️ `api-gateway` — single ingress, JWT validation, rate limiting
+4. ⏭️ `admin-service` — back-office / audit
+5. ⏭️ `inventory-service` — schedules, seat availability
+6. ⏭️ `search-service` — Elasticsearch query layer
+7. ⏭️ `booking-service` — reservation lifecycle
+8. ⏭️ `payment-service` — payment intents, webhooks
+9. ⏭️ `web` — Next.js customer-facing frontend
 
-```sh
-cd my-turborepo
-npx turbo dev
-pnpm exec turbo dev
-pnpm exec turbo dev
-```
+## See also
 
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo dev --filter=web
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo login
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo login
-pnpm exec turbo login
-pnpm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-pnpm exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+- [`apps/user-service/README.md`](apps/user-service/README.md) —
+  full endpoint table, Redis data model, Kafka contract,
+  failure modes.
+- [`apps/notification-service/README.md`](apps/notification-service/README.md) —
+  consumer architecture, idempotency, event age expiration, email
+  provider abstraction.
+- [`packages/contracts`](packages/contracts) — every event schema and
+  topic constant.
+- [`docker-compose.yml`](docker-compose.yml) — the local stack this
+  README references.

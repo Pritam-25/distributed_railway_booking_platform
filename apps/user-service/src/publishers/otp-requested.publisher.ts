@@ -2,6 +2,7 @@ import type { Producer } from "@irctc/kafka";
 import { type OTPRequestedV1Type, KAFKA_TOPICS } from "@irctc/contracts";
 import { logger } from "@irctc/logger";
 import { KAFKA_HEADERS } from "@irctc/kafka";
+import { injectTraceContextToKafkaHeaders } from "@irctc/telemetry";
 
 const SCHEMA_VERSION = "1" as const;
 
@@ -24,16 +25,18 @@ export class OtpEventPublisher {
    */
   async publishOtpRequested(input: OTPRequestedV1Type): Promise<void> {
     try {
+      const headers = injectTraceContextToKafkaHeaders({
+        [KAFKA_HEADERS.EVENT_ID]: input.eventId,
+        [KAFKA_HEADERS.SCHEMA_VERSION]: SCHEMA_VERSION,
+      });
+
       await this.producer.send({
         topic: KAFKA_TOPICS.USER_OTP_REQUESTED,
         messages: [
           {
             key: input.userId ?? input.eventId,
             value: JSON.stringify(input),
-            headers: {
-              [KAFKA_HEADERS.EVENT_ID]: input.eventId,
-              [KAFKA_HEADERS.SCHEMA_VERSION]: SCHEMA_VERSION,
-            },
+            headers,
           },
         ],
       });
@@ -42,6 +45,7 @@ export class OtpEventPublisher {
         {
           module: "otp-publisher",
           eventId: input.eventId,
+          purpose: input.purpose,
         },
         "OTPRequestedV1 published",
       );
@@ -51,6 +55,7 @@ export class OtpEventPublisher {
           module: "otp-publisher",
           error,
           eventId: input.eventId,
+          purpose: input.purpose,
         },
         "Failed to publish OTPRequestedV1",
       );

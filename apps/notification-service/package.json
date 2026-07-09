@@ -11,7 +11,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "docker:build": "docker build -t notification-service:latest -f Dockerfile ../..",
-    "docker:run": "docker run --rm --name notification-service -p 4002:4002 --env-file .env notification-service:latest"
+    "docker:run": "docker run --rm --name notification-service --env-file .env notification-service:latest"
   },
   "keywords": [],
   "author": "",

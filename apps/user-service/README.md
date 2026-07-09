@@ -373,5 +373,4 @@ pnpm --filter user-service dev
 - `packages/kafka` — producer/consumer plumbing shared by every service.
 - `apps/notification-service` — consumer of `OTPRequestedV1` and
   `PasswordResetRequestedV1`.
-- Root `CLAUDE.md` — high-level architecture and the IRCTC-wide service pattern.
 - `docker-compose.yml` — the local stack this README references.

@@ -2,6 +2,7 @@ import type { Producer } from "@irctc/kafka";
 import { KAFKA_TOPICS, type UserLoggedInV1Type } from "@irctc/contracts";
 import { logger } from "@irctc/logger";
 import { KAFKA_HEADERS } from "@irctc/kafka";
+import { injectTraceContextToKafkaHeaders } from "@irctc/telemetry";
 
 const SCHEMA_VERSION = "1" as const;
 
@@ -31,16 +32,18 @@ export class UserLoggedInEventPublisher {
    */
   async publishUserLoggedIn(input: UserLoggedInV1Type): Promise<void> {
     try {
+      const headers = injectTraceContextToKafkaHeaders({
+        [KAFKA_HEADERS.EVENT_ID]: input.eventId,
+        [KAFKA_HEADERS.SCHEMA_VERSION]: SCHEMA_VERSION,
+      });
+
       await this.producer.send({
         topic: KAFKA_TOPICS.USER_LOGGED_IN,
         messages: [
           {
             key: input.userId,
             value: JSON.stringify(input),
-            headers: {
-              [KAFKA_HEADERS.EVENT_ID]: input.eventId,
-              [KAFKA_HEADERS.SCHEMA_VERSION]: SCHEMA_VERSION,
-            },
+            headers,
           },
         ],
       });

@@ -256,7 +256,6 @@ Validated by `@t3-oss/env-core` at boot; missing values abort startup.
 
 | Var                                    | Required | Default                 | Purpose                                                                |
 | -------------------------------------- | -------- | ----------------------- | ---------------------------------------------------------------------- |
-| `PORT`                                 | no       | `4002`                  | HTTP port (used by the platform probe gateway).                        |
 | `NODE_ENV`                             | no       | `development`           | Controls dev-only caching of the Redis client.                         |
 | `REDIS_URL`                            | **yes**  | —                       | `redis://` or `rediss://`.                                             |
 | `SERVICE_NAME`                         | no       | `notification-service`  | Tag for logs and OTel resource.                                        |
