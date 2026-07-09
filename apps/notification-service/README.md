@@ -374,4 +374,5 @@ pnpm --filter notification-service dev
   state machine described above).
 - `apps/user-service` — the only producer of events this service
   consumes.
+- [Root README (Observability & Tracing)](../../README.md#observability--tracing) — how to view end-to-end traces in Grafana and Tempo.
 - `docker-compose.yml` — the local stack this README references.

@@ -167,52 +167,144 @@ they never silently drop.
 
 ## Getting started
 
-### Prerequisites
+There are two ways to get the platform up and running locally:
+
+### Option 1: Docker Compose Setup (Easiest & Recommended)
+
+This option spins up all infrastructure (Postgres, Redis, Kafka, Elasticsearch, Tempo, Grafana) and compiles/runs all microservices inside Docker containers. **No local Node.js, pnpm, or manual database migration setup is needed.**
+
+#### Prerequisites
+
+- Docker & Docker Compose installed.
+- A SendGrid API Key (for email notifications).
+
+#### Steps
+
+1. **Clone the repository:**
+
+   ```bash
+   git clone https://github.com/Pritam-25/distributed_railway_booking_platform.git
+   cd distributed_railway_booking_platform
+   ```
+
+2. **Configure environment variables:**
+   Copy the root-level `.env.example` to `.env`:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   Open the root `.env` file and fill in your SendGrid API key and verified sender email address:
+
+   ```env
+   SENDGRID_API_KEY=SG.your_actual_api_key
+   SENDGRID_SENDER=your-sender@email.com
+   ```
+
+3. **Start the platform:**
+   ```bash
+   docker compose up -d --build
+   ```
+   This will build the service images, initialize the database migrations, and boot the entire platform.
+
+---
+
+### Option 2: Manual Local Development Setup (For development on host)
+
+Choose this option if you want to run the microservices directly on your host machine (e.g. for debugging with hot-reloading).
+
+#### Prerequisites
 
 - Node.js ≥ 22
 - pnpm ≥ 9
-- Docker + Docker Compose (for the local dev stack)
+- Docker (to run database/infrastructure backends)
 
-### One-shot local dev
+#### Steps
 
-```bash
-# 1. Bring up Postgres, Redis, Kafka (+ UIs), Elasticsearch, and the topic-init sidecar
-docker compose up -d
+1. **Clone the repository:**
 
-# 2. Install workspace deps
-pnpm install
+   ```bash
+   git clone https://github.com/Pritam-25/distributed_railway_booking_platform.git
+   cd distributed_railway_booking_platform
+   ```
 
-# 3. Generate the Prisma client and apply the user-service schema
-pnpm --filter user-service prisma:generate
-pnpm --filter user-service prisma:migrate:dev
+2. **Spin up only the infrastructure backends:**
 
-# 4. Copy the env templates (defaults already match docker-compose)
-cp apps/user-service/.env.example apps/user-service/.env
-cp apps/notification-service/.env.example apps/notification-service/.env
+   ```bash
+   # Starts Postgres, Redis, Kafka, Elasticsearch, Tempo, Grafana, and topic-init sidecar
+   docker compose up -d postgres redis kafka kafka-ui kafka-init elasticsearch tempo grafana
+   ```
 
-# 5. Start the workers
-pnpm --filter user-service dev
-pnpm --filter notification-service dev
-```
+3. **Install workspace dependencies:**
+
+   ```bash
+   pnpm install
+   ```
+
+4. **Generate Prisma Client & run migrations:**
+
+   ```bash
+   pnpm --filter user-service prisma:generate
+   pnpm --filter user-service prisma:migrate:dev
+   ```
+
+5. **Configure environment files for each service:**
+   Copy the local `.env.example` templates to `.env` in the respective apps:
+
+   ```bash
+   cp apps/user-service/.env.example apps/user-service/.env
+   cp apps/notification-service/.env.example apps/notification-service/.env
+   ```
+
+   _Note: Open `apps/notification-service/.env` and update the SendGrid credentials if you wish to send real emails during local host development._
+
+6. **Start microservices in development mode:**
+   ```bash
+   pnpm --filter user-service dev
+   pnpm --filter notification-service dev
+   ```
+
+---
 
 ### What `docker compose up` gives you
 
-| Service                | Host port       | Container                    | Purpose                                                          |
-| ---------------------- | --------------- | ---------------------------- | ---------------------------------------------------------------- |
-| `postgres`             | `5432`          | `irctc-postgres`             | App DB. `admin` / `password` / `irctc_db`.                       |
-| `redis`                | `6379`          | `irctc-redis`                | Sessions, OTPs, rate limits, idempotency.                        |
-| `kafka`                | `9092`, `29092` | `irctc-kafka`                | KRaft broker. `9092` for the host, `29092` for other containers. |
-| `kafka-ui`             | `8080`          | `irctc-kafka-ui`             | Browse topics, consumer groups, messages.                        |
-| `kafka-init`           | —               | `irctc-kafka-init`           | One-shot sidecar that pre-creates the `user.*` topics.           |
-| `elasticsearch`        | `9200`          | `irctc-elasticsearch`        | Search index store.                                              |
-| `pgadmin`              | `8081`          | `irctc-pgadmin`              | Browse Postgres.                                                 |
-| `redis-insight`        | `8001`          | `irctc-redis-insight`        | Browse Redis keys and TTLs.                                      |
-| `user-service`         | `4001`          | `irctc-user-service`         | The auth API.                                                    |
-| `notification-service` | —               | `irctc-notification-service` | Headless email worker. No HTTP listener.                         |
+| Service                | Host port             | Container                    | Purpose                                                          |
+| ---------------------- | --------------------- | ---------------------------- | ---------------------------------------------------------------- |
+| `postgres`             | `5432`                | `irctc-postgres`             | App DB. `admin` / `password` / `irctc_db`.                       |
+| `redis`                | `6379`                | `irctc-redis`                | Sessions, OTPs, rate limits, idempotency.                        |
+| `kafka`                | `9092`, `29092`       | `irctc-kafka`                | KRaft broker. `9092` for the host, `29092` for other containers. |
+| `kafka-ui`             | `8080`                | `irctc-kafka-ui`             | Browse topics, consumer groups, messages.                        |
+| `kafka-init`           | —                     | `irctc-kafka-init`           | One-shot sidecar that pre-creates the `user.*` topics.           |
+| `elasticsearch`        | `9200`                | `irctc-elasticsearch`        | Search index store.                                              |
+| `tempo`                | `3200`, `4317`/`4318` | `irctc-tempo`                | OTel tracing collector & query backend.                          |
+| `grafana`              | `3000`                | `irctc-grafana`              | Metrics & Traces visualization UI (admin/admin).                 |
+| `user-service`         | `4001`                | `irctc-user-service`         | The auth API.                                                    |
+| `notification-service` | —                     | `irctc-notification-service` | Headless email worker. No HTTP listener.                         |
 
 > **Heads-up on `KAFKA_BROKERS`.** The dev script runs on the **host**
 > and reaches Kafka at `localhost:9092`. Containers reach it at
 > `irctc-kafka:29092`. Both are wired in `docker-compose.yml`.
+
+### Observability & Tracing
+
+The platform is integrated with **OpenTelemetry** for distributed tracing. Traces flow automatically from the services (e.g., `user-service` and `notification-service`) into **Tempo** and can be visualized in **Grafana**.
+
+- **Grafana Dashboard**: [http://localhost:3000](http://localhost:3000) (default credentials: `admin` / `admin`).
+- **Tempo Backend**: Queryable inside Grafana via the pre-configured `Tempo` datasource.
+
+#### End-to-End Tracing with Kafka Propagation
+
+We propagate tracing context across asynchronous Kafka message boundaries (via custom headers using standard W3C propagation). This allows you to follow a single request's lifecycle completely:
+
+1. A client initiates an action (e.g., requesting an OTP from `user-service`).
+2. `user-service` generates a **Trace ID** and publishes the `user.otp-requested.v1` event containing tracing metadata in the Kafka message headers.
+3. `notification-service` consumes the event, extracts the parent trace context, and processes it under the same **Trace ID**.
+
+To view the full trace:
+
+1. Locate the `traceId` in your application logs or responses.
+2. Open Grafana, go to **Explore**, and select **Tempo** as the datasource.
+3. Query by the `Trace ID` to view the unified call graph spanning both HTTP requests and Kafka event boundaries.
 
 Tear down:
 
@@ -278,3 +370,9 @@ them:
   topic constant.
 - [`docker-compose.yml`](docker-compose.yml) — the local stack this
   README references.
+
+---
+
+⭐ **Star the Repository**
+
+If you find this project informative or useful, please consider giving it a star on [GitHub](https://github.com/Pritam-25/distributed_railway_booking_platform)!
