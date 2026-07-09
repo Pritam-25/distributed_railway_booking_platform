@@ -13,12 +13,19 @@ import { z } from "zod";
  * the wire. `z.coerce.date()` round-trips it back to a Date on the
  * consumer side, so the in-memory type is `Date` everywhere.
  */
+export enum OtpPurpose {
+  REGISTRATION = "registration",
+  FORGOT_PASSWORD = "forgot-password",
+}
+
 export const OTPRequestedV1 = z.object({
   eventId: z.uuid(),
   userId: z.uuid().optional(),
   email: z.email(),
   otp: z.string().length(6),
   createdAt: z.coerce.date(),
+  purpose: z.enum(OtpPurpose),
+  ttlSeconds: z.number().int().positive(),
 });
 
 export type OTPRequestedV1Type = z.infer<typeof OTPRequestedV1>;

@@ -1,8 +1,13 @@
-import { createKafkaClient, KafkaProducerManager } from "@irctc/kafka";
+import {
+  createConsumer,
+  createKafkaClient,
+  KafkaProducerManager,
+  type Consumer,
+} from "@irctc/kafka";
 import { env } from "@config";
 
 /**
- * Shared Kafka client instance for the user service.
+ * Shared Kafka client instance for the notification service.
  * Configured using environment variables for client ID and brokers list.
  */
 const kafka = createKafkaClient({
@@ -58,4 +63,14 @@ export const disconnectKafka = async () => {
  */
 export const initKafka = async (): Promise<void> => {
   await getProducer();
+};
+
+/**
+ * Creates and returns a new Kafka consumer instance for the specified group ID.
+ *
+ * @param groupId - The consumer group ID this consumer will join.
+ * @returns An initialized Consumer instance.
+ */
+export const getConsumer = (groupId: string): Consumer => {
+  return createConsumer(kafka, groupId);
 };

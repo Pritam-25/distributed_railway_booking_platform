@@ -33,16 +33,12 @@
       "@container": ["./src/container/index.js"],
       "@routes": ["./src/api/v1/routes/index.js"],
       "@services": ["./src/services/index.js"],
-      "@repository": ["./src/repository/index.js"],
+      "@consumers": ["./src/consumers/index.js"],
       "@controllers": ["./src/controllers/index.js"],
-      "@middleware": ["./src/middleware/index.js"],
+      "@templates": ["./src/templates/index.js"],
       "@utils/errors": ["./src/utils/errors/index.js"],
       "@utils/constants": ["./src/utils/constants/index.js"],
-      "@utils": ["./src/utils/index.ts"],
-      "@dto": ["./src/dto/index.ts"],
-      "@mappers": ["./src/mappers/index.js"],
-      "@publishers": ["./src/publishers/index.js"],
-      "@generated/*": ["./src/generated/*"]
+      "@email": ["./src/email/index.js"]
     },
 
     // Recommended Options

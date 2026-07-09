@@ -5,8 +5,6 @@
 > `OTPRequestedV1` and `PasswordResetRequestedV1` to Kafka. Email delivery is
 > `notification-service`'s job.
 
----
-
 ## Responsibilities
 
 **Owns:** registration (with email verification), login, JWT access/refresh token
@@ -16,8 +14,6 @@ session/OTP storage, producing OTP and password-reset events to Kafka.
 
 **Does NOT own:** email delivery (notification-service), profile-update
 authorization (api-gateway and resource services), global token blacklists.
-
----
 
 ## Endpoints
 
@@ -63,8 +59,6 @@ All under `/api/v1`. All responses use the `@irctc/http`
 | `refresh_token` | JWT refresh token | `HttpOnly`, `SameSite=Strict`, `Secure` in prod, lifetime = `JWT_REFRESH_EXPIRES_IN` (7 d) |
 | `otp_session`   | UUID session id   | `HttpOnly`, `SameSite=Strict`, lifetime = `OTP_TTL` (5 m)                                  |
 
----
-
 ## Architecture at a glance
 
 ```mermaid
@@ -81,8 +75,6 @@ flowchart LR
 Layered: `Routes → Controllers → Services → Repositories → Prisma/Redis/Kafka`.
 `user-service` is the only writer to the `User` table and the only thing that
 knows the password hash — Kafka events carry no credentials.
-
----
 
 ## Registration flow
 
@@ -115,8 +107,6 @@ If `producer.send` rejects **after** Redis accepts the OTP, the service deletes
 the Redis keys and returns `502 KAFKA_PUBLISH_FAILED` — the user is never told
 "OTP sent" unless the event was durably enqueued.
 
----
-
 ## Password recovery flow
 
 Three stages: prove you own the inbox → get a short-lived bearer token → perform
@@ -144,8 +134,6 @@ sequenceDiagram
     US->>R: logoutAll(userId) — wipe every auth:session:*
     US-->>C: 200
 ```
-
----
 
 ## Refresh token rotation & reuse detection
 
@@ -178,8 +166,6 @@ Every successful refresh issues a new refresh token and updates the stored
 `sha256` hash. A previously-valid token whose hash is no longer in Redis is
 treated as a theft signal — every session for that user is destroyed.
 
----
-
 ## Redis data model
 
 All keys are prefixed `auth:*` so ops can grep, scan, and ACL them as one
@@ -198,8 +184,6 @@ bucket. Source of truth: `src/utils/constants/redis-keys.ts`.
 | `auth:session:{sessionId}`         | JSON             | 30 d           | Server-side session: userId, fingerprint, `sha256(refreshToken)`, timestamps.                       |
 | `auth:user:{userId}:sessions`      | set of sessionId | refreshed 30 d | Per-user index of active sessions; enables multi-device listing and "log out everywhere".           |
 
----
-
 ## Kafka contract
 
 | Topic                              | Schema                                 | Producer            | Consumer               | Purpose                                         |
@@ -210,8 +194,6 @@ bucket. Source of truth: `src/utils/constants/redis-keys.ts`.
 Headers on every event: `x-event-id` (for log correlation), `x-schema-version`
 (always `"1"`). `notification-service` dedupes on `eventId` via
 `SET notification:processed:*:{eventId} NX EX 7d`.
-
----
 
 ## Security
 
@@ -232,8 +214,6 @@ Headers on every event: `x-event-id` (for log correlation), `x-schema-version`
   authenticate as a user. A Redis dump leaks OTP **hashes** and refresh-token
   **hashes**, never plaintext credentials. A Postgres dump leaks bcrypt
   password hashes (cost 10).
-
----
 
 ## Failure modes
 
@@ -263,8 +243,6 @@ Headers on every event: `x-event-id` (for log correlation), `x-schema-version`
 Each step is wrapped in a 5 s `Promise.race` timeout; `Promise.allSettled`
 keeps a single failure from skipping the rest.
 
----
-
 ## Configuration
 
 Validated by `@t3-oss/env-core` at boot; missing values abort startup.
@@ -287,8 +265,6 @@ Validated by `@t3-oss/env-core` at boot; missing values abort startup.
 | `KAFKA_OTP_TOPIC`             | no       | `user.otp-requested.v1`            | Target topic for OTP events.                         |
 | `KAFKA_RESET_TOPIC`           | no       | `user.password-reset-requested.v1` | Target topic for recovery-OTP events.                |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | no       | `http://localhost:4318`            | OTLP HTTP collector base URL.                        |
-
----
 
 ## Local development — Docker Compose (recommended)
 
@@ -349,8 +325,6 @@ forgot-password → reset-password) with auto-captured variables, open
 `apps/user-service/api-test.http` with the VS Code REST Client extension and
 execute each request in order.
 
----
-
 ## Local development — manual (no Docker)
 
 If you'd rather point at managed services (Neon, Upstash, Confluent Cloud) or
@@ -392,8 +366,6 @@ cp apps/user-service/.env.example apps/user-service/.env
 # 4. Start the service
 pnpm --filter user-service dev
 ```
-
----
 
 ## See also
 
