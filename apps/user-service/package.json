@@ -9,14 +9,15 @@
     "build": "tsc && tsc-alias",
     "check-types": "tsc --noEmit",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "docker:build": "docker build -t user-service:latest -f Dockerfile ../..",
+    "docker:run": "docker run --rm --name user-service -p 4001:4001 --env-file .env user-service:latest"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "@types/otp-generator": "^4.0.2",
-    "prisma": "^7.8.0",
     "tsc-alias": "^1.9.0",
     "tsx": "^4.23.0"
   },
@@ -46,6 +47,7 @@
     "helmet": "^8.2.0",
     "jsonwebtoken": "^9.0.2",
     "otp-generator": "^4.0.1",
+    "prisma": "^7.8.0",
     "zod": "^4.4.3"
   }
 }

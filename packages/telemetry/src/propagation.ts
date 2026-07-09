@@ -1,38 +1,34 @@
-/**
- * Trace context propagation across Kafka message boundaries.
- *
- * Producers: the `@opentelemetry/instrumentation-kafkajs` package writes the
- * W3C `traceparent` / `tracestate` headers automatically as part of the
- * `kafka.publish` span. Producer code does NOT need to inject anything.
- *
- * Consumers: kafkajs' auto-instrumentation does NOT automatically resume the
- * parent context inside the message handler. Each consumer-runner MUST call
- * {@link extractTraceContextFromKafkaHeaders} and `context.with(...)` the
- * result around the handler invocation. That's the only place manual
- * propagation is needed in this package.
- */
 import { context, propagation, type Context } from "@opentelemetry/api";
 
 /**
- * Normalised Kafka headers. KafkaJS hands consumer `EachMessagePayload`
- * headers as `IHeaders`, which is `Buffer | string | (Buffer | string)[]` per
- * key. This helper collapses any of those shapes into a plain `string` map
- * so the W3C propagator can read it.
+ * Raw KafkaJS header format matching kafkajs' IHeaders structure.
  */
-export type KafkaHeaderMap = Record<string, string>;
+export type RawKafkaHeaders = Record<
+  string,
+  string | Buffer | (string | Buffer)[] | undefined
+>;
 
 /**
- * Convert raw KafkaJS headers to a flat string map. Multi-valued headers are
- * joined with `,` — we never expect that for `traceparent` / `tracestate`,
- * but a deterministic join is safer than dropping the second value silently.
- *
- * @param headers - The `message.headers` from an `EachMessagePayload`.
- * @returns A flat `Record<string, string>` safe to pass to the propagator.
+ * Flat string record mapping header keys to normalized string values.
  */
-export function normaliseKafkaHeaders(headers: unknown): KafkaHeaderMap {
+export type NormalizedKafkaHeaders = Record<string, string>;
+
+/**
+ * Normalizes raw KafkaJS headers into a flat string record.
+ *
+ * @param headers Kafka message headers (raw format).
+ * @returns Headers normalized to string key-value pairs.
+ *
+ * @remarks
+ * Preprocesses headers before OpenTelemetry context extraction.
+ * Converts all header values to strings and ensures keys are normalized for consistent lookup.
+ */
+export function normaliseKafkaHeaders(
+  headers: unknown,
+): NormalizedKafkaHeaders {
   if (!headers || typeof headers !== "object") return {};
 
-  const out: KafkaHeaderMap = {};
+  const out: NormalizedKafkaHeaders = {};
   for (const [rawKey, rawValue] of Object.entries(
     headers as Record<string, unknown>,
   )) {
@@ -58,40 +54,38 @@ export function normaliseKafkaHeaders(headers: unknown): KafkaHeaderMap {
 }
 
 /**
- * Extract the W3C trace context that the producer wrote into Kafka message
- * headers and return an OTel `Context` ready to be re-attached to the
- * current async context. The caller is responsible for wrapping the message
- * handler in `context.with(ctx, () => handler(payload))`.
+ * Extracts W3C trace context from incoming Kafka message headers.
  *
- * @param headers - Raw `message.headers` from an `EachMessagePayload`.
- * @returns The extracted context, or the current active context if no
- *          `traceparent` header is present (cold message, e.g. a replay).
+ * @param headers Kafka message headers (raw format).
+ * @returns The extracted OpenTelemetry trace context.
+ *
+ * @remarks
+ * Extracts parent trace metadata (e.g. traceparent) from consumed messages.
+ * Normalizes raw message headers to lowercase string key-value pairs, then extracts the OpenTelemetry trace context using the standard W3C propagator.
  */
 export function extractTraceContextFromKafkaHeaders(headers: unknown): Context {
   const normalised = normaliseKafkaHeaders(headers);
-  const extracted = propagation.extract(context.active(), normalised);
-  return extracted;
+  return propagation.extract(context.active(), normalised);
 }
 
 /**
- * Convenience helper to extract the trace context and construct the child span name.
- * The caller is responsible for starting and activating the child CONSUMER span using the
- * returned context and span name (e.g., via context.with/tracer.startSpan).
+ * Injects the active tracing context into outgoing Kafka message headers.
  *
- * Why this exists: Separating parent context extraction from the actual span creation
- * allows the consumer runner to apply the correct tracer/span kind.
+ * @param headers Kafka message headers (raw format).
+ * @returns The Kafka message headers with injected trace context.
  *
- * @param headers - Raw `message.headers` from an `EachMessagePayload`.
- * @param topic   - The Kafka topic. Becomes the span name's suffix.
- * @returns The extracted context and computed span name.
+ * @remarks
+ * Propagates the active trace context downstream across a Kafka boundary.
+ * Reads the active OpenTelemetry span context, serializes it into a temporary W3C trace header map, and merges it back into the outgoing message headers.
  */
-export function buildConsumerSpanContext(
-  headers: unknown,
-  topic: string,
-): { ctx: Context; spanName: string } {
-  const ctx = extractTraceContextFromKafkaHeaders(headers);
-  // We don't actually start the span here — we hand the caller a context
-  // that already carries the parent, and a name to use when they do. The
-  // runner is the only place that knows the right sampler / span kind.
-  return { ctx, spanName: `${topic} process` };
+export function injectTraceContextToKafkaHeaders(
+  headers: RawKafkaHeaders = {},
+): RawKafkaHeaders {
+  const carrier: Record<string, string> = {};
+  propagation.inject(context.active(), carrier);
+
+  return {
+    ...headers,
+    ...carrier,
+  };
 }

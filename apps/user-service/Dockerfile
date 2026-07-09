@@ -1,37 +1,41 @@
-# build stage
-FROM node:22-alpine AS build
+# --- Pruner stage ---
+FROM node:22-alpine AS pruner
 WORKDIR /repo
 ENV CI=true
 ENV TURBO_TELEMETRY_DISABLED=1
 
-# Copy workspace configuration and dependencies locks
+# Copy workspace configuration and prune for user-service
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml .npmrc turbo.json ./
+COPY apps ./apps
 COPY packages ./packages
-COPY apps/user-service ./apps/user-service
 
-RUN corepack enable && pnpm install --filter ...user-service --frozen-lockfile
+RUN corepack enable \
+ && npm install -g turbo@2.9.18 \
+ && pnpm exec turbo prune user-service --docker
 
-# Generate Prisma client before building typescript
-RUN pnpm --filter user-service exec prisma generate
-
-# Build the user-service
-RUN npx turbo run build --filter=user-service
-
-# runtime stage
-FROM node:22-alpine AS runtime
+# --- Installer + builder + deploy ---
+FROM pruner AS build
 WORKDIR /repo
+
+# Install workspace dependencies (no-frozen-lockfile is required for pruned lockfile)
+COPY --from=pruner /repo/out/json ./
+RUN pnpm install --no-frozen-lockfile --ignore-scripts
+
+# Copy full pruned source and build
+COPY --from=pruner /repo/out/full ./
+RUN pnpm --filter user-service exec prisma generate \
+ && npx turbo run build --filter=user-service
+
+# Deploy flat standalone package to /deploy
+RUN pnpm --filter user-service deploy /deploy --prod
+
+# --- Runtime stage ---
+FROM node:22-alpine AS runtime
+WORKDIR /deploy
 ENV NODE_ENV=production
 
-# Copy node_modules and built packages to preserve workspace symbolic links
-COPY --from=build /repo/node_modules ./node_modules
-COPY --from=build /repo/packages ./packages
-COPY --from=build /repo/apps/user-service/node_modules ./apps/user-service/node_modules
-COPY --from=build /repo/apps/user-service/dist ./apps/user-service/dist
-COPY --from=build /repo/apps/user-service/package.json ./apps/user-service/package.json
-COPY --from=build /repo/apps/user-service/prisma ./apps/user-service/prisma
-COPY --from=build /repo/apps/user-service/prisma.config.ts ./apps/user-service/prisma.config.ts
+COPY --from=build /deploy ./
 
-WORKDIR /repo/apps/user-service
 EXPOSE 4001
 USER node
 CMD ["node", "--import", "@irctc/telemetry/instrumentation", "dist/server.js"]

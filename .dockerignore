@@ -1,0 +1,59 @@
+# Build context: exclude everything that isn't needed to build the service.
+# `turbo prune --docker` only retains the source of the target service in
+# `out/full/`, so this list doesn't have to be precise per service.
+
+# Local installs and caches — would be re-installed inside the image anyway.
+**/node_modules
+**/.pnpm-store
+.pnpm-store
+
+# Build outputs — the Dockerfile re-runs `pnpm build` and `pnpm deploy`.
+**/dist
+**/.next
+**/.turbo
+.turbo
+out
+
+# Test artifacts
+**/coverage
+**/.vitest
+**/test-results
+
+# Logs
+**/*.log
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+**/pnpm-debug.log*
+
+# Editor / OS junk
+**/.vscode
+**/.idea
+**/.DS_Store
+**/Thumbs.db
+
+# Env files (the runtime image gets its env from Kubernetes secrets, not the build context)
+**/.env
+**/.env.*
+!**/.env.example
+
+# Docker metadata (avoid recursion)
+**/Dockerfile
+**/docker-compose*.yml
+**/.dockerignore
+
+# Git
+**/.git
+**/.gitignore
+**/.gitattributes
+
+# Documentation
+**/*.md
+**/README*
+**/CHANGELOG*
+**/LICENSE*
+**/.github
+
+# Per-service generated/cloned artifacts
+**/.husky/_/husky.sh
+**/tsconfig.tsbuildinfo

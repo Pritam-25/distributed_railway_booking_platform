@@ -3,7 +3,7 @@
 @users = {{baseUrl}}/users
 
 # Fallback Variables (used if running request in isolation instead of full sequential flow)
-@fallbackOtp = 123456
+@fallbackOtp = 200278
 @fallbackSessionId = session-id-goes-here
 @fallbackRecoverySessionId = recovery-session-id-goes-here
 @fallbackPasswordResetToken = reset-token-goes-here
@@ -43,7 +43,7 @@ Content-Type: application/json
 {
   "firstName": "John",
   "lastName": "Doe",
-  "email": "maityp394@example.com",
+  "email": "john.doe@example.com",
   "password": "Password@123",
   "confirmPassword": "Password@123"
 }
@@ -70,7 +70,7 @@ POST {{auth}}/login
 Content-Type: application/json
 
 {
-  "email": "maityp394@example.com",
+  "email": "john@example.com",
   "password": "Password@123"
 }
 

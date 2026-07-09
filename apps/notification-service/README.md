@@ -256,7 +256,6 @@ Validated by `@t3-oss/env-core` at boot; missing values abort startup.
 
 | Var                                    | Required | Default                 | Purpose                                                                |
 | -------------------------------------- | -------- | ----------------------- | ---------------------------------------------------------------------- |
-| `PORT`                                 | no       | `4002`                  | HTTP port (used by the platform probe gateway).                        |
 | `NODE_ENV`                             | no       | `development`           | Controls dev-only caching of the Redis client.                         |
 | `REDIS_URL`                            | **yes**  | —                       | `redis://` or `rediss://`.                                             |
 | `SERVICE_NAME`                         | no       | `notification-service`  | Tag for logs and OTel resource.                                        |
@@ -375,4 +374,5 @@ pnpm --filter notification-service dev
   state machine described above).
 - `apps/user-service` — the only producer of events this service
   consumes.
+- [Root README (Observability & Tracing)](../../README.md#observability--tracing) — how to view end-to-end traces in Grafana and Tempo.
 - `docker-compose.yml` — the local stack this README references.
