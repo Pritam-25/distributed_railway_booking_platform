@@ -197,6 +197,7 @@ services:
       - irctc-network
     depends_on:
       - kafka
+      - redis
 
 networks:
   irctc-network:
