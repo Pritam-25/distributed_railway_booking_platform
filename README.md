@@ -244,8 +244,8 @@ Choose this option if you want to run the microservices directly on your host ma
 4. **Generate Prisma Client & run migrations:**
 
    ```bash
-   pnpm --filter user-service prisma:generate
-   pnpm --filter user-service prisma:migrate:dev
+   pnpm --filter user-service prisma generate
+   pnpm --filter user-service prisma migrate dev
    ```
 
 5. **Configure environment files for each service:**

@@ -277,8 +277,8 @@ docker compose up -d
 
 # 2. Install workspace deps and apply the schema
 pnpm install
-pnpm --filter user-service prisma:generate
-pnpm --filter user-service prisma:migrate:dev
+pnpm --filter user-service prisma generate
+pnpm --filter user-service prisma migrate dev
 
 # 3. Copy the env template
 cp apps/user-service/.env.example apps/user-service/.env
@@ -358,8 +358,8 @@ kafka-topics --bootstrap-server localhost:9092 --create --if-not-exists \
 
 # 3. From the repo root
 pnpm install
-pnpm --filter user-service prisma:generate
-pnpm --filter user-service prisma:migrate:dev
+pnpm --filter user-service prisma generate
+pnpm --filter user-service prisma migrate dev
 cp apps/user-service/.env.example apps/user-service/.env
 # edit .env: set DATABASE_URL / REDIS_URL / KAFKA_BROKERS to your services
 
