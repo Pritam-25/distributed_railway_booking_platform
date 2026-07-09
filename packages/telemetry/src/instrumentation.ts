@@ -1,4 +1,5 @@
 import { startTelemetry } from "./index.js";
+import { createRequire } from "node:module";
 
 /**
  * OpenTelemetry bootstrap entrypoint.
@@ -10,6 +11,18 @@ import { startTelemetry } from "./index.js";
  * Usage:
  *   node --import @irctc/telemetry/instrumentation dist/server.js
  */
+
+// Synchronously load dotenv configuration in development environments
+try {
+  const require = createRequire(import.meta.url);
+  require("dotenv").config();
+} catch (e) {
+  // In production/Docker containers, dotenv might not be installed;
+  // we gracefully fall back to pre-injected OS environment variables.
+  if (!(e instanceof Error && (e as any).code === "MODULE_NOT_FOUND")) {
+    throw e;
+  }
+}
 
 const serviceName = process.env.SERVICE_NAME?.trim() || "unknown-service";
 
