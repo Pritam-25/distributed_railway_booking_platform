@@ -1,3 +1,5 @@
+name: irctc
+
 services:
   # --- Infrastructure Layer ---
 
@@ -77,24 +79,55 @@ services:
 
   # --- Management Tools ---
 
-  pgadmin:
-    image: dpage/pgadmin4:9.15.0
-    container_name: irctc-pgadmin
+  # pgadmin:
+  #   image: dpage/pgadmin4:9.15.0
+  #   container_name: irctc-pgadmin
+  #   restart: always
+  #   ports:
+  #     - "8081:80"
+  #   environment:
+  #     PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@irctc.com}
+  #     PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-password}
+  #   networks:
+  #     - irctc-network
+
+  # redis-insight:
+  #   image: redis/redisinsight:3.4.2
+  #   container_name: irctc-redis-insight
+  #   restart: always
+  #   ports:
+  #     - "8001:8001"
+  #   networks:
+  #     - irctc-network
+
+  tempo:
+    image: grafana/tempo:latest
+    container_name: irctc-tempo
     restart: always
     ports:
-      - "8081:80"
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@irctc.com}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-password}
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+      - "3200:3200" # Tempo query API
+    volumes:
+      - ./infra/tempo/tempo.yml:/etc/tempo.yaml:ro
+      - tempo_data:/var/tempo
+    command: ["-config.file=/etc/tempo.yaml"]
     networks:
       - irctc-network
 
-  redis-insight:
-    image: redis/redisinsight:3.4.2
-    container_name: irctc-redis-insight
+  grafana:
+    image: grafana/grafana:latest
+    container_name: irctc-grafana
     restart: always
+    depends_on:
+      - tempo
     ports:
-      - "8001:8001"
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
     networks:
       - irctc-network
 
@@ -131,18 +164,38 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-password}@irctc-postgres:5432/irctc_db
       REDIS_URL: redis://irctc-redis:6379
       KAFKA_BROKERS: irctc-kafka:29092
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_SECRET: ${JWT_SECRET:-"your_jwt_secret"}
       JWT_ACCESS_EXPIRES_IN: 15m
       JWT_REFRESH_EXPIRES_IN: 7d
-      CORS_ORIGINS: ${CORS_ORIGINS}
+      CORS_ORIGINS: ${CORS_ORIGINS:-"http://localhost:3000"}
       SERVICE_NAME: user-service
-    expose:
-      - "4001"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
+    ports:
+      - "4001:4001"
     networks:
       - irctc-network
     depends_on:
       - postgres
       - redis
+      - kafka
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: apps/notification-service/Dockerfile
+    container_name: irctc-notification-service
+    restart: always
+    environment:
+      REDIS_URL: redis://irctc-redis:6379
+      KAFKA_BROKERS: irctc-kafka:29092
+      SERVICE_NAME: notification-service
+      EMAIL_VENDOR: SENDGRID
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY:?"SendGrid API key is not set."}
+      SENDGRID_SENDER: ${SENDGRID_SENDER:?"SendGrid sender is not set."}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
+    networks:
+      - irctc-network
+    depends_on:
       - kafka
 
 networks:
