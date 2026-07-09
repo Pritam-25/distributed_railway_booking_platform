@@ -49,7 +49,16 @@ export class SendGridProvider implements EmailProvider {
     };
 
     try {
-      await sgMail.send(msg);
+      const SEND_TIMEOUT_MS = 10_000; // 10 seconds
+      await Promise.race([
+        sgMail.send(msg),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("SendGrid send timed out")),
+            SEND_TIMEOUT_MS,
+          ),
+        ),
+      ]);
       this.logger.info({ module: "email-sendgrid" }, "Email sent via SendGrid");
     } catch (err) {
       this.logger.error(

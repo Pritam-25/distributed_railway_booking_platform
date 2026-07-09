@@ -10,7 +10,11 @@
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "format": "prettier . --write",
-    "format:check": "prettier . --check"
+    "format:check": "prettier . --check",
+    "docker:build:user": "pnpm --filter user-service docker:build",
+    "docker:run:user": "pnpm --filter user-service docker:run",
+    "docker:build:notification": "pnpm --filter notification-service docker:build",
+    "docker:run:notification": "pnpm --filter notification-service docker:run"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": [
@@ -37,8 +41,8 @@
     "lint-staged": "^17.0.8",
     "prettier": "^3.9.4",
     "tsx": "^4.23.0",
-    "turbo": "^2.10.4",
-    "typescript": "5.9.2"
+    "turbo": "2.9.18",
+    "typescript": "7.0.2"
   },
   "packageManager": "pnpm@9.0.0",
   "engines": {

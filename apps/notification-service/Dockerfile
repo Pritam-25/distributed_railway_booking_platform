@@ -1,31 +1,39 @@
-# build stage
-FROM node:22-alpine AS build
+# --- Pruner stage ---
+FROM node:22-alpine AS pruner
 WORKDIR /repo
 ENV CI=true
 ENV TURBO_TELEMETRY_DISABLED=1
 
-# Copy workspace configuration and dependencies locks
+# Copy workspace configuration and prune for notification-service
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml .npmrc turbo.json ./
+COPY apps ./apps
 COPY packages ./packages
-COPY apps/notification-service ./apps/notification-service
 
-RUN corepack enable && pnpm install --filter ...notification-service --frozen-lockfile
+RUN corepack enable \
+ && npm install -g turbo@2.9.18 \
+ && pnpm exec turbo prune notification-service --docker
 
-# Build the notification-service
+# --- Installer + builder + deploy ---
+FROM pruner AS build
+WORKDIR /repo
+
+# Install workspace dependencies (no-frozen-lockfile is required for pruned lockfile)
+COPY --from=pruner /repo/out/json ./
+RUN pnpm install --no-frozen-lockfile --ignore-scripts
+
+# Copy full pruned source and build
+COPY --from=pruner /repo/out/full ./
 RUN npx turbo run build --filter=notification-service
 
-# runtime stage
+# Deploy flat standalone package to /deploy
+RUN pnpm --filter notification-service deploy /deploy --prod
+
+# --- Runtime stage ---
 FROM node:22-alpine AS runtime
-WORKDIR /repo
+WORKDIR /deploy
 ENV NODE_ENV=production
 
-# Copy node_modules and built packages to preserve workspace symbolic links
-COPY --from=build /repo/node_modules ./node_modules
-COPY --from=build /repo/packages ./packages
-COPY --from=build /repo/apps/notification-service/node_modules ./apps/notification-service/node_modules
-COPY --from=build /repo/apps/notification-service/dist ./apps/notification-service/dist
-COPY --from=build /repo/apps/notification-service/package.json ./apps/notification-service/package.json
+COPY --from=build /deploy ./
 
-WORKDIR /repo/apps/notification-service
 USER node
 CMD ["node", "--import", "@irctc/telemetry/instrumentation", "dist/server.js"]
