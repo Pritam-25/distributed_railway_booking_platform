@@ -107,7 +107,7 @@ Based on the matched route, one of four authentication behaviors executes:
 
 ### 5. Rate Limiting
 
-Applies token bucket rate limiting via `@irctc/redis`. Keyed by `userId` (for authenticated requests) or client `IP` (for anonymous requests).
+Applies token bucket rate limiting via `@irctc/resilience`, backed by `@irctc/redis`. Buckets are keyed by `userId` or client `IP`.
 
 - **`default`**: General endpoint preset (e.g. 100 capacity, refilling at ~1.67 tokens/sec).
 - **`auth`**: Credential-bearing endpoints (e.g. 10 capacity, refilling at ~0.17 tokens/sec).

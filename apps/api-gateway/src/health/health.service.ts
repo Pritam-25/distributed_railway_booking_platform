@@ -15,12 +15,19 @@ export interface ReadinessCheck {
 
 export type HealthChecks = Record<string, ReadinessCheck>;
 
+let activeRedisProbe: Promise<string> | null = null;
+
+const runRedisProbe = async (): Promise<string> => {
+  try {
+    return await redis.ping();
+  } finally {
+    activeRedisProbe = null;
+  }
+};
+
 /**
- * Probe Redis with a bounded 5s timeout. The default ioredis timeout
- * is 30s+; without an explicit bound a slow Redis would hang the
- * readiness response and k8s would not mark the pod NotReady in time.
- *
- * Never throws — failures are converted to `{ ok: false, error }`.
+ * Probe Redis with a bounded 5s timeout and deduplicated query promise.
+ * Avoids queueing up commands during connection stalls.
  */
 const probeRedis = async (): Promise<ReadinessCheck> => {
   const start = Date.now();
@@ -40,8 +47,10 @@ const probeRedis = async (): Promise<ReadinessCheck> => {
       };
     }
 
-    await Promise.race([
-      redis.ping(),
+    activeRedisProbe ??= runRedisProbe();
+
+    const pong = await Promise.race([
+      activeRedisProbe,
       new Promise<string>((_, reject) => {
         timeoutId = setTimeout(
           () => reject(new Error("redis probe timeout")),
@@ -49,6 +58,10 @@ const probeRedis = async (): Promise<ReadinessCheck> => {
         );
       }),
     ]);
+
+    if (pong !== "PONG") {
+      throw new Error(`Unexpected Redis ping response: ${pong}`);
+    }
 
     return { name: "redis", ok: true, latencyMs: Date.now() - start };
   } catch (error) {
@@ -60,21 +73,21 @@ const probeRedis = async (): Promise<ReadinessCheck> => {
       name: "redis",
       ok: false,
       latencyMs: Date.now() - start,
-      error: String(error),
+      error: "redis probe failed",
     };
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
   }
 };
 
-/**
- * Runs all readiness probes. Returns a flat map keyed by probe name
- * so the controller can render a single response payload.
- */
-export const runReadinessChecks = async (): Promise<HealthChecks> => {
-  // Probes run in parallel — total latency is the slowest probe, not
-  // the sum. Keep each probe bounded (5s) so a hung dependency cannot
-  // block the whole `/health/ready` response.
-  const [redisCheck] = await Promise.all([probeRedis()]);
-  return { redis: redisCheck };
-};
+export class HealthService {
+  /**
+   * Runs all readiness probes. Returns a flat map keyed by probe name
+   * so the controller can render a single response payload.
+   * @returns {Promise<HealthChecks>} hashmap of all readiness probes
+   */
+  static async runReadinessChecks(): Promise<HealthChecks> {
+    const redisCheck = await probeRedis();
+    return { redis: redisCheck };
+  }
+}

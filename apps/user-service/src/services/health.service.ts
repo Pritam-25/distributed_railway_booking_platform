@@ -1,73 +1,136 @@
 import { prisma, redis, kafka } from "@config";
 import { logger } from "@irctc/logger";
 
-export type HealthChecks = {
-  database: boolean;
-  redis: boolean;
-  kafka: boolean;
-};
+/**
+ * Result of each dependency probe.
+ */
+export interface ReadinessCheck {
+  name: string;
+  ok: boolean;
+  latencyMs: number;
+  error?: string;
+}
 
-const DB_PROBE_TIMEOUT_MS = 5000;
-const KAFKA_PROBE_TIMEOUT_MS = 5000;
-const REDIS_PROBE_TIMEOUT_MS = 5000;
+export type HealthChecks = Record<string, ReadinessCheck>;
 
-const probeDatabase = async (): Promise<boolean> => {
-  const probe = async (): Promise<boolean> => {
-    try {
-      await prisma.$queryRaw`SELECT 1`;
-      return true;
-    } catch (err) {
-      logger.warn({ module: "health", err }, "Database readiness probe failed");
-      return false;
-    }
-  };
-  let timeoutHandle: NodeJS.Timeout | undefined;
-  const timeout = new Promise<boolean>((resolve) => {
-    timeoutHandle = setTimeout(() => {
-      logger.warn({ module: "health" }, "Database readiness probe timed out");
-      resolve(false);
-    }, DB_PROBE_TIMEOUT_MS);
-  });
+let activeDbProbe: Promise<void> | null = null;
+
+const runDbProbe = async (): Promise<void> => {
   try {
-    return await Promise.race([probe(), timeout]);
+    await prisma.$queryRaw`SELECT 1`;
   } finally {
-    if (timeoutHandle) clearTimeout(timeoutHandle);
-  }
-};
-
-const probeRedis = async (): Promise<boolean> => {
-  const probe = async (): Promise<boolean> => {
-    try {
-      if (redis.status !== "ready") return false;
-      const pong = await redis.ping();
-      return pong === "PONG";
-    } catch (err) {
-      logger.warn({ module: "health", err }, "Redis readiness probe failed");
-      return false;
-    }
-  };
-  let timeoutHandle: NodeJS.Timeout | undefined;
-  const timeout = new Promise<boolean>((resolve) => {
-    timeoutHandle = setTimeout(() => {
-      logger.warn({ module: "health" }, "Redis readiness probe timed out");
-      resolve(false);
-    }, REDIS_PROBE_TIMEOUT_MS);
-  });
-  try {
-    return await Promise.race([probe(), timeout]);
-  } finally {
-    if (timeoutHandle) clearTimeout(timeoutHandle);
+    activeDbProbe = null;
   }
 };
 
 /**
- * Real Kafka broker readiness check.
- *
- * We rely on the cluster's own health by listing topics, which round-trips
- * to a broker. This is a strong signal that the producer's connection is
- * still alive — far stronger than `instance !== null`, which can be true
- * even when `connect()` failed or the broker has since become unreachable.
+ * Probe Database with a bounded 5s timeout and deduplicated query promise.
  */
+const probeDatabase = async (): Promise<ReadinessCheck> => {
+  const start = Date.now();
+  let timeoutId: NodeJS.Timeout | undefined;
+
+  try {
+    activeDbProbe ??= runDbProbe();
+
+    await Promise.race([
+      activeDbProbe,
+      new Promise<void>((_, reject) => {
+        timeoutId = setTimeout(
+          () => reject(new Error("database probe timeout")),
+          5000,
+        );
+      }),
+    ]);
+
+    return {
+      name: "database",
+      ok: true,
+      latencyMs: Date.now() - start,
+    };
+  } catch (error) {
+    logger.warn(
+      { module: "health", err: error },
+      "Database readiness probe failed",
+    );
+    return {
+      name: "database",
+      ok: false,
+      latencyMs: Date.now() - start,
+      error: "database probe failed",
+    };
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+};
+
+let activeRedisProbe: Promise<string> | null = null;
+
+const runRedisProbe = async (): Promise<string> => {
+  try {
+    return await redis.ping();
+  } finally {
+    activeRedisProbe = null;
+  }
+};
+
+/**
+ * Probe Redis with a bounded 5s timeout and deduplicated query promise.
+ */
+const probeRedis = async (): Promise<ReadinessCheck> => {
+  const start = Date.now();
+  let timeoutId: NodeJS.Timeout | undefined;
+
+  try {
+    if (redis.status !== "ready") {
+      logger.warn(
+        { module: "health" },
+        `Redis not ready for probe (status: ${redis.status})`,
+      );
+      return {
+        name: "redis",
+        ok: false,
+        latencyMs: Date.now() - start,
+        error: `redis status: ${redis.status}`,
+      };
+    }
+
+    activeRedisProbe ??= runRedisProbe();
+
+    const pong = await Promise.race([
+      activeRedisProbe,
+      new Promise<string>((_, reject) => {
+        timeoutId = setTimeout(
+          () => reject(new Error("redis probe timeout")),
+          5000,
+        );
+      }),
+    ]);
+
+    if (pong !== "PONG") {
+      throw new Error(`Unexpected Redis ping response: ${pong}`);
+    }
+
+    return {
+      name: "redis",
+      ok: true,
+      latencyMs: Date.now() - start,
+    };
+  } catch (error) {
+    logger.warn(
+      { module: "health", err: error },
+      "Redis readiness probe failed",
+    );
+    return {
+      name: "redis",
+      ok: false,
+      latencyMs: Date.now() - start,
+      error: "redis probe failed",
+    };
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+};
 
 let activeKafkaProbe: Promise<boolean> | null = null;
 
@@ -87,30 +150,61 @@ const runKafkaProbe = async (): Promise<boolean> => {
         // Disconnect failures are non-fatal for a readiness probe.
       });
     }
+    activeKafkaProbe = null;
   }
 };
 
-const probeKafka = async (): Promise<boolean> => {
-  activeKafkaProbe ??= runKafkaProbe().finally(() => {
-    activeKafkaProbe = null;
-  });
-
-  let timeoutHandle: NodeJS.Timeout | undefined;
-  const timeout = new Promise<boolean>((resolve) => {
-    timeoutHandle = setTimeout(() => {
-      logger.warn({ module: "health" }, "Kafka readiness probe timed out");
-      resolve(false);
-    }, KAFKA_PROBE_TIMEOUT_MS);
-  });
+/**
+ * Probe Kafka with a bounded 5s timeout and deduplicated query promise.
+ */
+const probeKafka = async (): Promise<ReadinessCheck> => {
+  const start = Date.now();
+  let timeoutId: NodeJS.Timeout | undefined;
 
   try {
-    return await Promise.race([activeKafkaProbe, timeout]);
+    activeKafkaProbe ??= runKafkaProbe();
+
+    const ok = await Promise.race([
+      activeKafkaProbe,
+      new Promise<boolean>((_, reject) => {
+        timeoutId = setTimeout(
+          () => reject(new Error("kafka probe timeout")),
+          5000,
+        );
+      }),
+    ]);
+
+    if (!ok) {
+      throw new Error("Kafka probe internal execution failed");
+    }
+
+    return {
+      name: "kafka",
+      ok: true,
+      latencyMs: Date.now() - start,
+    };
+  } catch (error) {
+    logger.warn(
+      { module: "health", err: error },
+      "Kafka readiness probe failed",
+    );
+    return {
+      name: "kafka",
+      ok: false,
+      latencyMs: Date.now() - start,
+      error: "kafka probe failed",
+    };
   } finally {
-    if (timeoutHandle) clearTimeout(timeoutHandle);
+    if (timeoutId) clearTimeout(timeoutId);
   }
 };
 
 export class HealthService {
+  /**
+   * Runs all readiness probes. Returns a flat map keyed by probe name
+   * so the controller can render a single response payload.
+   * @returns {Promise<HealthChecks>} hashmap of all readiness probes
+   */
   static async runReadinessChecks(): Promise<HealthChecks> {
     const [database, redisOk, kafka] = await Promise.all([
       probeDatabase(),

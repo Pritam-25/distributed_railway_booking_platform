@@ -1,6 +1,8 @@
 import type { Request, Response } from "express";
-import { statusCode, successResponse } from "@irctc/http";
-import { runReadinessChecks } from "./health.service.js";
+import { statusCode, successResponse, errorResponse } from "@irctc/http";
+import { ApiError, ERROR_CODES } from "@irctc/errors";
+import { HealthService } from "./health.service.js";
+import { logger } from "@irctc/logger";
 
 /**
  * Liveness probe — returns 200 as long as the process is up.
@@ -24,22 +26,50 @@ export const readyCheck = async (
   _req: Request,
   res: Response,
 ): Promise<void> => {
-  const checks = await runReadinessChecks();
-  const allOk = Object.values(checks).every((c) => c.ok);
+  try {
+    const checks = await HealthService.runReadinessChecks();
+    const allHealthy = Object.values(checks).every((c) => c.ok);
 
-  if (!allOk) {
-    res.status(statusCode.serviceUnavailable).json({
-      success: false,
-      status: "unhealthy",
-      checks,
-    });
-    return;
+    if (!allHealthy) {
+      res.status(statusCode.serviceUnavailable).json(
+        errorResponse(
+          new ApiError(
+            statusCode.serviceUnavailable,
+            ERROR_CODES.SERVICE_UNAVAILABLE,
+            "Gateway is unhealthy",
+          ),
+          {
+            status: "unhealthy",
+            checks,
+          },
+        ),
+      );
+      return;
+    }
+
+    res.status(statusCode.success).json(
+      successResponse("Gateway is ready", {
+        status: "ready",
+        checks,
+      }),
+    );
+  } catch (error) {
+    logger.error(
+      { err: error, module: "health" },
+      "Gateway health readiness check failed",
+    );
+    res.status(statusCode.serviceUnavailable).json(
+      errorResponse(
+        new ApiError(
+          statusCode.serviceUnavailable,
+          ERROR_CODES.INTERNAL_ERROR,
+          "Gateway health check failed",
+        ),
+        {
+          status: "error",
+          error: "Internal health check execution error",
+        },
+      ),
+    );
   }
-
-  res.status(statusCode.success).json(
-    successResponse("Gateway is ready", {
-      status: "ready",
-      checks,
-    }),
-  );
 };
