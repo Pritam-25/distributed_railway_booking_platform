@@ -18,13 +18,13 @@ let isShuttingDown = false;
 let server: Server | undefined;
 
 /**
- * Graceful shutdown sequence to prevent data loss and ensure clean termination in K8s/Docker:
- * 1. Stop HTTP server (draining requests)
- * 2. Disconnect Kafka
- * 3. Disconnect Redis
- * 4. Disconnect Prisma
- * 5. Shutdown telemetry
- * 6. Exit process with appropriate exit code
+ * Executes a promise-based operation with a maximum timeout threshold.
+ *
+ * @param label - Diagnostic label used in timeout error messages.
+ * @param op    - The promise representing the async operation.
+ * @param ms    - The timeout limit in milliseconds (default: 5000).
+ * @returns A promise resolving to the operation result.
+ * @throws {Error} If the timeout is reached before the operation completes.
  */
 const withTimeout = async <T>(
   label: string,
@@ -44,6 +44,15 @@ const withTimeout = async <T>(
   }
 };
 
+/**
+ * Graceful shutdown sequence to prevent data loss and ensure clean termination in K8s/Docker:
+ * 1. Stop HTTP server (draining requests)
+ * 2. Disconnect Kafka
+ * 3. Disconnect Redis
+ * 4. Disconnect Prisma
+ * 5. Shutdown telemetry
+ * 6. Exit process with appropriate exit code
+ */
 const shutdown = async (signal: NodeJS.Signals, exitCode = 0) => {
   if (isShuttingDown) return;
   isShuttingDown = true;

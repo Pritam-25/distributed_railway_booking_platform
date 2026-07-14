@@ -9,7 +9,7 @@ import {
 } from "@dto";
 import { validateSchema, asyncHandler } from "@irctc/middleware";
 import { Router } from "express";
-import { sessionMiddleware, requireUser } from "@middleware";
+import { sessionMiddleware, trustGatewayHeaders } from "@middleware";
 
 /**
  * All routes for authentication and authorization
@@ -62,7 +62,7 @@ router.post(
  */
 router.get(
   "/sessions",
-  requireUser,
+  trustGatewayHeaders,
   sessionMiddleware,
   asyncHandler((req, res) => authController.getSessions(req, res)),
 );
@@ -73,7 +73,7 @@ router.get(
  */
 router.delete(
   "/sessions/:sessionId",
-  requireUser,
+  trustGatewayHeaders,
   sessionMiddleware,
   asyncHandler((req, res) => authController.revokeSession(req, res)),
 );
@@ -84,7 +84,7 @@ router.delete(
  */
 router.post(
   "/logout",
-  requireUser,
+  trustGatewayHeaders,
   sessionMiddleware,
   asyncHandler((req, res) => authController.logout(req, res)),
 );
@@ -95,7 +95,7 @@ router.post(
  */
 router.post(
   "/logout-all",
-  requireUser,
+  trustGatewayHeaders,
   sessionMiddleware,
   asyncHandler((req, res) => authController.logoutAll(req, res)),
 );

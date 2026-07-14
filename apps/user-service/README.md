@@ -33,7 +33,9 @@ All under `/api/v1`. All responses use the `@irctc/http`
 | `POST` | `/auth/verify-reset-otp` | `{ sessionId, otp }`                                        | `200 {passwordResetToken}` (short-lived bearer)                           | `400 OTP_INVALID`, `404 OTP_EXPIRED`, `429 OTP_LOCKED`                             |
 | `POST` | `/auth/reset-password`   | `{ passwordResetToken, password, confirmPassword }`         | `200` + clears all active sessions for that user                          | `404 RESET_TOKEN_INVALID_OR_EXPIRED`                                               |
 
-### Authenticated (`auth_token` cookie required)
+### Authenticated (Gateway-injected headers required)
+
+These routes require valid client identity headers (`X-User-Id` and `X-Session-Id`) injected by the API gateway and verified by `trustGatewayHeaders` middleware.
 
 | Method   | Endpoint                    | Body / params                              | Success                                                                                | Errors                          |
 | -------- | --------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------- | ------------------------------- |
@@ -201,9 +203,9 @@ Headers on every event: `x-event-id` (for log correlation), `x-schema-version`
 - OTPs (registration + recovery): `bcryptjs(otp, 10)` in Redis (5-min window).
 - Refresh tokens: only the `sha256(token)` lives in Redis. The raw token is
   only ever in the user's cookie.
-- JWTs: HS256 with `JWT_SECRET`. Access tokens carry `type: "access"`,
-  refresh tokens carry `type: "refresh"`. `requireUser` rejects a refresh
-  token used as an access token.
+- JWTs: HS256 with `JWT_SECRET`. The edge API Gateway validates the JWT signature and expiration. Access tokens carry `type: "access"`,
+  and refresh tokens carry `type: "refresh"`. The gateway's authentication middleware rejects a refresh
+  token used as an access token. Downstream `user-service` trusts the Gateway-injected headers (`X-User-Id` and `X-Session-Id`) extracted by `trustGatewayHeaders` middleware.
 - Device fingerprint: `User-Agent` + first IP in `X-Forwarded-For`. Mismatch
   on `/refresh` ⇒ session killed.
 - Helmet, CORS allow-list (`CORS_ORIGINS`), 1 MB JSON body limit.

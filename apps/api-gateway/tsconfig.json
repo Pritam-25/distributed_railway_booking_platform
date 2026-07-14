@@ -1,0 +1,54 @@
+{
+  "extends": "@repo/typescript-config/base.json",
+  "compilerOptions": {
+    // File Layout
+    "rootDir": "./src",
+    "outDir": "./dist",
+
+    // Environment Settings
+    // See also https://aka.ms/tsconfig/module
+    "module": "nodenext",
+    "target": "esnext",
+    "types": ["node"],
+    "lib": ["esnext"],
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+
+    // Stricter Typechecking Options
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+
+    // Style Options
+    "noImplicitReturns": true,
+    "noImplicitOverride": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noPropertyAccessFromIndexSignature": true,
+
+    // path aliases
+    "paths": {
+      "@config": ["./src/config/index.js"],
+      "@auth": ["./src/auth/index.js"],
+      "@health": ["./src/health/index.js"],
+      "@ratelimit": ["./src/ratelimit/index.js"],
+      "@resilience": ["./src/resilience/index.js"],
+      "@routing": ["./src/routing/index.js"],
+      "@routes": ["./src/routes/index.js"],
+      "@proxy": ["./src/proxy/index.js"],
+      "@utils": ["./src/utils/errors/index.js"]
+    },
+
+    // Recommended Options
+
+    "strict": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "noUncheckedSideEffectImports": true,
+    "moduleDetection": "force",
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"],
+  "exclude": ["node_modules", "dist", "prisma.config.ts", "vitest.config.ts"]
+}

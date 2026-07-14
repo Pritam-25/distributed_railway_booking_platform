@@ -29,7 +29,7 @@ import type {
 import { ERROR_CODES as COMMON_ERROR_CODES, ApiError } from "@irctc/errors";
 import { AUTH_DURATIONS, REDIS_KEYS } from "@utils/constants";
 import { AuthMapper } from "../mappers/auth.mapper.js";
-import type { RefreshTokenPayload } from "@middleware";
+import type { RefreshTokenPayload } from "@irctc/middleware";
 
 /**
  * Service handling authentication-related business logic, including registration flows,

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { requireUser, sessionMiddleware } from "@middleware";
+import { trustGatewayHeaders, sessionMiddleware } from "@middleware";
 import { validateSchema, asyncHandler } from "@irctc/middleware";
 import { userController } from "@container";
 import { UserUpdateSchema } from "@dto";
@@ -12,7 +12,7 @@ const router: Router = Router();
  */
 router.get(
   "/me",
-  requireUser,
+  trustGatewayHeaders,
   sessionMiddleware,
   asyncHandler((req, res) => userController.getProfile(req, res)),
 );
@@ -23,7 +23,7 @@ router.get(
  */
 router.put(
   "/me",
-  requireUser,
+  trustGatewayHeaders,
   sessionMiddleware,
   validateSchema(UserUpdateSchema),
   asyncHandler((req, res) => userController.updateProfile(req, res)),
