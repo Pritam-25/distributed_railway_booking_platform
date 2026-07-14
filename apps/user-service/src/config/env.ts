@@ -25,7 +25,7 @@ export const env = createEnv({
     FORGOT_PASSWORD_OTP_TTL: z.coerce.number().int().positive().default(600), // 10 minutes in seconds
     SERVICE_NAME: z.string().default("user-service"),
     OTEL_EXPORTER_OTLP_ENDPOINT: z.url().default("http://localhost:4318"),
-    OTEL_DEBUG: z.enum(["true", "false"]).default("true"),
+    OTEL_DEBUG: z.enum(["true", "false"]).default("false"),
     LOKI_HOST: z.url().optional(),
     KAFKA_BROKERS: z
       .string()

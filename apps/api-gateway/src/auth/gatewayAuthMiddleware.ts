@@ -43,50 +43,6 @@ const scrubTrustedHeaders = (req: Request): void => {
 };
 
 /**
- * Adds `X-User-Id` to the response `Vary` header (idempotently) so
- * caches and CDNs don't serve one user's response to another.
- */
-const ensureVaryUserId = (res: Response): void => {
-  const current = res.getHeader("Vary");
-  let varyValue = "";
-  if (Array.isArray(current)) {
-    varyValue = current.join(",");
-  } else if (typeof current === "string") {
-    varyValue = current;
-  }
-
-  const parts = varyValue
-    .split(",")
-    .map((v) => v.trim())
-    .filter(Boolean);
-
-  if (!parts.some((v) => v.toLowerCase() === "x-user-id")) {
-    parts.push("X-User-Id");
-  }
-  res.setHeader("Vary", parts.join(", "));
-};
-
-const ensureVaryAdminId = (res: Response): void => {
-  const current = res.getHeader("Vary");
-  let varyValue = "";
-  if (Array.isArray(current)) {
-    varyValue = current.join(",");
-  } else if (typeof current === "string") {
-    varyValue = current;
-  }
-
-  const parts = varyValue
-    .split(",")
-    .map((v) => v.trim())
-    .filter(Boolean);
-
-  if (!parts.some((v) => v.toLowerCase() === "x-admin-id")) {
-    parts.push("X-Admin-Id");
-  }
-  res.setHeader("Vary", parts.join(", "));
-};
-
-/**
  * Required user auth — throws 401 if no valid access token is present.
  *
  * Token source: `Authorization: Bearer <token>` header first, then
@@ -134,7 +90,7 @@ export const gatewayAuthMiddleware: RequestHandler = (
   req.headers["x-user-email"] = user.email;
   req.headers["x-session-id"] = user.sessionId;
 
-  ensureVaryUserId(res);
+  res.setHeader("Cache-Control", "private, no-store");
   next();
 };
 
@@ -188,7 +144,7 @@ export const optionalGatewayAuthMiddleware: RequestHandler = (
       req.headers["x-user-id"] = user.userId;
       req.headers["x-user-email"] = user.email;
       req.headers["x-session-id"] = user.sessionId;
-      ensureVaryUserId(res);
+      res.setHeader("Cache-Control", "private, no-store");
     }
     // If token is present but invalid, fall through silently —
     // the route will decide what to do (e.g. 401 for refresh on
@@ -225,7 +181,7 @@ export const gatewayAdminAuthMiddleware: RequestHandler = (
   // verify against the same secret and expect an `adminId` claim.
   // (Real admin verification lives in admin-service; this is just
   // a presence + signature check at the gateway edge.)
-  if (!token || token.split(".").length !== 3) {
+  if (token?.split(".").length !== 3) {
     throw new ApiError(
       statusCode.unauthorized,
       ERROR_CODES.UNAUTHORIZED,
@@ -249,7 +205,7 @@ export const gatewayAdminAuthMiddleware: RequestHandler = (
 
     req.admin = { adminId: decoded.sub };
     req.headers["x-admin-id"] = decoded.sub;
-    ensureVaryAdminId(res);
+    res.setHeader("Cache-Control", "private, no-store");
     next();
   } catch (error) {
     if (error instanceof ApiError) throw error;

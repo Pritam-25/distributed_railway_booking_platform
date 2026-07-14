@@ -55,7 +55,7 @@ export class TokenBucketRateLimiter {
       return result;
     } catch (err) {
       this.logger?.error(
-        { module: "token-bucket", key, err: err as Error },
+        { module: "token-bucket", err: err as Error },
         "Rate limiter Lua eval failed",
       );
       throw err;

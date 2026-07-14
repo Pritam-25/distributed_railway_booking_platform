@@ -63,7 +63,7 @@ export const env = createEnv({
 
     SERVICE_NAME: z.string().default("api-gateway"),
     OTEL_EXPORTER_OTLP_ENDPOINT: z.url().default("http://localhost:4318"),
-    OTEL_DEBUG: z.enum(["true", "false"]).default("true"),
+    OTEL_DEBUG: z.enum(["true", "false"]).default("false"),
     LOKI_HOST: z.url().optional(),
   },
   runtimeEnv: process.env,

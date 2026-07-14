@@ -15,6 +15,11 @@ import { mountRoutes } from "@routing";
 
 const app: Application = express();
 
+if (env.TRUST_PROXY === "true") {
+  // Trust the first hop (the immediate load balancer/proxy)
+  app.set("trust proxy", 1);
+}
+
 /**
  * Security headers
  */
