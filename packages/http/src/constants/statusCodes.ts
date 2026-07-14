@@ -13,6 +13,7 @@ export const statusCode = {
   conflict: 409,
   unprocessable: 422,
   tooManyRequests: 429,
+  methodNotAllowed: 405,
   internalError: 500,
   badGateway: 502,
   serviceUnavailable: 503,

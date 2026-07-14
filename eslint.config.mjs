@@ -1,1 +1,1 @@
-export { config } from "./packages/eslint-config/base.js";
+export { config as default } from "./packages/eslint-config/base.js";

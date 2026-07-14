@@ -1,5 +1,5 @@
 import type { AuthService } from "@services";
-import type { RefreshTokenPayload } from "@middleware";
+import type { RefreshTokenPayload } from "@irctc/middleware";
 import type {
   LoginRequestDto,
   RegisterRequestDto,

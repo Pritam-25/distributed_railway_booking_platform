@@ -7,6 +7,7 @@ services:
     image: postgres:16-alpine
     container_name: irctc-postgres
     restart: unless-stopped
+    profiles: ["prod"]
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-admin}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
@@ -17,17 +18,29 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - irctc-network
+    healthcheck:
+      test:
+        ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
     container_name: irctc-redis
     restart: always
+    profiles: ["prod"]
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
     networks:
       - irctc-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   # --- Messaging Layer (KRaft Mode - Using Confluent Image for stability) ---
   # Two listeners because Kafka clients resolve advertised addresses against
@@ -41,6 +54,7 @@ services:
     image: confluentinc/cp-kafka:7.8.0
     container_name: irctc-kafka
     restart: always
+    profiles: ["dev", "prod"]
     ports:
       - "9092:9092"
       - "29092:29092"
@@ -62,13 +76,24 @@ services:
       - kafka_data:/var/lib/kafka/data
     networks:
       - irctc-network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "kafka-broker-api-versions --bootstrap-server localhost:9092 || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   kafka-ui:
     image: ghcr.io/kafbat/kafka-ui:v1.5.0
     container_name: irctc-kafka-ui
     restart: always
+    profiles: ["dev"]
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
     ports:
       - "8080:8080"
     environment:
@@ -79,31 +104,34 @@ services:
 
   # --- Management Tools ---
 
-  # pgadmin:
-  #   image: dpage/pgadmin4:9.15.0
-  #   container_name: irctc-pgadmin
-  #   restart: always
-  #   ports:
-  #     - "8081:80"
-  #   environment:
-  #     PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@irctc.com}
-  #     PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-password}
-  #   networks:
-  #     - irctc-network
+  pgadmin:
+    image: dpage/pgadmin4:9.15.0
+    container_name: irctc-pgadmin
+    restart: always
+    profiles: ["debug"]
+    ports:
+      - "8081:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@irctc.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-password}
+    networks:
+      - irctc-network
 
-  # redis-insight:
-  #   image: redis/redisinsight:3.4.2
-  #   container_name: irctc-redis-insight
-  #   restart: always
-  #   ports:
-  #     - "8001:8001"
-  #   networks:
-  #     - irctc-network
+  redis-insight:
+    image: redis/redisinsight:3.4.2
+    container_name: irctc-redis-insight
+    restart: always
+    profiles: ["debug"]
+    ports:
+      - "8001:8001"
+    networks:
+      - irctc-network
 
   tempo:
     image: grafana/tempo:latest
     container_name: irctc-tempo
     restart: always
+    profiles: ["dev", "prod"]
     ports:
       - "4317:4317" # OTLP gRPC
       - "4318:4318" # OTLP HTTP
@@ -119,10 +147,11 @@ services:
     image: grafana/grafana:latest
     container_name: irctc-grafana
     restart: always
+    profiles: ["dev", "prod"]
     depends_on:
       - tempo
     ports:
-      - "3000:3000"
+      - "3050:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     volumes:
@@ -144,8 +173,10 @@ services:
       context: .
       dockerfile: infra/kafka-init/Dockerfile
     container_name: irctc-kafka-init
+    profiles: ["dev", "prod"]
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
     networks:
       - irctc-network
     restart: "no"
@@ -157,6 +188,7 @@ services:
       context: .
       dockerfile: apps/user-service/Dockerfile
     container_name: irctc-user-service
+    profiles: ["prod"]
     restart: always
     command: sh -c "npx prisma migrate deploy && exec node --import @irctc/telemetry/instrumentation dist/server.js"
     environment:
@@ -164,26 +196,45 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-password}@irctc-postgres:5432/irctc_db
       REDIS_URL: redis://irctc-redis:6379
       KAFKA_BROKERS: irctc-kafka:29092
-      JWT_SECRET: ${JWT_SECRET:-"your_jwt_secret"}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
       JWT_ACCESS_EXPIRES_IN: 15m
       JWT_REFRESH_EXPIRES_IN: 7d
       CORS_ORIGINS: ${CORS_ORIGINS:-"http://localhost:3000"}
       SERVICE_NAME: user-service
       OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
-    ports:
-      - "4001:4001"
+    expose:
+      - "4001"
     networks:
       - irctc-network
     depends_on:
-      - postgres
-      - redis
-      - kafka
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --quiet --tries=1 --spider http://localhost:4001/health/live || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
 
   notification-service:
     build:
       context: .
       dockerfile: apps/notification-service/Dockerfile
     container_name: irctc-notification-service
+    profiles: ["prod"]
     restart: always
     environment:
       REDIS_URL: redis://irctc-redis:6379
@@ -196,8 +247,55 @@ services:
     networks:
       - irctc-network
     depends_on:
-      - kafka
-      - redis
+      redis:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: apps/api-gateway/Dockerfile
+    container_name: irctc-api-gateway
+    profiles: ["prod"]
+    restart: always
+    environment:
+      PORT: 4000
+      REDIS_URL: redis://irctc-redis:6379
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
+      CORS_ORIGINS: ${CORS_ORIGINS:-"http://localhost:3000"}
+      USER_UPSTREAM: http://irctc-user-service:4001
+      SERVICE_NAME: api-gateway
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
+    ports:
+      - "4000:4000"
+    networks:
+      - irctc-network
+    depends_on:
+      redis:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --quiet --tries=1 --spider http://localhost:4000/health/live || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
 
 networks:
   irctc-network:

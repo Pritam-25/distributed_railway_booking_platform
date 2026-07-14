@@ -1,5 +1,21 @@
-import { Redis, type RedisOptions } from "ioredis";
+import { createRequire } from "node:module";
+import type { Redis as RedisType, RedisOptions } from "ioredis";
 import { logger } from "@irctc/logger";
+
+/**
+ * OpenTelemetry Redis Tracing ESM Workaround:
+ * Under Node.js ESM (`"type": "module"`), static imports (e.g., `import { Redis } from "ioredis"`)
+ * bypass the CommonJS `require` hooks that `@opentelemetry/instrumentation-ioredis` relies on
+ * to auto-instrument the Redis client.
+ *
+ * To solve this, we resolve the client at runtime using Node's native `createRequire`.
+ * This forces the loading of `ioredis` through the CommonJS pipeline, triggering OpenTelemetry's
+ * auto-instrumentation hooks without requiring experimental/conflict-prone ESM loader flags.
+ *
+ * We statically import type information from "ioredis" separately to maintain full type-safety.
+ */
+const require = createRequire(import.meta.url);
+const { Redis } = require("ioredis");
 
 /**
  * Creates a centralized Redis client with standard exponential backoff
@@ -12,7 +28,7 @@ import { logger } from "@irctc/logger";
 export const createRedisClient = (
   url: string,
   overrideOptions?: RedisOptions,
-): Redis => {
+): RedisType => {
   const client = new Redis(url, {
     maxRetriesPerRequest: 3,
     enableReadyCheck: true,

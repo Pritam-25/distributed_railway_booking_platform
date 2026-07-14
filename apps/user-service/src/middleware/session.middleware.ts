@@ -15,9 +15,9 @@ import { AUTH_DURATIONS, REDIS_KEYS } from "@utils/constants";
  * 3. Updates the session's last active time to now.
  * 4. Extends the session's expiration timer in Redis so the user stays logged in while actively using the app.
  *
- * Why we need this (alongside requireUser):
- * - requireUser only verifies the JWT signature (stateless). Because it doesn't talk to Redis, it has two major limitations:
- *     1. No immediate revocation: It cannot detect if a session was deleted (e.g. if the user logged out, changed their password, or got banned) before the JWT's built-in expiry time runs out.
+ * Why we need this (alongside trustGatewayHeaders):
+ * - trustGatewayHeaders only extracts the identity claims from headers injected by the API gateway (stateless). Because it doesn't talk to Redis, it has two major limitations:
+ *     1. No immediate revocation: It cannot detect if a session was deleted (e.g. if the user logged out, changed their password, or got banned) before the JWT's built-in expiry time runs out at the gateway edge.
  *     2. No sliding session window: It cannot extend the user's active session length based on their activity.
  * - This middleware checks if the session is still active in Redis (stateful), solving both limitations by enabling immediate session termination and resetting the session expiration time on every request.
  *
