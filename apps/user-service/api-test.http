@@ -1,10 +1,17 @@
-@baseUrl = http://localhost:4001/api/v1
+# All requests are routed through the API gateway on :4000.
+# - {{gateway}}        — the gateway itself (root + health probes)
+# - {{baseUrl}}/auth   — proxied to user-service
+# - {{baseUrl}}/users  — proxied to user-service
+@baseUrl = http://localhost:4000/api/v1
 @auth = {{baseUrl}}/auth
 @users = {{baseUrl}}/users
+@gateway = http://localhost:4000
+
+@user-service = http://localhost:4001
 
 # Fallback Variables (used if running request in isolation instead of full sequential flow)
 @fallbackOtp = 244792
-@fallbackEmail = jhondoe@example.com
+@fallbackEmail = jhon_doe123@example.com
 @fallbackSessionId = session-id-goes-here
 @fallbackRecoverySessionId = recovery-session-id-goes-here
 @fallbackPasswordResetToken = reset-token-goes-here
@@ -19,16 +26,29 @@
 # 1. Diagnostics & Health Check
 # ==============================================================================
 
-### Root Endpoint (Basic Connectivity Check)
-GET http://localhost:4001/
+### Root gateway endpoint
+GET {{gateway}}/
+
+### Gateway Liveness (gateway only — Redis probe)
+GET {{gateway}}/health/live
 
 ### Health Probe (Check DB, Redis, and Kafka Connectivity)
 
-#### Liveness Probe
-GET {{baseUrl}}/health/live
+#### Liveness Probe (gateway direct)
+GET {{gateway}}/health/live
 
-#### Readiness Probe
-GET {{baseUrl}}/health/ready
+#### Readiness Probe (gateway direct)
+GET {{gateway}}/health/ready
+
+
+### root user-service endpoint
+GET {{user-service}}
+
+### user-service Liveness Probe
+GET {{user-service}}/health/live
+
+### user-service Readiness Probe
+GET {{user-service}}/health/ready
 
 
 ###

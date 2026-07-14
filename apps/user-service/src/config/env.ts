@@ -18,18 +18,6 @@ export const env = createEnv({
         message: "REDIS_URL must use redis:// or rediss://",
       },
     ),
-    CORS_ORIGINS: z
-      .string()
-      .default("http://localhost:3000")
-      .transform((value) =>
-        value
-          .split(",")
-          .map((origin) => origin.trim())
-          .filter((origin) => origin.length > 0),
-      )
-      .refine((origins) => origins.length > 0, {
-        message: "CORS_ORIGINS must include at least one origin",
-      }),
     JWT_SECRET: z.string().min(1),
     JWT_ACCESS_EXPIRES_IN: z.enum(["15m", "30m", "1h", "1d"]).default("15m"),
     JWT_REFRESH_EXPIRES_IN: z.enum(["7d", "30d"]).default("7d"),
@@ -37,7 +25,7 @@ export const env = createEnv({
     FORGOT_PASSWORD_OTP_TTL: z.coerce.number().int().positive().default(600), // 10 minutes in seconds
     SERVICE_NAME: z.string().default("user-service"),
     OTEL_EXPORTER_OTLP_ENDPOINT: z.url().default("http://localhost:4318"),
-    OTEL_DEBUG: z.enum(["true", "false"]).default("false"),
+    OTEL_DEBUG: z.enum(["true", "false"]).default("true"),
     LOKI_HOST: z.url().optional(),
     KAFKA_BROKERS: z
       .string()

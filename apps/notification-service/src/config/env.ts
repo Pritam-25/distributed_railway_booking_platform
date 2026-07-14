@@ -18,7 +18,7 @@ export const env = createEnv({
     ),
     SERVICE_NAME: z.string().default("notification-service"),
     OTEL_EXPORTER_OTLP_ENDPOINT: z.url().default("http://localhost:4318"),
-    OTEL_DEBUG: z.enum(["true", "false"]).default("false"),
+    OTEL_DEBUG: z.enum(["true", "false"]).default("true"),
     LOKI_HOST: z.url().optional(),
     KAFKA_BROKERS: z
       .string()
