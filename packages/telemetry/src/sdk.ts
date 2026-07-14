@@ -11,6 +11,7 @@ import {
   ParentBasedSampler,
   TraceIdRatioBasedSampler,
 } from "@opentelemetry/sdk-trace-base";
+import { IORedisInstrumentation } from "@opentelemetry/instrumentation-ioredis";
 
 import os from "node:os";
 
@@ -73,17 +74,16 @@ let started = false;
  * append the standard `/v1/traces` path if the caller gave us a base URL.
  */
 function resolveOtlpTracesUrl(endpoint: string): string {
-  const trimmed = endpoint.trim().replace(/\/+$/, "");
+  let trimmed = endpoint.trim();
+  while (trimmed.endsWith("/")) {
+    trimmed = trimmed.slice(0, -1);
+  }
   if (!trimmed) {
     throw new Error(
       "startTelemetry: 'otlpEndpoint' must be a non-empty absolute URL",
     );
   }
-  if (!/^https?:\/\//i.test(trimmed)) {
-    throw new Error(
-      "startTelemetry: 'otlpEndpoint' must start with http:// or https://",
-    );
-  }
+
   if (trimmed.endsWith("/v1/traces")) return trimmed;
   return `${trimmed}${DEFAULT_OTLP_TRACES_PATH}`;
 }
@@ -136,6 +136,10 @@ export function startTelemetry(options: TelemetryOptions): NodeSDK {
         // value once a service is past the bootstrap phase.
         "@opentelemetry/instrumentation-fs": { enabled: false },
         "@opentelemetry/instrumentation-pino": { enabled: false },
+        "@opentelemetry/instrumentation-ioredis": { enabled: false },
+      }),
+      new IORedisInstrumentation({
+        requireParentSpan: false,
       }),
     ],
   });
