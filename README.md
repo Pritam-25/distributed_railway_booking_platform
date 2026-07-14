@@ -71,7 +71,7 @@ state changes flow through Kafka and get fanned out.
 .
 ├── apps/
 │   ├── web/                    # (planned) Next.js frontend
-│   ├── api-gateway/            # (planned) HTTPS termination, JWT validation, routing
+│   ├── api-gateway/            # ✅ HTTPS termination, JWT validation, routing
 │   ├── user-service/           # ✅ auth, registration, sessions, OTP
 │   ├── notification-service/   # ✅ Kafka consumer, transactional email
 │   ├── inventory-service/      # (planned) trains, schedules, seat availability
@@ -105,6 +105,7 @@ state changes flow through Kafka and get fanned out.
 
 ### Implemented
 
+- **`api-gateway`** — single ingress. Edge security (CORS, Helmet), request validation, cookie parsing, rate limiting, and service resilience via circuit breakers.
 - **`user-service`** — registration, login, JWT issuance, multi-device
   session management, password recovery. Owns the `User` table, the
   Redis session/OTP keyspace, and produces `user.otp-requested.v1`
@@ -115,8 +116,6 @@ state changes flow through Kafka and get fanned out.
 
 ### Planned
 
-- **`api-gateway`** — single ingress. TLS termination, JWT validation,
-  rate limiting, request-id propagation, request routing, CORS.
 - **`inventory-service`** — trains, schedules, stations, seat
   availability. Source of truth for what _can_ be booked. Emits
   inventory events that feed `search-service` and `booking-service`.
@@ -202,10 +201,31 @@ This option spins up all infrastructure (Postgres, Redis, Kafka, Elasticsearch, 
    ```
 
 3. **Start the platform:**
-   ```bash
-   docker compose up -d --build
-   ```
-   This will build the service images, initialize the database migrations, and boot the entire platform.
+
+   > [!NOTE]
+   > The Docker Compose configuration is customized with profiles (`dev`, `prod`, and `debug`) to optimize resource usage. You can adapt these to your workflow:
+   >
+   > - **`prod` profile:** Starts the database, cache, message broker, and the microservices stack (useful for production-like integration tests).
+   > - **`dev` profile:** Starts the messaging and tracing tools (`kafka`, `kafka-ui`, `tempo`, `grafana`).
+   > - **`debug` profile:** Starts auxiliary database GUI tools (`pgadmin`, `redis-insight`). These are kept for reference and are disabled by default.
+   - **To run all application services (for production testing):**
+
+     ```bash
+     docker compose --profile prod up -d --build
+     ```
+
+     This will build the service images, initialize the database migrations, and boot the entire platform.
+
+   - **To run only the development infrastructure tools:**
+
+     ```bash
+     docker compose --profile dev up -d
+     ```
+
+   - **To run debug helpers (pgadmin & redis-insight):**
+     ```bash
+     docker compose --profile debug up -d
+     ```
 
 ---
 
@@ -277,7 +297,8 @@ Choose this option if you want to run the microservices directly on your host ma
 | `kafka-init`           | —                     | `irctc-kafka-init`           | One-shot sidecar that pre-creates the `user.*` topics.           |
 | `elasticsearch`        | `9200`                | `irctc-elasticsearch`        | Search index store.                                              |
 | `tempo`                | `3200`, `4317`/`4318` | `irctc-tempo`                | OTel tracing collector & query backend.                          |
-| `grafana`              | `3000`                | `irctc-grafana`              | Metrics & Traces visualization UI (admin/admin).                 |
+| `grafana`              | `3050`                | `irctc-grafana`              | Metrics & Traces visualization UI (admin/admin).                 |
+| `api-gateway`          | `4000`                | `irctc-api-gateway`          | Ingress proxy, Edge security, JWT validation, rate limiting.     |
 | `user-service`         | `4001`                | `irctc-user-service`         | The auth API.                                                    |
 | `notification-service` | —                     | `irctc-notification-service` | Headless email worker. No HTTP listener.                         |
 
@@ -289,7 +310,7 @@ Choose this option if you want to run the microservices directly on your host ma
 
 The platform is integrated with **OpenTelemetry** for distributed tracing. Traces flow automatically from the services (e.g., `user-service` and `notification-service`) into **Tempo** and can be visualized in **Grafana**.
 
-- **Grafana Dashboard**: [http://localhost:3000](http://localhost:3000) (default credentials: `admin` / `admin`).
+- **Grafana Dashboard**: [http://localhost:3050](http://localhost:3050) (default credentials: `admin` / `admin`).
 - **Tempo Backend**: Queryable inside Grafana via the pre-configured `Tempo` datasource.
 
 #### End-to-End Tracing with Kafka Propagation
@@ -350,7 +371,7 @@ them:
 
 1. ✅ `user-service` — auth foundation
 2. ✅ `notification-service` — fan-out to email
-3. ⏭️ `api-gateway` — single ingress, JWT validation, rate limiting
+3. ✅ `api-gateway` — single ingress, JWT validation, rate limiting
 4. ⏭️ `admin-service` — back-office / audit
 5. ⏭️ `inventory-service` — schedules, seat availability
 6. ⏭️ `search-service` — Elasticsearch query layer
