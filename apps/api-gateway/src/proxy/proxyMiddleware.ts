@@ -37,17 +37,16 @@ const getOrCreateProxy = (
       return (req as any).originalUrl.replace(/^\/api\/v1/, "");
     },
     on: {
-      error: (err, _req, _res) => {
+      error: (err, _req, res) => {
         // Connection-level failure (ECONNREFUSED, ECONNRESET, DNS error).
-        // The promise returned by `proxy()` rejects with the same error,
-        // which propagates to the outer catch in `createProxyHandler` and
-        // is translated to a 502 ApiError via the central error pipeline.
         // We log here so the failure is recorded with the upstream name
         // even if the response was partially written before the failure.
         logger.error(
           { module: "proxy", upstream: upstreamName, err },
           `Proxy error for upstream "${upstreamName}"`,
         );
+        // Emit the error so the per-request promise in runProxy can reject.
+        (res as any).emit?.("proxyError", err);
       },
     },
   };
@@ -71,12 +70,24 @@ const runProxy = (
   res: ExpressResponse,
 ): Promise<void> => {
   return new Promise<void>((resolve, reject) => {
-    const onClose = () => resolve();
+    const onClose = () => {
+      cleanup();
+      resolve();
+    };
+    const onProxyError = (err: unknown) => {
+      cleanup();
+      reject(err instanceof Error ? err : new Error(String(err)));
+    };
+    const cleanup = () => {
+      res.off("close", onClose);
+      res.off("proxyError", onProxyError);
+    };
+
     res.on("close", onClose);
+    res.on("proxyError", onProxyError);
+
     proxy(req, res, (err?: unknown) => {
-      if (err) {
-        reject(err instanceof Error ? err : new Error(String(err)));
-      }
+      if (err) onProxyError(err);
     });
   });
 };
@@ -174,7 +185,10 @@ export const createProxyHandler = (route: RouteConfig): RequestHandler => {
         `Proxy request to ${upstream} failed`,
       );
 
-      if (res.headersSent) return;
+      if (res.headersSent) {
+        res.end();
+        return;
+      }
 
       if (error instanceof CircuitBreakerOpenError) {
         next(

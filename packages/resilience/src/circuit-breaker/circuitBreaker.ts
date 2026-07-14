@@ -81,6 +81,7 @@ export class CircuitBreaker {
    * Resets the circuit breaker to the CLOSED state and resets all stats.
    */
   public reset(): void {
+    const previousState = this.state;
     this.state = CircuitBreakerState.CLOSED;
     this.failureCount = 0;
     this.successCount = 0;
@@ -90,7 +91,20 @@ export class CircuitBreaker {
     this.lastOpenTime = 0;
     this.lastHalfOpenTime = 0;
     this.lastClosedTime = Date.now();
-
+    if (
+      previousState !== CircuitBreakerState.CLOSED &&
+      this.options.onStateChange
+    ) {
+      try {
+        this.options.onStateChange(
+          previousState,
+          CircuitBreakerState.CLOSED,
+          this.options.name,
+        );
+      } catch (e) {
+        this.logCallbackError("onStateChange", e);
+      }
+    }
     if (this.options.onCircuitClosed) {
       try {
         this.options.onCircuitClosed(this.options.name);
@@ -99,7 +113,6 @@ export class CircuitBreaker {
       }
     }
   }
-
   /**
    * Forces the circuit breaker into the OPEN state.
    */
@@ -218,25 +231,13 @@ export class CircuitBreaker {
         this.successCount = 0;
         this.activeTrialsCount = 0;
         this.lastClosedTime = now;
-        if (this.options.onCircuitClosed) {
-          try {
-            this.options.onCircuitClosed(this.options.name);
-          } catch (e) {
-            this.logCallbackError("onCircuitClosed", e);
-          }
-        }
+        this.triggerCallback("onCircuitClosed");
         break;
 
       case CircuitBreakerState.OPEN:
         this.lastOpenTime = now;
         this.activeTrialsCount = 0;
-        if (this.options.onCircuitOpen) {
-          try {
-            this.options.onCircuitOpen(this.options.name);
-          } catch (e) {
-            this.logCallbackError("onCircuitOpen", e);
-          }
-        }
+        this.triggerCallback("onCircuitOpen");
         break;
 
       case CircuitBreakerState.HALF_OPEN:
@@ -244,13 +245,7 @@ export class CircuitBreaker {
         this.failureCount = 0;
         this.activeTrialsCount = 0;
         this.lastHalfOpenTime = now;
-        if (this.options.onCircuitHalfOpen) {
-          try {
-            this.options.onCircuitHalfOpen(this.options.name);
-          } catch (e) {
-            this.logCallbackError("onCircuitHalfOpen", e);
-          }
-        }
+        this.triggerCallback("onCircuitHalfOpen");
         break;
     }
   }
@@ -309,19 +304,36 @@ export class CircuitBreaker {
     }
   }
 
+  private triggerCallback(
+    callbackName: "onCircuitClosed" | "onCircuitOpen" | "onCircuitHalfOpen",
+  ): void {
+    const callback = this.options[callbackName];
+    if (callback) {
+      try {
+        callback(this.options.name);
+      } catch (e) {
+        this.logCallbackError(callbackName, e);
+      }
+    }
+  }
+
   private logCallbackError(callbackName: string, error: unknown): void {
     const msg = `CircuitBreaker ${callbackName} callback failed`;
-    if (this.options.logger) {
-      this.options.logger.error(
-        {
-          module: "circuit-breaker",
-          circuit: this.options.name,
-          callback: callbackName,
-          err: error instanceof Error ? error : new Error(String(error)),
-        },
-        msg,
-      );
-    } else {
+    try {
+      if (this.options.logger) {
+        this.options.logger.error(
+          {
+            module: "circuit-breaker",
+            circuit: this.options.name,
+            callback: callbackName,
+            err: error instanceof Error ? error : new Error(String(error)),
+          },
+          msg,
+        );
+      } else {
+        console.error(`${msg}:`, error);
+      }
+    } catch {
       console.error(`${msg}:`, error);
     }
   }
