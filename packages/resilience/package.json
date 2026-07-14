@@ -1,0 +1,29 @@
+{
+  "name": "@irctc/resilience",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc && copyfiles -u 1 src/**/*.lua dist",
+    "lint": "eslint . --no-error-on-unmatched-pattern",
+    "lint:fix": "eslint . --fix --no-error-on-unmatched-pattern"
+  },
+  "dependencies": {
+    "@irctc/errors": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^25.9.4",
+    "copyfiles": "^2.4.1",
+    "ioredis": "^5.6.1"
+  }
+}
