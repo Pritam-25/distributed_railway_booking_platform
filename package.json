@@ -11,10 +11,17 @@
     "typecheck": "turbo run typecheck",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
+    "kafka:create-topics": "tsx scripts/create-kafka-topics.mts",
     "docker:build:user": "pnpm --filter user-service docker:build",
     "docker:run:user": "pnpm --filter user-service docker:run",
     "docker:build:notification": "pnpm --filter notification-service docker:build",
-    "docker:run:notification": "pnpm --filter notification-service docker:run"
+    "docker:run:notification": "pnpm --filter notification-service docker:run",
+    "docker:build:gateway": "pnpm --filter api-gateway docker:build",
+    "docker:run:gateway": "pnpm --filter api-gateway docker:run",
+    "docker:build:admin": "pnpm --filter admin-service docker:build",
+    "docker:run:admin": "pnpm --filter admin-service docker:run",
+    "docker:run:dev": "docker compose --profile dev up -d",
+    "docker:down:dev": "docker compose --profile dev down"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": [

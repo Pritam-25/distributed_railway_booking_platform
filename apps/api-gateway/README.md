@@ -60,8 +60,8 @@ flowchart TD
     C --> RL[Route Matcher]
     RL --> S[Header Scrubbing]
     S --> A[Auth Middleware]
-    A --> L[Rate Limiter (Redis)]
-    L --> P[Proxy Handler & Circuit Breaker]
+    A --> L["Rate Limiter (Redis)"]
+    L --> P["Proxy Handler & Circuit Breaker"]
   end
 
   GW --> Pipeline

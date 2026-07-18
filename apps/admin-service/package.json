@@ -10,6 +10,7 @@
     "check-types": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "seed": "pnpm prisma db seed",
     "docker:build": "docker build -t admin-service:latest -f Dockerfile ../..",
     "docker:run": "docker run --rm --name admin-service -p 4001:4001 --env-file .env admin-service:latest"
   },
@@ -27,7 +28,6 @@
     "@irctc/kafka": "workspace:*",
     "@irctc/logger": "workspace:*",
     "@irctc/middleware": "workspace:*",
-    "@irctc/redis": "workspace:^",
     "@irctc/telemetry": "workspace:*",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",

@@ -64,9 +64,6 @@ importers:
       "@irctc/middleware":
         specifier: workspace:*
         version: link:../../packages/middleware
-      "@irctc/redis":
-        specifier: workspace:^
-        version: link:../../packages/redis
       "@irctc/telemetry":
         specifier: workspace:*
         version: link:../../packages/telemetry

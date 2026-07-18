@@ -63,7 +63,7 @@ enum TrainCategory {
  */
 model Train {
   id          String        @id @default(uuid())
-  trainNumber String        @unique // "12345"
+  trainNumber String        @unique @db.Char(5)
   trainName   String // "Rajdhani Express"
   category    TrainCategory @default(PASSENGER)
   isActive    Boolean       @default(true)

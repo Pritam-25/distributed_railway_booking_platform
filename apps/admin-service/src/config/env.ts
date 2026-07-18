@@ -9,15 +9,7 @@ export const env = createEnv({
       .enum(["development", "production", "test"])
       .default("development"),
     DATABASE_URL: z.url(),
-    REDIS_URL: z.url().refine(
-      (value) => {
-        const protocol = new URL(value).protocol;
-        return protocol === "redis:" || protocol === "rediss:";
-      },
-      {
-        message: "REDIS_URL must use redis:// or rediss://",
-      },
-    ),
+
     JWT_SECRET: z.string().min(1),
     JWT_ACCESS_EXPIRES_IN: z.enum(["15m", "30m", "1h", "1d"]).default("15m"),
     JWT_REFRESH_EXPIRES_IN: z.enum(["7d", "30d"]).default("7d"),

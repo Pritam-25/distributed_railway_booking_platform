@@ -22,6 +22,16 @@ export const successResponse = <T>(
 });
 
 /**
+ * Pagination options interface.
+ * @field skip The number of records to skip.
+ * @field take The number of records to take.
+ */
+export interface PaginationOptions {
+  skip: number;
+  take: number;
+}
+
+/**
  * Paginated response structure containing the paginated data array and pagination metadata.
  */
 export interface PaginatedResult<T> {

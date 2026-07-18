@@ -1,11 +1,4 @@
-import {
-  env,
-  prisma,
-  disconnectRedis,
-  initRedis,
-  initKafka,
-  disconnectKafka,
-} from "@config";
+import { env, prisma, initKafka, disconnectKafka } from "@config";
 import { logger } from "@irctc/logger";
 import type { Server } from "node:http";
 import { registerErrorMessages } from "@irctc/errors";
@@ -92,17 +85,7 @@ const shutdown = async (signal: NodeJS.Signals, exitCode = 0) => {
     );
     hadError = true;
   }
-  // 3. Disconnect Redis
-  try {
-    await withTimeout("Redis disconnect", disconnectRedis());
-    logger.info({ module: "server" }, "Redis connection closed.");
-  } catch (error) {
-    logger.error(
-      { module: "server", err: error },
-      "Error occurred while disconnecting Redis.",
-    );
-    hadError = true;
-  }
+
   // 4. Disconnect Prisma
   try {
     await withTimeout("Prisma disconnect", prisma.$disconnect());
@@ -142,7 +125,6 @@ const startServer = async () => {
 
   // Sequential initialization of dependencies to ensure ordered readiness
   await withTimeout("Prisma connect", prisma.$connect());
-  await withTimeout("Redis connect", initRedis());
   await withTimeout("Kafka connect", initKafka());
 
   logger.info({ module: "server" }, "All dependencies connected successfully.");

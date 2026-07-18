@@ -1,4 +1,4 @@
-import { prisma, redis, kafka } from "@config";
+import { prisma, kafka } from "@config";
 import { logger } from "@irctc/logger";
 
 /**
@@ -58,74 +58,6 @@ const probeDatabase = async (): Promise<ReadinessCheck> => {
       ok: false,
       latencyMs: Date.now() - start,
       error: "database probe failed",
-    };
-  } finally {
-    if (timeoutId) clearTimeout(timeoutId);
-  }
-};
-
-let activeRedisProbe: Promise<string> | null = null;
-
-const runRedisProbe = async (): Promise<string> => {
-  try {
-    return await redis.ping();
-  } finally {
-    activeRedisProbe = null;
-  }
-};
-
-/**
- * Probe Redis with a bounded 5s timeout and deduplicated query promise.
- */
-const probeRedis = async (): Promise<ReadinessCheck> => {
-  const start = Date.now();
-  let timeoutId: NodeJS.Timeout | undefined;
-
-  try {
-    if (redis.status !== "ready") {
-      logger.warn(
-        { module: "health" },
-        `Redis not ready for probe (status: ${redis.status})`,
-      );
-      return {
-        name: "redis",
-        ok: false,
-        latencyMs: Date.now() - start,
-        error: `redis status: ${redis.status}`,
-      };
-    }
-
-    activeRedisProbe ??= runRedisProbe();
-
-    const pong = await Promise.race([
-      activeRedisProbe,
-      new Promise<string>((_, reject) => {
-        timeoutId = setTimeout(
-          () => reject(new Error("redis probe timeout")),
-          5000,
-        );
-      }),
-    ]);
-
-    if (pong !== "PONG") {
-      throw new Error(`Unexpected Redis ping response: ${pong}`);
-    }
-
-    return {
-      name: "redis",
-      ok: true,
-      latencyMs: Date.now() - start,
-    };
-  } catch (error) {
-    logger.warn(
-      { module: "health", err: error },
-      "Redis readiness probe failed",
-    );
-    return {
-      name: "redis",
-      ok: false,
-      latencyMs: Date.now() - start,
-      error: "redis probe failed",
     };
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
@@ -197,18 +129,12 @@ const probeKafka = async (): Promise<ReadinessCheck> => {
 };
 
 export class HealthService {
-  /**
-   * Runs all readiness probes. Returns a flat map keyed by probe name
-   * so the controller can render a single response payload.
-   * @returns {Promise<HealthChecks>} hashmap of all readiness probes
-   */
   static async runReadinessChecks(): Promise<HealthChecks> {
-    const [database, redisOk, kafka] = await Promise.all([
+    const [database, kafka] = await Promise.all([
       probeDatabase(),
-      probeRedis(),
       probeKafka(),
     ]);
 
-    return { database, redis: redisOk, kafka };
+    return { database, kafka };
   }
 }

@@ -1,6 +1,6 @@
 import {
   StationRepository,
-  AdminRepository,
+  AdminAuthRepository,
   TrainRepository,
   CoachRepository,
   SeatRepository,
@@ -53,7 +53,7 @@ export class AdminContainer {
   private constructor() {
     // 1. Repositories
     const stationRepository = new StationRepository(prisma);
-    const adminRepository = new AdminRepository(prisma);
+    const adminAuthRepository = new AdminAuthRepository(prisma);
     const trainRepository = new TrainRepository(prisma);
     const coachRepository = new CoachRepository(prisma);
     const seatRepository = new SeatRepository(prisma);
@@ -63,8 +63,13 @@ export class AdminContainer {
 
     // 3. Services
     const stationService = new StationService(stationRepository);
-    const adminAuthService = new AdminAuthService(adminRepository);
-    const trainService = new TrainService(trainRepository);
+    const adminAuthService = new AdminAuthService(adminAuthRepository);
+    const trainService = new TrainService(
+      prisma,
+      trainRepository,
+      this.outboxRepository,
+      scheduleRepository,
+    );
     const coachService = new CoachService(coachRepository);
     const seatService = new SeatService(seatRepository);
     const routeService = new RouteService(routeRepository);
