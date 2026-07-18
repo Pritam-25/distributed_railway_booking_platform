@@ -8,8 +8,11 @@ const router: Router = Router();
 
 /**
  * all routes are private (Admin only via Gateway)
+ *
+ * There is no admin create/signup route,
+ * Admin user is seeded at the time of DB setup.
+ * Or admin user can only be created by platform-admin (Super Admin)
  */
-router.use(requireAdmin);
 router.use(requireAdmin);
 
 /**

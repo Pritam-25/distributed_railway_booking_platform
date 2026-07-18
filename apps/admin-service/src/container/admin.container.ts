@@ -70,8 +70,19 @@ export class AdminContainer {
       this.outboxRepository,
       scheduleRepository,
     );
-    const coachService = new CoachService(coachRepository);
-    const seatService = new SeatService(seatRepository);
+    const coachService = new CoachService(
+      prisma,
+      coachRepository,
+      trainRepository,
+      seatRepository,
+      this.outboxRepository,
+    );
+    const seatService = new SeatService(
+      prisma,
+      coachRepository,
+      seatRepository,
+      this.outboxRepository,
+    );
     const routeService = new RouteService(routeRepository);
     const scheduleService = new ScheduleService(scheduleRepository);
 

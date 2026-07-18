@@ -5,13 +5,14 @@ import {
   validateQuery,
   validateParams,
 } from "@irctc/middleware";
-import { trainController } from "@container";
+import { coachController, trainController } from "@container";
 import {
   createTrainSchema,
   updateTrainSchema,
   listTrainsQuerySchema,
   trainIdParamSchema,
   updateOperatingDaysSchema,
+  createCoachSchema,
 } from "@dto";
 import { requireAdmin } from "@middleware";
 
@@ -79,6 +80,31 @@ router.patch(
   "/:trainId/deactivate",
   validateParams(trainIdParamSchema),
   asyncHandler((req, res) => trainController.deactivateTrain(req, res)),
+);
+
+/**
+ * @route GET /api/v1/trains/:trainId/coaches
+ * @desc Retrieve all coaches belonging to a train
+ */
+router.get(
+  "/:trainId/coaches",
+  validateParams(trainIdParamSchema),
+  asyncHandler(async (req, res) => {
+    return coachController.getAllCoaches(req, res);
+  }),
+);
+
+/**
+ * @route POST /api/v1/trains/:trainId/coaches
+ * @desc Add a new coach to a train
+ */
+router.post(
+  "/:trainId/coaches",
+  validateParams(trainIdParamSchema),
+  validateSchema(createCoachSchema),
+  asyncHandler(async (req, res) => {
+    return coachController.createCoach(req, res);
+  }),
 );
 
 /**

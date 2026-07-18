@@ -11,4 +11,12 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
     "Train does not operate on the scheduled day of the week.",
   [ERROR_CODES.TRAIN_OPERATING_DAYS_REFERENCED]:
     "Cannot remove operating days that have active future schedules.",
+
+  [ERROR_CODES.COACH_ALREADY_EXISTS]:
+    "Coach with this number already exists for this train.",
+  [ERROR_CODES.COACH_NOT_FOUND]: "Coach not found.",
+  [ERROR_CODES.SEATS_ALREADY_GENERATED]:
+    "Seats have already been generated for this coach.",
+
+  [ERROR_CODES.SEAT_NOT_FOUND]: "Seat not found.",
 };
