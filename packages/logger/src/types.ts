@@ -13,3 +13,16 @@ export interface LoggerContext {
   traceId?: string;
   spanId?: string;
 }
+
+/**
+ * Interface describing the shape of HTTP log entries.
+ */
+export interface HttpLog {
+  service?: string;
+  module?: string;
+  method?: string;
+  path?: string;
+  statusCode?: number;
+  durationMs?: number;
+  remoteAddress?: string;
+}

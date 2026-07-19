@@ -421,6 +421,9 @@ importers:
 
   packages/kafka:
     dependencies:
+      "@confluentinc/kafka-javascript":
+        specifier: ^1.10.0
+        version: 1.10.0
       "@irctc/logger":
         specifier: workspace:*
         version: link:../logger
@@ -430,9 +433,6 @@ importers:
       "@opentelemetry/api":
         specifier: 1.9.1
         version: 1.9.1
-      kafkajs:
-        specifier: ^2.2.4
-        version: 2.2.4
     devDependencies:
       "@repo/typescript-config":
         specifier: workspace:*
@@ -687,6 +687,13 @@ packages:
         integrity: sha512-7zVFCDB2reMvJH5dmbKnOQPjZEvjdJTH8jc0U/PIPU1r3/+vf5pD1HlfitV2MWsWXrvu7u39iY1lyLUPOaN0Gw==,
       }
     engines: { node: ">=22.12.0" }
+
+  "@confluentinc/kafka-javascript@1.10.0":
+    resolution:
+      {
+        integrity: sha512-6gLgZSxbtlC5kR/VOG1JE2m8Lb2NwXMDJmkEDunyj8yV/VyzjLTqH/SojMJ/SdcmwUxmXVwf7VC4ATK/gQsKxg==,
+      }
+    engines: { node: ">=18.0.0" }
 
   "@conventional-changelog/git-client@2.7.0":
     resolution:
@@ -1097,6 +1104,13 @@ packages:
       }
     engines: { node: ">=12" }
 
+  "@isaacs/fs-minipass@4.0.1":
+    resolution:
+      {
+        integrity: sha512-wgm9Ehl2jpeqP3zw/7mo3kRHFp5MEDhqAdwy1fTGkHAwnkGOVsgpvQhL8B5n1qlb01jV3n/bI0ZfZp5lWA1k4w==,
+      }
+    engines: { node: ">=18.0.0" }
+
   "@js-sdsl/ordered-map@4.4.2":
     resolution:
       {
@@ -1108,6 +1122,14 @@ packages:
       {
         integrity: sha512-M5UknZPHRu3DEDWoipU6sE8PdkZ6Z/S+v4dD+Ke8IaNlpdSQah50lz1KtcFBa2vsdOnwbbnxJwVM4wty6udA5w==,
       }
+
+  "@mapbox/node-pre-gyp@2.0.3":
+    resolution:
+      {
+        integrity: sha512-uwPAhccfFJlsfCxMYTwOdVfOz3xqyj8xYL3zJj8f0pb30tLohnnFPhLuqp4/qoEz8sNxe4SESZedcBojRefIzg==,
+      }
+    engines: { node: ">=18" }
+    hasBin: true
 
   "@next/eslint-plugin-next@16.2.0":
     resolution:
@@ -2735,6 +2757,13 @@ packages:
       }
     hasBin: true
 
+  abbrev@3.0.1:
+    resolution:
+      {
+        integrity: sha512-AO2ac6pjRB3SJmGJo+v5/aK6Omggp6fsLrs6wN9bd35ulu4cCwaAU9+7ZhXjeqHVkaHThLuzH0nZr0YpCDhygg==,
+      }
+    engines: { node: ^18.17.0 || >=20.5.0 }
+
   accepts@2.0.0:
     resolution:
       {
@@ -2959,6 +2988,12 @@ packages:
       }
     engines: { node: ">=8" }
 
+  bindings@1.5.0:
+    resolution:
+      {
+        integrity: sha512-p2q/t/mhvuOj/UeLlV6566GD/guowlr0hHxClI0W9m7MWYkL1F0hLo+0Aexs9HSPCtR1SXQ0TD3MMKrXZajbiQ==,
+      }
+
   body-parser@2.3.0:
     resolution:
       {
@@ -3065,6 +3100,13 @@ packages:
       }
     engines: { node: ">= 20.19.0" }
 
+  chownr@3.0.0:
+    resolution:
+      {
+        integrity: sha512-+IxzY9BZOQd/XuYPRmrvEVjF/nqj5kgT4kEq7VofrDoM1MxoRjEWkrCC3EtLi59TVawxTAn+orJwFQcrqEN1+g==,
+      }
+    engines: { node: ">=18" }
+
   cjs-module-lexer@2.2.0:
     resolution:
       {
@@ -3156,6 +3198,13 @@ packages:
       {
         integrity: sha512-ysOGlgTFbN2/Y6Cg3Iye8YKulHw+R2fNXHrgSmXISQdMnomY6eNDprVdW9R5xBguEqI954+S6709UyiO7B+6OQ==,
       }
+
+  consola@3.4.2:
+    resolution:
+      {
+        integrity: sha512-5IKcdX0nnYavi6G7TtOhwkYzyjfJlatbjMjuLSfE2kYT5pMDOilZ4OvMhi637CcDICTmz3wARPoyhqyX1Y+XvA==,
+      }
+    engines: { node: ^14.18.0 || >=16.10.0 }
 
   content-disposition@1.1.0:
     resolution:
@@ -3395,6 +3444,13 @@ packages:
       {
         integrity: sha512-ugFTXCtDZunbzasqBxrK93Ik/DRYsO6S/fedkWEMKqt04xZ4csmnmwGDBAb07QWNaGMAmnTIemsYZCksjATwsA==,
       }
+
+  detect-libc@2.1.2:
+    resolution:
+      {
+        integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==,
+      }
+    engines: { node: ">=8" }
 
   dir-glob@3.0.1:
     resolution:
@@ -3847,6 +3903,12 @@ packages:
         integrity: sha512-XXTUwCvisa5oacNGRP9SfNtYBNAMi+RPwBFmblZEF7N7swHYQS6/Zfk7SRwx4D5j3CH211YNRco1DEMNVfZCnQ==,
       }
     engines: { node: ">=16.0.0" }
+
+  file-uri-to-path@1.0.0:
+    resolution:
+      {
+        integrity: sha512-0Zt+s3L7Vf1biwWZ29aARiVYLx7iMGnEUl9x33fbB/j3jR81u/O2LbqK+Bm1CDSNDKVtJ/YjwY7TUd5SkeLQLw==,
+      }
 
   fill-range@7.1.1:
     resolution:
@@ -4721,13 +4783,6 @@ packages:
         integrity: sha512-EKI/M/yqPncGUUh44xz0PxSidXFr/+r0pA70+gIYhjv+et7yxM+s29Y+VGDkovRofQem0fs7Uvf4+YmAdyRduA==,
       }
 
-  kafkajs@2.2.4:
-    resolution:
-      {
-        integrity: sha512-j/YeapB1vfPT2iOIUn/vxdyKEuhuY2PxMBvf5JWux6iSaukAccrMtXEY/Lb7OvavDhOWME589bpLrEdnVHjfjA==,
-      }
-    engines: { node: ">=14.0.0" }
-
   keyv@4.5.4:
     resolution:
       {
@@ -4965,6 +5020,13 @@ packages:
       }
     engines: { node: ">=16 || 14 >=14.17" }
 
+  minizlib@3.1.0:
+    resolution:
+      {
+        integrity: sha512-KZxYo1BUkWD2TVFLr0MQoM8vUUigWD3LlD83a/75BqC+4qE0Hb1Vo5v1FgcfaNXvfXzr+5EhQ6ing/CaBijTlw==,
+      }
+    engines: { node: ">= 18" }
+
   mkdirp@1.0.4:
     resolution:
       {
@@ -5006,6 +5068,12 @@ packages:
       }
     engines: { node: ">=8.0.0" }
 
+  nan@2.28.0:
+    resolution:
+      {
+        integrity: sha512-fTsDz99OTq2sVePhGdp4qQhggZFtKr64ZNVyVajRKtMOkJxYekplBh577PiJB12v/D3s2E5cGtOI45LWp6rnLQ==,
+      }
+
   natural-compare@1.4.0:
     resolution:
       {
@@ -5027,6 +5095,18 @@ packages:
     engines: { node: ">=10.5.0" }
     deprecated: Use your platform's native DOMException instead
 
+  node-fetch@2.7.0:
+    resolution:
+      {
+        integrity: sha512-c4FRfUm/dbcWZ7U+1Wq0AwCyFL+3nt2bEw05wfxSz+DWpWsitgmSgYmy2dQdWyKC1694ELPqMs/YzUSNozLt8A==,
+      }
+    engines: { node: 4.x || >=6.0.0 }
+    peerDependencies:
+      encoding: ^0.1.0
+    peerDependenciesMeta:
+      encoding:
+        optional: true
+
   node-fetch@3.3.2:
     resolution:
       {
@@ -5039,6 +5119,14 @@ packages:
       {
         integrity: sha512-lNDU9VJaOPxUmXcLb+HQFeUgQQPtMI24Gt6hgfuMHRJgMRHMF/qZ4HJD3GDru4sSw9IQl2jPjAYnQrdIeLbwow==,
       }
+
+  nopt@8.1.0:
+    resolution:
+      {
+        integrity: sha512-ieGu42u/Qsa4TFktmaKEwM6MQH0pOWnaB3htzh0JRtx84+Mebc0cbZYN5bC+6WTZ4+77xrL9Pn5m7CV6VIkV7A==,
+      }
+    engines: { node: ^18.17.0 || >=20.5.0 }
+    hasBin: true
 
   normalize-path@3.0.0:
     resolution:
@@ -6122,6 +6210,13 @@ packages:
       }
     engines: { node: ">= 0.4" }
 
+  tar@7.5.20:
+    resolution:
+      {
+        integrity: sha512-9FcyK4PA6+WbzlTM9WhQm6vB5W7cP7dUiPsv1g7YDwEQnQ1CGpK3MGlKk/ITVWMk05kHZuBhmVhiv8LZoy/PFQ==,
+      }
+    engines: { node: ">=18" }
+
   thread-stream@4.2.0:
     resolution:
       {
@@ -6162,6 +6257,12 @@ packages:
         integrity: sha512-o5sSPKEkg/DIQNmH43V0/uerLrpzVedkUh8tGNvaeXpfpuwjKenlSox/2O/BTlZUtEe+JG7s5YhEz608PlAHRA==,
       }
     engines: { node: ">=0.6" }
+
+  tr46@0.0.3:
+    resolution:
+      {
+        integrity: sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw==,
+      }
 
   ts-api-utils@2.1.0:
     resolution:
@@ -6340,6 +6441,18 @@ packages:
       }
     engines: { node: ">= 8" }
 
+  webidl-conversions@3.0.1:
+    resolution:
+      {
+        integrity: sha512-2JAn3z8AR6rjK8Sm8orRC0h/bcl/DqL7tRPdGZ4I1CjdF+EaMLmYxBHyXuKL849eucPFhvBoxMsflfOb8kxaeQ==,
+      }
+
+  whatwg-url@5.0.0:
+    resolution:
+      {
+        integrity: sha512-saE57nupxk6v3HY35+jzBwYa0rKSy0XR8JSxZPwgLr7ys0IBzhGviA1/TUGJLmSVqs8pb9AnvICXEuOHLprYTw==,
+      }
+
   which-boxed-primitive@1.1.1:
     resolution:
       {
@@ -6429,6 +6542,13 @@ packages:
         integrity: sha512-0pfFzegeDWJHJIAmTLRP2DwHjdF5s7jo9tuztdQxAhINCdvS+3nGINqPd00AphqJR/0LhANUS6/+7SCb98YOfA==,
       }
     engines: { node: ">=10" }
+
+  yallist@5.0.0:
+    resolution:
+      {
+        integrity: sha512-YgvUTfwqyc7UXVMrB+SImsVYSmTS8X/tSrtdNZMImM+n7+QTriRXyXim0mBrTXNeqzVF0KWGgHPeiyViFFrNDw==,
+      }
+    engines: { node: ">=18" }
 
   yaml@2.9.0:
     resolution:
@@ -6617,6 +6737,17 @@ snapshots:
       conventional-commits-parser: 7.0.1
       picocolors: 1.1.1
 
+  "@confluentinc/kafka-javascript@1.10.0":
+    dependencies:
+      "@mapbox/node-pre-gyp": 2.0.3
+      bindings: 1.5.0
+      js-yaml: 4.3.0
+      nan: 2.28.0
+      tar: 7.5.20
+    transitivePeerDependencies:
+      - encoding
+      - supports-color
+
   "@conventional-changelog/git-client@2.7.0(conventional-commits-parser@7.0.1)":
     dependencies:
       "@simple-libs/child-process-utils": 1.0.2
@@ -6799,9 +6930,26 @@ snapshots:
       wrap-ansi: 8.1.0
       wrap-ansi-cjs: wrap-ansi@7.0.0
 
+  "@isaacs/fs-minipass@4.0.1":
+    dependencies:
+      minipass: 7.1.3
+
   "@js-sdsl/ordered-map@4.4.2": {}
 
   "@kurkle/color@0.3.4": {}
+
+  "@mapbox/node-pre-gyp@2.0.3":
+    dependencies:
+      consola: 3.4.2
+      detect-libc: 2.1.2
+      https-proxy-agent: 7.0.6
+      node-fetch: 2.7.0
+      nopt: 8.1.0
+      semver: 7.8.5
+      tar: 7.5.20
+    transitivePeerDependencies:
+      - encoding
+      - supports-color
 
   "@next/eslint-plugin-next@16.2.0":
     dependencies:
@@ -8026,6 +8174,8 @@ snapshots:
     dependencies:
       "@typescript/old": typescript@6.0.3
 
+  abbrev@3.0.1: {}
+
   accepts@2.0.0:
     dependencies:
       mime-types: 3.0.2
@@ -8171,6 +8321,10 @@ snapshots:
 
   binary-extensions@2.3.0: {}
 
+  bindings@1.5.0:
+    dependencies:
+      file-uri-to-path: 1.0.0
+
   body-parser@2.3.0:
     dependencies:
       bytes: 3.1.2
@@ -8261,6 +8415,8 @@ snapshots:
     dependencies:
       readdirp: 5.0.0
 
+  chownr@3.0.0: {}
+
   cjs-module-lexer@2.2.0: {}
 
   cli-cursor@5.0.0:
@@ -8309,6 +8465,8 @@ snapshots:
   concat-map@0.0.1: {}
 
   confbox@0.2.4: {}
+
+  consola@3.4.2: {}
 
   content-disposition@1.1.0: {}
 
@@ -8434,6 +8592,8 @@ snapshots:
   depd@2.0.0: {}
 
   destr@2.0.5: {}
+
+  detect-libc@2.1.2: {}
 
   dir-glob@3.0.1:
     dependencies:
@@ -8819,6 +8979,8 @@ snapshots:
   file-entry-cache@8.0.0:
     dependencies:
       flat-cache: 4.0.1
+
+  file-uri-to-path@1.0.0: {}
 
   fill-range@7.1.1:
     dependencies:
@@ -9355,8 +9517,6 @@ snapshots:
       jwa: 2.0.1
       safe-buffer: 5.2.1
 
-  kafkajs@2.2.4: {}
-
   keyv@4.5.4:
     dependencies:
       json-buffer: 3.0.1
@@ -9468,6 +9628,10 @@ snapshots:
 
   minipass@7.1.3: {}
 
+  minizlib@3.1.0:
+    dependencies:
+      minipass: 7.1.3
+
   mkdirp@1.0.4: {}
 
   module-details-from-path@1.0.4: {}
@@ -9492,11 +9656,17 @@ snapshots:
     dependencies:
       lru.min: 1.1.4
 
+  nan@2.28.0: {}
+
   natural-compare@1.4.0: {}
 
   negotiator@1.0.0: {}
 
   node-domexception@1.0.0: {}
+
+  node-fetch@2.7.0:
+    dependencies:
+      whatwg-url: 5.0.0
 
   node-fetch@3.3.2:
     dependencies:
@@ -9508,6 +9678,10 @@ snapshots:
     dependencies:
       inherits: 2.0.4
       readable-stream: 1.0.34
+
+  nopt@8.1.0:
+    dependencies:
+      abbrev: 3.0.1
 
   normalize-path@3.0.0: {}
 
@@ -10193,6 +10367,14 @@ snapshots:
 
   supports-preserve-symlinks-flag@1.0.0: {}
 
+  tar@7.5.20:
+    dependencies:
+      "@isaacs/fs-minipass": 4.0.1
+      chownr: 3.0.0
+      minipass: 7.1.3
+      minizlib: 3.1.0
+      yallist: 5.0.0
+
   thread-stream@4.2.0:
     dependencies:
       real-require: 1.0.0
@@ -10214,6 +10396,8 @@ snapshots:
       is-number: 7.0.0
 
   toidentifier@1.0.1: {}
+
+  tr46@0.0.3: {}
 
   ts-api-utils@2.1.0(@typescript/typescript6@6.0.2):
     dependencies:
@@ -10361,6 +10545,13 @@ snapshots:
 
   web-streams-polyfill@3.3.3: {}
 
+  webidl-conversions@3.0.1: {}
+
+  whatwg-url@5.0.0:
+    dependencies:
+      tr46: 0.0.3
+      webidl-conversions: 3.0.1
+
   which-boxed-primitive@1.1.1:
     dependencies:
       is-bigint: 1.1.0
@@ -10437,6 +10628,8 @@ snapshots:
   xtend@4.0.2: {}
 
   y18n@5.0.8: {}
+
+  yallist@5.0.0: {}
 
   yaml@2.9.0: {}
 

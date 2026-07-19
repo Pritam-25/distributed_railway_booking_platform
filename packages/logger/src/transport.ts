@@ -1,4 +1,7 @@
-import pretty from "pino-pretty";
+import pretty, { colorizerFactory } from "pino-pretty";
+import { HttpLog } from "./types.js";
+
+const levelColorize = colorizerFactory(true);
 
 // ANSI Escape Codes for CLI coloring
 const RESET = "\x1b[0m";
@@ -60,6 +63,29 @@ const transport = (opts: Record<string, unknown>) =>
     ...opts,
     colorize: true,
     translateTime: "SYS:yyyy-mm-dd - HH:MM:ss",
+    customPrettifiers: {
+      level: (logLevel: unknown) => {
+        const getLevelLabel = (level: unknown): string => {
+          if (typeof level === "string") return level.toUpperCase();
+          if (typeof level === "number") {
+            if (level >= 60) return "FATAL";
+            if (level >= 50) return "ERROR";
+            if (level >= 40) return "WARN";
+            if (level >= 30) return "INFO";
+            if (level >= 20) return "DEBUG";
+            return "TRACE";
+          }
+          return String(level).toUpperCase();
+        };
+
+        const label = getLevelLabel(logLevel);
+        const colorized = levelColorize(
+          logLevel as string | number | undefined,
+        );
+        const paddedLabel = label.padEnd(5, " ");
+        return colorized.replace(label, paddedLabel);
+      },
+    },
     messageFormat: (log) => {
       const moduleName = typeof log.module === "string" ? log.module : "app";
 
@@ -68,10 +94,12 @@ const transport = (opts: Record<string, unknown>) =>
         return `${SERVICE_COLOR}[${log.service}]${RESET} ${MODULE_COLOR}[${moduleName}]${RESET} ${MESSAGE_COLOR}${log.message}${RESET}`;
       }
 
-      const code = Number(log.statusCode ?? 200);
-      const method = String(log.method ?? "GET");
-      const duration = `${log.durationMs}ms`;
-      const remoteAddress = String(log.remoteAddress ?? "unknown");
+      const httpLog = log as HttpLog;
+      const code = httpLog.statusCode ?? 200;
+      const method = httpLog.method ?? "GET";
+      const duration = `${httpLog.durationMs ?? 0}ms`;
+      const remoteAddress = httpLog.remoteAddress ?? "unknown";
+      const path = httpLog.path ?? "/";
 
       // Padding for fixed width blocks
       const paddedMethod = ` ${method.toUpperCase().padEnd(METHOD_WIDTH, " ")} `;
@@ -80,11 +108,11 @@ const transport = (opts: Record<string, unknown>) =>
       const paddedRemoteAddress = ` ${remoteAddress.padStart(REMOTE_ADDR_WIDTH, " ")} `;
 
       return (
-        `${SERVICE_COLOR}[${log.service}]${RESET} ${MODULE_COLOR}[http]${RESET} | ` +
+        `${SERVICE_COLOR}[${httpLog.service ?? "unknown-service"}]${RESET} ${MODULE_COLOR}[http]${RESET} | ` +
         `${statusColor(code)}${paddedStatus}${RESET} | ` +
         `${durationColor}${paddedDuration}${RESET} | ` +
         `${paddedRemoteAddress} | ` +
-        `${methodColor(method)}${paddedMethod}${RESET} "${log.path}"`
+        `${methodColor(method)}${paddedMethod}${RESET} "${path}"`
       );
     },
   });

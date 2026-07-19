@@ -1,5 +1,8 @@
-import type { EachMessagePayload, Producer } from "kafkajs";
+import { KafkaJS } from "@confluentinc/kafka-javascript";
 import type { logger as irctcLogger } from "@irctc/logger";
+
+type EachMessagePayload = KafkaJS.EachMessagePayload;
+type Producer = KafkaJS.Producer;
 import { KAFKA_HEADERS } from "../headers/kafka-headers.js";
 import { DLQ_REASONS } from "../headers/dlq-reasons.js";
 

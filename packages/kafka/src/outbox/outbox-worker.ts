@@ -1,5 +1,7 @@
-import type { Producer } from "kafkajs";
+import { KafkaJS } from "@confluentinc/kafka-javascript";
 import { logger } from "@irctc/logger";
+
+type Producer = KafkaJS.Producer;
 import { KAFKA_HEADERS } from "../headers/kafka-headers.js";
 import type { OutboxRepository } from "./interfaces.js";
 
