@@ -29,4 +29,18 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
     "Station with this code already exists.",
   [ERROR_CODES.STATION_NOT_FOUND]: "Station not found.",
   [ERROR_CODES.STATION_DEACTIVATED]: "Station is deactivated.",
+
+  // Route error messages
+  [ERROR_CODES.ROUTE_NOT_FOUND]: "Route not found.",
+  [ERROR_CODES.ROUTE_ALREADY_EXISTS]:
+    "Route with this train ID already exists.",
+  [ERROR_CODES.ROUTE_REFERENCED_BY_SCHEDULES]:
+    "Cannot delete route because it has active future schedules.",
+  [ERROR_CODES.ROUTE_MIN_STATIONS_REQUIRED]:
+    "Route must have at least 2 stations (source and destination).",
+  [ERROR_CODES.ROUTE_STATION_NOT_FOUND]: "Route station not found.",
+  [ERROR_CODES.STATION_ALREADY_ON_ROUTE]:
+    "Station is already present on this route.",
+  [ERROR_CODES.STOP_NUMBER_CONFLICT]:
+    "Stop number conflicts with an existing stop on the route.",
 };

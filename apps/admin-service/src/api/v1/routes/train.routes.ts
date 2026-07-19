@@ -5,7 +5,7 @@ import {
   validateQuery,
   validateParams,
 } from "@irctc/middleware";
-import { coachController, trainController } from "@container";
+import { coachController, routeController, trainController } from "@container";
 import {
   createTrainSchema,
   updateTrainSchema,
@@ -80,6 +80,18 @@ router.patch(
   "/:trainId/deactivate",
   validateParams(trainIdParamSchema),
   asyncHandler((req, res) => trainController.deactivateTrain(req, res)),
+);
+
+/**
+ * @route POST /api/v1/trains/:trainId/routes
+ * @desc Create a shell route for a train
+ */
+router.post(
+  "/:trainId/routes",
+  validateParams(trainIdParamSchema),
+  asyncHandler(async (req, res) => {
+    return routeController.createRoute(req, res);
+  }),
 );
 
 /**

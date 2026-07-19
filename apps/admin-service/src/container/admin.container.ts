@@ -87,7 +87,13 @@ export class AdminContainer {
       seatRepository,
       this.outboxRepository,
     );
-    const routeService = new RouteService(routeRepository);
+    const routeService = new RouteService(
+      prisma,
+      routeRepository,
+      trainRepository,
+      stationRepository,
+      this.outboxRepository,
+    );
     const scheduleService = new ScheduleService(scheduleRepository);
 
     // 4. Controllers

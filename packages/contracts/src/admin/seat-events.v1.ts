@@ -1,5 +1,8 @@
 import { z } from "zod";
-
+/**
+ * Schema for SeatTemplateCreatedEventV1.
+ * This event is published when a new seat template is created.
+ */
 export const SeatTemplateCreatedEventV1 = z.object({
   eventId: z.uuid(),
   coachId: z.uuid(),

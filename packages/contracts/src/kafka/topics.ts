@@ -22,4 +22,12 @@ export const KAFKA_TOPICS = {
   STATION_CREATED: "admin.station-created.v1",
   STATION_UPDATED: "admin.station-updated.v1",
   STATION_DEACTIVATED: "admin.station-deactivated.v1",
+
+  // route related events
+  ROUTE_CREATED: "admin.route-created.v1",
+  ROUTE_UPDATED: "admin.route-updated.v1",
+  ROUTE_DELETED: "admin.route-deleted.v1",
+  ROUTE_STATION_ADDED: "admin.route-station-added.v1",
+  ROUTE_STATION_UPDATED: "admin.route-station-updated.v1",
+  ROUTE_STATION_REMOVED: "admin.route-station-removed.v1",
 } as const;

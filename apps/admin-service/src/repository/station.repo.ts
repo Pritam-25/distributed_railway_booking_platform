@@ -91,7 +91,7 @@ export class StationRepository {
       ...(filters.state && {
         state: { contains: filters.state, mode: "insensitive" },
       }),
-      isActive: filters.isActive !== undefined ? filters.isActive : true,
+      isActive: filters.isActive ?? true,
     };
   }
 

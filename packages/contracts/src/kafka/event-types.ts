@@ -16,4 +16,12 @@ export const EVENT_TYPES = {
   STATION_CREATED: "StationCreatedV1",
   STATION_UPDATED: "StationUpdatedV1",
   STATION_DEACTIVATED: "StationDeactivatedV1",
+
+  // route domain
+  ROUTE_CREATED: "RouteCreatedV1",
+  ROUTE_UPDATED: "RouteUpdatedV1",
+  ROUTE_DELETED: "RouteDeletedV1",
+  ROUTE_STATION_ADDED: "RouteStationAddedV1",
+  ROUTE_STATION_UPDATED: "RouteStationUpdatedV1",
+  ROUTE_STATION_REMOVED: "RouteStationRemovedV1",
 } as const;
