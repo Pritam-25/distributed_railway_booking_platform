@@ -1,0 +1,396 @@
+# All requests are routed through the API gateway on :4000.
+# - {{gateway}}        — the gateway itself (root + health probes)
+# - {{baseUrl}}/admin  — proxied to admin-service
+@baseUrl = http://localhost:4000/api/v1
+@adminAuth = {{baseUrl}}/admin/auth
+@stations = {{baseUrl}}/admin/stations
+@trains = {{baseUrl}}/admin/trains
+@coaches = {{baseUrl}}/admin/coaches
+@gateway = http://localhost:4000
+@admin-service = http://localhost:4002
+
+# Fallback Variables (used if running request in isolation instead of full sequential flow)
+@fallbackAdminId = afd836b9-ca43-45f8-9c75-cf775b663bbd
+@fallbackStationId1 = stationId1-goes-here
+@fallbackStationId2 = stationId2-goes-here
+@fallbackTrainId = c9a7b880-0ce2-4479-871f-641d8f172457
+@fallbackCoachId = coachId-goes-here
+@fallbackSeatId = seatId-goes-here
+@fallbackRouteId = routeId-goes-here
+@fallbackRouteStationId = routeStationId-goes-here
+@fallbackScheduleId = scheduleId-goes-here
+
+# Helper dynamic variables resolving to auto-captured response data OR fallback variables
+@adminId = {{login.response.body.data.admin.id}}
+@stationId1 = {{createStation1.response.body.data.id}}
+@stationId2 = {{createStation2.response.body.data.id}}
+@trainId = {{createTrain.response.body.data.id}}
+@coachId = {{addCoach.response.body.data.id}}
+@routeId = {{createRoute.response.body.data.id}}
+@routeStationId1 = {{addRouteStation1.response.body.data.id}}
+@routeStationId2 = {{addRouteStation2.response.body.data.id}}
+@scheduleId = {{createSchedule.response.body.data.id}}
+
+# ==============================================================================
+# 1. Diagnostics & Health Check
+# ==============================================================================
+
+### Root gateway endpoint
+GET {{gateway}}/
+
+### Gateway Liveness (gateway only — Redis probe)
+GET {{gateway}}/health/live
+
+### Health Probe (Check DB, Redis, and Kafka Connectivity)
+
+#### Liveness Probe (gateway direct)
+GET {{gateway}}/health/live
+
+#### Readiness Probe (gateway direct)
+GET {{gateway}}/health/ready
+
+
+### root admin-service endpoint
+GET {{admin-service}}
+
+### admin-service Liveness Probe
+GET {{admin-service}}/health/live
+
+### admin-service Readiness Probe
+GET {{admin-service}}/health/ready
+
+
+###
+# ==============================================================================
+# 2. Admin Authentication
+# ==============================================================================
+
+### Login Admin User
+# @name login
+POST {{adminAuth}}/login
+Content-Type: application/json
+
+{
+  "email": "maityp394@gmail.com",
+  "password": "maityp394@gmail.com"
+}
+
+### Logout Admin User
+POST {{adminAuth}}/logout
+Content-Type: application/json
+
+
+###
+# ==============================================================================
+# 3. Station Management
+# ==============================================================================
+
+### Create Station 1 (Source: Howrah Junction)
+# @name createStation1
+POST {{stations}}
+Content-Type: application/json
+x-admin-id: {{adminId}}
+
+{
+  "name": "Howrah Junction",
+  "code": "HWR",
+  "zone": "Kolkata",
+  "state": "West Bengal"
+}
+
+### Create Station 2 (Destination: Santragachi Junction)
+# @name createStation2
+POST {{stations}}
+Content-Type: application/json
+x-admin-id: {{adminId}}
+
+{
+  "name": "Santragachi Junction",
+  "code": "SRC",
+  "zone": "Kolkata",
+  "state": "West Bengal"
+}
+
+### List All Stations
+GET {{stations}}?page=1&limit=10
+x-admin-id: {{adminId}}
+
+### Get Station 1 by ID
+GET {{stations}}/{{stationId1}}
+x-admin-id: {{adminId}}
+
+### Update Station 1 by ID
+PATCH {{stations}}/{{stationId1}}
+Content-Type: application/json
+x-admin-id: {{adminId}}
+
+{
+  "name": "Howrah Junction Station"
+}
+
+### Deactivate Station 1 by ID
+PATCH {{stations}}/{{stationId1}}/deactivate
+x-admin-id: {{adminId}}
+
+
+
+###
+# ==============================================================================
+# 4. Train Management
+# ==============================================================================
+
+### Create Train
+# @name createTrain
+POST {{trains}}
+Content-Type: application/json
+x-admin-id: {{adminId}}
+
+{
+  "trainNumber": "12841",
+  "trainName": "Coromandel Express",
+  "category": "EXPRESS"
+}
+
+### List All Trains
+GET {{trains}}?page=1&limit=10
+x-admin-id: {{adminId}}
+
+### Get Train by ID
+GET {{trains}}/{{trainId}}
+x-admin-id: {{adminId}}
+
+### Update Train by ID
+PATCH {{trains}}/{{trainId}}
+Content-Type: application/json
+x-admin-id: {{adminId}}
+
+{
+  "trainName": "Coromandel Superfast Express"
+}
+
+### Deactivate Train by ID
+PATCH {{trains}}/{{trainId}}/deactivate
+x-admin-id: {{adminId}}
+
+
+###
+# ==============================================================================
+# 5. Coach Management (Phase 3)
+# ==============================================================================
+
+### Add Coach to a Train
+# @name addCoach
+POST {{trains}}/{{trainId}}/coaches
+Content-Type: application/json
+x-admin-id: {{adminId}}
+
+{
+  "coachNumber": "A1",
+  "coachType": "AC_2A",
+  "totalSeats": 48
+}
+
+### List Coaches belonging to a Train
+GET {{trains}}/{{trainId}}/coaches
+x-admin-id: {{adminId}}
+
+### Get Coach details by ID
+GET {{coaches}}/{{coachId}}
+x-admin-id: {{adminId}}
+
+### Update Coach by ID
+# Capacity ranges constraints apply based on coach type
+PATCH {{coaches}}/{{coachId}}
+Content-Type: application/json
+x-admin-id: {{adminId}}
+
+{
+  "totalSeats": 50
+}
+
+### Delete Coach by ID
+# Note: If seats have been generated, this will fail with 409 Conflict. Reset seats first.
+DELETE {{coaches}}/{{coachId}}
+x-admin-id: {{adminId}}
+
+
+###
+# ==============================================================================
+# 6. Seat Management (Phase 4)
+# ==============================================================================
+
+### Bulk Generate Seat Templates for Coach
+# Uses Indian Railways repeating layout (Lower, Upper, Side Lower, Side Upper, etc.)
+POST {{coaches}}/{{coachId}}/seats
+x-admin-id: {{adminId}}
+
+### Retrieve all Seat Templates for Coach
+GET {{coaches}}/{{coachId}}/seats
+x-admin-id: {{adminId}}
+
+### Retrieve a single Seat Template by ID
+GET {{coaches}}/{{coachId}}/seats/{{fallbackSeatId}}
+x-admin-id: {{adminId}}
+
+### Reset/Delete all Seat Templates for Coach
+DELETE {{coaches}}/{{coachId}}/seats
+x-admin-id: {{adminId}}
+
+
+###
+# ==============================================================================
+# 7. Route Management (Phase 5)
+# ==============================================================================
+
+@routes = {{baseUrl}}/admin/routes
+@routeStations = {{baseUrl}}/admin/route-stations
+
+### Create Route for a Train
+# @name createRoute
+POST {{trains}}/{{trainId}}/routes
+x-admin-id: {{adminId}}
+
+### Get Route by ID
+GET {{routes}}/{{routeId}}
+x-admin-id: {{adminId}}
+
+### List All Routes
+GET {{routes}}?page=1&limit=10
+x-admin-id: {{adminId}}
+
+### Add Station 1 to Route (Source)
+# @name addRouteStation1
+POST {{routes}}/{{routeId}}/stations
+Content-Type: application/json
+x-admin-id: {{adminId}}
+
+{
+  "stationId": "{{stationId1}}",
+  "stopNumber": 1,
+  "arrivalMinutes": null,
+  "departureMinutes": 10,
+  "distanceFromStart": 0,
+  "platformNumber": "1"
+}
+
+### Add Station 2 to Route (Destination)
+# @name addRouteStation2
+POST {{routes}}/{{routeId}}/stations
+Content-Type: application/json
+x-admin-id: {{adminId}}
+
+{
+  "stationId": "{{stationId2}}",
+  "stopNumber": 2,
+  "arrivalMinutes": 20,
+  "departureMinutes": null,
+  "distanceFromStart": 15,
+  "platformNumber": "2"
+}
+
+### Update Route Station Details
+PATCH {{routeStations}}/{{routeStationId1}}
+Content-Type: application/json
+x-admin-id: {{adminId}}
+
+{
+  "departureMinutes": 15,
+  "platformNumber": "2"
+}
+
+### Remove Station from Route
+DELETE {{routeStations}}/{{routeStationId2}}
+x-admin-id: {{adminId}}
+
+### Update Route Status (Active/Inactive)
+PATCH {{routes}}/{{routeId}}/status
+Content-Type: application/json
+x-admin-id: {{adminId}}
+
+{
+  "isActive": false
+}
+
+### Soft Delete Route
+DELETE {{routes}}/{{routeId}}
+x-admin-id: {{adminId}}
+
+
+###
+# ==============================================================================
+# 8. Train Operating Days
+# ==============================================================================
+
+### Set Train Operating Days (e.g., Monday, Wednesday, Friday: [1, 3, 5])
+POST {{trains}}/{{trainId}}/operating-days
+Content-Type: application/json
+x-admin-id: {{adminId}}
+
+{
+  "operatingDays": [1, 3, 5]
+}
+
+
+###
+# ==============================================================================
+# 9. Train Schedule Management (Phase 6)
+# ==============================================================================
+
+@schedules = {{baseUrl}}/admin/schedules
+
+### Create Train Schedule - SUCCESS case (Operating day Monday)
+# 2026-07-20 is a Monday (dayOfWeek = 1). Since train has operating days [1, 3, 5], this succeeds!
+# @name createSchedule
+POST {{schedules}}
+Content-Type: application/json
+x-admin-id: {{adminId}}
+
+{
+  "trainId": "{{fallbackTrainId}}",
+  "departureDate": "2026-07-20T08:00:00.000Z"
+}
+
+### Create Train Schedule - FAIL case (Non-operating day Tuesday)
+# 2026-07-21 is a Tuesday (dayOfWeek = 2). Since 2 is not in [1, 3, 5], this fails with 409!
+POST {{schedules}}
+Content-Type: application/json
+x-admin-id: {{adminId}}
+
+{
+  "trainId": "{{trainId}}",
+  "departureDate": "2026-07-21T08:00:00.000Z"
+}
+
+### List Train Schedules (with filters & pagination)
+GET {{schedules}}?page=1&limit=10&trainId={{trainId}}&status=ACTIVE
+x-admin-id: {{adminId}}
+
+### Get Schedule details by ID
+GET {{schedules}}/{{scheduleId}}
+x-admin-id: {{adminId}}
+
+### Update Schedule status (e.g., to CANCELLED)
+# Status options: DRAFT, ACTIVE, CANCELLED
+PATCH {{schedules}}/{{scheduleId}}/status
+Content-Type: application/json
+x-admin-id: {{adminId}}
+
+{
+  "status": "CANCELLED"
+}
+
+
+###
+# ==============================================================================
+# 10. Train Operating Days Modification Guard
+# ==============================================================================
+
+### Remove Operating Day Monday - FAIL case (Active future schedule exists on Monday 2026-07-20)
+# Trying to change operatingDays to [3, 5] will fail because Monday = 1 has an active schedule!
+POST {{trains}}/{{trainId}}/operating-days
+Content-Type: application/json
+x-admin-id: {{adminId}}
+
+{
+  "operatingDays": [3, 5]
+}

@@ -13,8 +13,6 @@ const router: Router = Router();
  * Admin user is seeded at the time of DB setup.
  * Or admin user can only be created by platform-admin (Super Admin)
  */
-router.use(requireAdmin);
-
 /**
  * @route POST /api/v1/admin/auth/login
  * @desc Admin Login
@@ -33,6 +31,7 @@ router.post(
  */
 router.post(
   "/logout",
+  requireAdmin,
   asyncHandler(async (req, res) => {
     return adminAuthController.logout(req, res);
   }),
