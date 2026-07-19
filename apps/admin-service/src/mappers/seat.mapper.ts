@@ -8,6 +8,12 @@ import {
  * Maps Seat generation metadata to versioned event payloads.
  */
 export class SeatEventMapper {
+  /**
+   * Maps a database coach entity to a SeatTemplateCreatedEventV1 payload.
+   *
+   * @param coach The Coach entity to map.
+   * @returns The validated SeatTemplateCreatedEventV1 event payload.
+   */
   static toCreatedEvent(coach: Coach): SeatTemplateCreatedEventV1Type {
     return SeatTemplateCreatedEventV1.parse({
       eventId: crypto.randomUUID(),

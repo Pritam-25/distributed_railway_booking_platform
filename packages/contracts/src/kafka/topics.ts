@@ -17,4 +17,9 @@ export const KAFKA_TOPICS = {
 
   // seat template related events
   SEAT_TEMPLATE_CREATED: "admin.seat-template-created.v1",
+
+  // station related events
+  STATION_CREATED: "admin.station-created.v1",
+  STATION_UPDATED: "admin.station-updated.v1",
+  STATION_DEACTIVATED: "admin.station-deactivated.v1",
 } as const;

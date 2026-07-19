@@ -15,6 +15,11 @@ export const ERROR_CODES = {
 
   // seat Error Codes
   SEAT_NOT_FOUND: "SEAT_NOT_FOUND",
+
+  // statio Error Codes
+  STATION_ALREADY_EXISTS: "STATION_ALREADY_EXISTS",
+  STATION_NOT_FOUND: "STATION_NOT_FOUND",
+  STATION_DEACTIVATED: "STATION_DEACTIVATED",
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];

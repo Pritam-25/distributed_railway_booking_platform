@@ -62,7 +62,11 @@ export class AdminContainer {
     this.outboxRepository = new PostgresOutboxRepository(prisma);
 
     // 3. Services
-    const stationService = new StationService(stationRepository);
+    const stationService = new StationService(
+      prisma,
+      stationRepository,
+      this.outboxRepository,
+    );
     const adminAuthService = new AdminAuthService(adminAuthRepository);
     const trainService = new TrainService(
       prisma,

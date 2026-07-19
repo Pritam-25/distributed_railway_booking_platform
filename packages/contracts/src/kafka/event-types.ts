@@ -11,4 +11,9 @@ export const EVENT_TYPES = {
 
   // seat domain
   SEAT_TEMPLATE_CREATED: "SeatTemplateCreatedV1",
+
+  // station domain
+  STATION_CREATED: "StationCreatedV1",
+  STATION_UPDATED: "StationUpdatedV1",
+  STATION_DEACTIVATED: "StationDeactivatedV1",
 } as const;
