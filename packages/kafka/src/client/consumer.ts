@@ -1,13 +1,17 @@
-import { Kafka, Consumer, ConsumerConfig } from "kafkajs";
+import { KafkaJS } from "@confluentinc/kafka-javascript";
 import { logger } from "@irctc/logger";
 
+type Kafka = KafkaJS.Kafka;
+type Consumer = KafkaJS.Consumer;
+type ConsumerConfig = KafkaJS.ConsumerConfig;
+
 /**
- * Creates and registers a new KafkaJS Consumer instance for the specified consumer group.
+ * Creates and registers a new Consumer instance for the specified consumer group.
  *
  * @param kafka - The initialized Kafka client instance.
  * @param groupId - The unique identifier representing the consumer group.
  * @param retry - Optional consumer-specific retry configuration parameters.
- * @returns A newly created KafkaJS Consumer instance.
+ * @returns A newly created Consumer instance.
  */
 export const createConsumer = (
   kafka: Kafka,
@@ -18,5 +22,12 @@ export const createConsumer = (
     { module: "kafka-consumer" },
     `Creating consumer for group: ${groupId}`,
   );
-  return kafka.consumer(retry ? { groupId, retry } : { groupId });
+  const { factor, multiplier, ...cleanRetry } = (retry || {}) as any;
+  return kafka.consumer({
+    kafkaJS: {
+      groupId,
+      fromBeginning: false,
+      ...(retry ? { retry: cleanRetry } : {}),
+    },
+  });
 };

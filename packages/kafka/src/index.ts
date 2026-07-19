@@ -12,5 +12,8 @@ export * from "./consumer-runner/index.js";
 export * from "./retry/index.js";
 export * from "./headers/index.js";
 export * from "./outbox/index.js";
-export type { Kafka, Producer, Consumer } from "kafkajs";
-export type { EachMessagePayload } from "kafkajs";
+import { KafkaJS } from "@confluentinc/kafka-javascript";
+export interface Kafka extends KafkaJS.Kafka {}
+export interface Producer extends KafkaJS.Producer {}
+export interface Consumer extends KafkaJS.Consumer {}
+export interface EachMessagePayload extends KafkaJS.EachMessagePayload {}

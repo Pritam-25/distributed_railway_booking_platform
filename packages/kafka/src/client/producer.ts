@@ -1,5 +1,8 @@
-import { Kafka, Producer } from "kafkajs";
+import { KafkaJS } from "@confluentinc/kafka-javascript";
 import { logger } from "@irctc/logger";
+
+type Kafka = KafkaJS.Kafka;
+type Producer = KafkaJS.Producer;
 
 /**
  * Singleton manager class for creating, caching, and retrieving the shared Kafka Producer instance.
@@ -25,9 +28,11 @@ export class KafkaProducerManager {
     logger.info({ module: "kafka-producer" }, "Initializing Kafka producer...");
 
     const producer = kafka.producer({
-      allowAutoTopicCreation: false,
-      idempotent: true,
-      maxInFlightRequests: 5,
+      kafkaJS: {
+        allowAutoTopicCreation: false,
+        idempotent: true,
+        maxInFlightRequests: 5,
+      },
     });
 
     // Establish broker connection before exposing the instance.

@@ -20,7 +20,7 @@
     "@irctc/logger": "workspace:*",
     "@irctc/telemetry": "workspace:*",
     "@opentelemetry/api": "1.9.1",
-    "kafkajs": "^2.2.4"
+    "@confluentinc/kafka-javascript": "^1.10.0"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",

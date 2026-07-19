@@ -1,5 +1,8 @@
-import type { Consumer, EachMessagePayload } from "kafkajs";
+import { KafkaJS } from "@confluentinc/kafka-javascript";
 import { SpanKind, SpanStatusCode, context, trace } from "@opentelemetry/api";
+
+type Consumer = KafkaJS.Consumer;
+type EachMessagePayload = KafkaJS.EachMessagePayload;
 import { extractTraceContextFromKafkaHeaders } from "@irctc/telemetry";
 
 /**
@@ -60,7 +63,6 @@ export class KafkaConsumerRunner {
     await this.consumer.connect();
     await this.consumer.subscribe({
       topic,
-      fromBeginning: false,
     });
 
     this.logger.info(

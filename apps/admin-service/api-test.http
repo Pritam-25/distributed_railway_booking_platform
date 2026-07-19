@@ -71,9 +71,10 @@ POST {{adminAuth}}/login
 Content-Type: application/json
 
 {
-  "email": "maityp394@gmail.com",
-  "password": "maityp394@gmail.com"
+  "email": "{{$dotenv ADMIN_EMAIL}}",
+  "password": "{{$dotenv ADMIN_PASSWORD}}"
 }
+
 
 ### Logout Admin User
 POST {{adminAuth}}/logout

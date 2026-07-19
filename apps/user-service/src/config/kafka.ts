@@ -1,11 +1,16 @@
-import { createKafkaClient, KafkaProducerManager } from "@irctc/kafka";
+import {
+  createKafkaClient,
+  KafkaProducerManager,
+  type Kafka,
+  type Producer,
+} from "@irctc/kafka";
 import { env } from "@config";
 
 /**
  * Shared Kafka client instance for the user service.
  * Configured using environment variables for client ID and brokers list.
  */
-const kafka = createKafkaClient({
+const kafka: Kafka = createKafkaClient({
   clientId: env.KAFKA_CLIENT_ID,
   brokers: env.KAFKA_BROKERS,
 });
@@ -18,7 +23,7 @@ export { kafka };
  *
  * @returns A promise that resolves to the connected Kafka Producer.
  */
-export const getProducer = async () => {
+export const getProducer = async (): Promise<Producer> => {
   return await KafkaProducerManager.getProducer(kafka);
 };
 
@@ -28,7 +33,7 @@ export const getProducer = async () => {
  *
  * @returns The initialized Kafka Producer instance.
  */
-export const getProducerSync = () => {
+export const getProducerSync = (): Producer => {
   return KafkaProducerManager.getProducerSync();
 };
 
