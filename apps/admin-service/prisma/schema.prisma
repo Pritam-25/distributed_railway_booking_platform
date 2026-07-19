@@ -1,0 +1,301 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/**
+ * Master railway station.
+ * Examples:
+ * - NDLS (New Delhi)
+ * - HWH (Howrah)
+ * - PNBE (Patna)
+ * Used by:
+ * - Search Service
+ * - Route Management
+ * - Booking Service
+ */
+model Station {
+  id        String   @id @default(uuid())
+  name      String   @unique // "New Delhi"
+  code      String   @unique // "NDLS"
+  zone      String? // "Delhi"
+  state     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  routeStation RouteStation[]
+
+  @@index([name])
+  @@index([code])
+  @@index([zone])
+  @@map("stations")
+}
+
+enum TrainCategory {
+  RAJDHANI
+  SHATABDI
+  VANDE_BHARAT
+  DURONTO
+  SUPERFAST
+  PASSENGER
+  EXPRESS
+  DEMU
+  MEMU
+}
+
+/**
+ * Master train record.
+ * Represents train identity independent of
+ * any particular journey date.
+ * Examples:
+ * - 12301 Rajdhani Express
+ * - 12002 Shatabdi Express
+ */
+model Train {
+  id          String        @id @default(uuid())
+  trainNumber String        @unique @db.Char(5)
+  trainName   String // "Rajdhani Express"
+  category    TrainCategory @default(PASSENGER)
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  coaches       Coach[]
+  route         Route?
+  operatingDays OperatingDay[]
+  schedules     Schedule[]
+
+  @@index([trainNumber])
+  @@index([trainName])
+  @@map("trains")
+}
+
+/**
+ * Route assigned to a train.
+ * A route contains an ordered list
+ * of stations through RouteStation.
+ */
+model Route {
+  id        String   @id @default(uuid())
+  trainId   String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  train        Train          @relation(fields: [trainId], references: [id], onDelete: Cascade)
+  routeStation RouteStation[]
+
+  @@map("routes")
+}
+
+/**
+ * Station stop inside a train route.
+ * Stores:
+ * - stop order
+ * - arrival offset
+ * - departure offset
+ * - distance from source station
+ * Used for:
+ * - fare calculation
+ * - route search
+ * - timetable generation
+ */
+model RouteStation {
+  id                String   @id @default(uuid())
+  routeId           String
+  stationId         String
+  stopNumber        Int // 1 for the first stop, 2 for the second, etc.
+  arrivalMinutes    Int?
+  departureMinutes  Int?
+  distanceFromStart Int      @default(0) // in kilometers, for pricing calculation
+  platformNumber    String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  route   Route   @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  station Station @relation(fields: [stationId], references: [id], onDelete: Cascade)
+
+  @@unique([routeId, stationId])
+  @@unique([routeId, stopNumber])
+  @@index([stopNumber])
+  @@map("route_stations")
+}
+
+enum CoachType {
+  GEN // General
+  SL // Sleeper
+  AC_3E // 3rd AC Economy
+  AC_3A // 3rd AC
+  AC_2A // 2nd AC
+  AC_1A // 1st AC
+  CC // Chair Car
+  EC // Executive Chair Car
+}
+
+/**
+ * Coach attached to a train.
+ * Examples:
+ * - S1
+ * - S2
+ * - A1
+ * - B1
+ */
+model Coach {
+  id          String    @id @default(uuid())
+  trainId     String
+  coachNumber String
+  coachType   CoachType
+  totalSeats  Int
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  train Train  @relation(fields: [trainId], references: [id], onDelete: Cascade)
+  seats Seat[]
+
+  @@unique([trainId, coachNumber])
+  @@map("coaches")
+}
+
+enum SeatType {
+  LOWER
+  MIDDLE
+  UPPER
+  SIDE_LOWER
+  SIDE_UPPER
+}
+
+/**
+ * Physical seat inside a coach.
+ * Unique only within a coach.
+ * Examples:
+ * - S1 Seat 1
+ * - S1 Seat 2
+ * - A1 Seat 12
+ */
+
+model Seat {
+  id         String   @id @default(uuid())
+  coachId    String
+  seatNumber Int
+  seatType   SeatType
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  coach Coach @relation(fields: [coachId], references: [id], onDelete: Cascade)
+
+  @@unique([coachId, seatNumber])
+  @@index([seatNumber])
+  @@map("seats")
+}
+
+/**
+ * Weekly operating day for a train.
+ * 0 = Sunday
+ * 6 = Saturday
+ */
+model OperatingDay {
+  id        String   @id @default(uuid())
+  trainId   String
+  dayOfWeek Int // 0 (Sunday) to 6 (Saturday)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  train Train @relation(fields: [trainId], references: [id], onDelete: Cascade)
+
+  @@unique([trainId, dayOfWeek])
+  @@map("operating_days")
+}
+
+enum ScheduleStatus {
+  DRAFT
+  ACTIVE
+  CANCELLED
+}
+
+model Schedule {
+  id            String         @id @default(uuid())
+  trainId       String
+  departureDate DateTime
+  status        ScheduleStatus @default(ACTIVE)
+  version       Int            @default(1)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  train Train @relation(fields: [trainId], references: [id], onDelete: Restrict)
+
+  @@unique([trainId, departureDate])
+  @@index([departureDate])
+  @@index([status])
+  @@map("schedules")
+}
+
+/**
+ * Administrative user.
+ * Can manage:
+ * - stations
+ * - trains
+ * - routes
+ * - coaches
+ * - seats
+ */
+model Admin {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("admins")
+}
+
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  PUBLISHED
+  FAILED
+  DEAD
+}
+
+/**
+ * Transactional outbox event.
+ * Guarantees eventual delivery
+ * of domain events to Kafka.
+ * Used for:
+ * - StationCreated
+ * - TrainCreated
+ * - RouteCreated
+ */
+model OutboxEvent {
+  id            String       @id @default(uuid())
+  aggregateType String       @map("aggregate_type")
+  aggregateId   String       @map("aggregate_id")
+  eventType     String       @map("event_type")
+  topic         String
+  payload       Json
+  headers       Json?
+  status        OutboxStatus @default(PENDING)
+  retryCount    Int          @default(0) @map("retry_count")
+  nextRetryAt   DateTime?    @map("next_retry_at")
+  errorMessage  String?      @map("error_message")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+  processedAt   DateTime?    @map("processed_at")
+
+  @@index([status, createdAt])
+  @@index([status, nextRetryAt])
+  @@map("outbox_events")
+}
+
+

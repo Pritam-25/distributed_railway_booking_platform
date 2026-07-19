@@ -174,14 +174,11 @@ const probeKafka = async (): Promise<ReadinessCheck> => {
       }),
     ]);
 
-    if (!ok) {
-      throw new Error("Kafka probe internal execution failed");
-    }
-
     return {
       name: "kafka",
-      ok: true,
+      ok,
       latencyMs: Date.now() - start,
+      ...(ok ? {} : { error: "kafka probe failed" }),
     };
   } catch (error) {
     logger.warn(
@@ -192,7 +189,7 @@ const probeKafka = async (): Promise<ReadinessCheck> => {
       name: "kafka",
       ok: false,
       latencyMs: Date.now() - start,
-      error: "kafka probe failed",
+      error: "kafka probe timeout",
     };
   } finally {
     if (timeoutId) clearTimeout(timeoutId);

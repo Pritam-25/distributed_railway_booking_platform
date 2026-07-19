@@ -74,11 +74,11 @@ state changes flow through Kafka and get fanned out.
 │   ├── api-gateway/            # ✅ HTTPS termination, JWT validation, routing
 │   ├── user-service/           # ✅ auth, registration, sessions, OTP
 │   ├── notification-service/   # ✅ Kafka consumer, transactional email
+│   └── admin-service/          # ✅ admin operations, stations, trains, schedules
 │   ├── inventory-service/      # (planned) trains, schedules, seat availability
 │   ├── booking-service/        # (planned) reservations, PNR, holds
 │   ├── payment-service/        # (planned) payment intents, reconciliation
 │   ├── search-service/         # (planned) Elasticsearch query layer
-│   └── admin-service/          # (planned) back-office / audit
 ├── packages/
 │   ├── contracts/              # Zod event schemas + topic / consumer-group constants
 │   ├── kafka/                  # producer/consumer factories, runner, retry policies
@@ -110,6 +110,7 @@ state changes flow through Kafka and get fanned out.
   session management, password recovery. Owns the `User` table, the
   Redis session/OTP keyspace, and produces `user.otp-requested.v1`
   and `user.logged-in.v1`.
+- **`admin-service`** — back-office administration. Owns trains, stations, coaches, routes, schedules, and dynamic seat template generation. Publishes lifecycle events to Kafka using the Transactional Outbox pattern.
 - **`notification-service`** — headless Kafka consumer that turns
   events into emails (OTP, welcome back). Pluggable `EmailProvider`
   with a SendGrid implementation.
@@ -131,8 +132,6 @@ state changes flow through Kafka and get fanned out.
 - **`search-service`** — read-only query layer over Elasticsearch.
   Consumes inventory + booking events and projects them into ES
   indices; serves search and filter queries to `api-gateway`.
-- **`admin-service`** — internal-only back-office. Operator
-  workflows, audit, fraud review. Never exposed publicly.
 - **`web`** — Next.js frontend (App Router). Talks only to
   `api-gateway`; never directly to internal services. Server
   components for SEO, client components for the booking flow.
@@ -264,8 +263,14 @@ Choose this option if you want to run the microservices directly on your host ma
 4. **Generate Prisma Client & run migrations:**
 
    ```bash
+   # User Service
    pnpm --filter user-service prisma generate
    pnpm --filter user-service prisma migrate dev
+
+   # Admin Service
+   pnpm --filter admin-service prisma generate
+   pnpm --filter admin-service prisma migrate dev
+   pnpm --filter admin-service seed
    ```
 
 5. **Configure environment files for each service:**
@@ -274,6 +279,7 @@ Choose this option if you want to run the microservices directly on your host ma
    ```bash
    cp apps/user-service/.env.example apps/user-service/.env
    cp apps/notification-service/.env.example apps/notification-service/.env
+   cp apps/admin-service/.env.example apps/admin-service/.env
    ```
 
    _Note: Open `apps/notification-service/.env` and update the SendGrid credentials if you wish to send real emails during local host development._
@@ -281,6 +287,7 @@ Choose this option if you want to run the microservices directly on your host ma
 6. **Start microservices in development mode:**
    ```bash
    pnpm --filter user-service dev
+   pnpm --filter admin-service dev
    pnpm --filter notification-service dev
    ```
 
@@ -300,6 +307,7 @@ Choose this option if you want to run the microservices directly on your host ma
 | `grafana`              | `3050`                | `irctc-grafana`              | Metrics & Traces visualization UI (admin/admin).                 |
 | `api-gateway`          | `4000`                | `irctc-api-gateway`          | Ingress proxy, Edge security, JWT validation, rate limiting.     |
 | `user-service`         | `4001`                | `irctc-user-service`         | The auth API.                                                    |
+| `admin-service`        | `4002`                | `irctc-admin-service`        | Station, train, route, schedule configuration API.               |
 | `notification-service` | —                     | `irctc-notification-service` | Headless email worker. No HTTP listener.                         |
 
 > **Heads-up on `KAFKA_BROKERS`.** The dev script runs on the **host**
@@ -372,7 +380,7 @@ them:
 1. ✅ `user-service` — auth foundation
 2. ✅ `notification-service` — fan-out to email
 3. ✅ `api-gateway` — single ingress, JWT validation, rate limiting
-4. ⏭️ `admin-service` — back-office / audit
+4. ✅ `admin-service` — back-office / audit
 5. ⏭️ `inventory-service` — schedules, seat availability
 6. ⏭️ `search-service` — Elasticsearch query layer
 7. ⏭️ `booking-service` — reservation lifecycle
