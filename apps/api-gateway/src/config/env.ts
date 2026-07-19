@@ -36,6 +36,7 @@ export const env = createEnv({
     // monorepo (user + notification). Add a new URL here and a
     // matching entry in `upstreams.ts` for each new service.
     USER_UPSTREAM: z.url().default("http://localhost:4001"),
+    ADMIN_UPSTREAM: z.url().default("http://localhost:4002"),
 
     JWT_SECRET: z.string().min(1),
 

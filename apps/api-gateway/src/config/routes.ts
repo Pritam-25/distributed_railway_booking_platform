@@ -87,4 +87,16 @@ export const routes: readonly RouteConfig[] = [
     auth: "required",
     rateLimit: "default",
   },
+  {
+    prefix: "/api/v1/admin/auth/login",
+    upstream: upstreams.admin,
+    auth: "none",
+    rateLimit: "auth",
+  },
+  {
+    prefix: "/api/v1/admin",
+    upstream: upstreams.admin,
+    auth: "admin",
+    rateLimit: "default",
+  },
 ];

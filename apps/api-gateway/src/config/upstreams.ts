@@ -27,4 +27,9 @@ export const upstreams = {
     baseUrl: UpstreamUrl.parse(env.USER_UPSTREAM),
     circuitName: "user-service",
   },
+  admin: {
+    name: "admin",
+    baseUrl: UpstreamUrl.parse(env.ADMIN_UPSTREAM),
+    circuitName: "admin-service",
+  },
 } satisfies Record<string, Upstream>;
