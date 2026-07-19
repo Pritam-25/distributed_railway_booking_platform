@@ -1,10 +1,16 @@
-import type {
-  RouteCreatedEventV1Type,
-  RouteUpdatedEventV1Type,
-  RouteStationAddedEventV1Type,
-  RouteStationUpdatedEventV1Type,
-  RouteStationRemovedEventV1Type,
-  RouteDeletedEventV1Type,
+import {
+  RouteCreatedEventV1,
+  RouteUpdatedEventV1,
+  RouteStationAddedEventV1,
+  RouteStationUpdatedEventV1,
+  RouteStationRemovedEventV1,
+  RouteDeletedEventV1,
+  type RouteCreatedEventV1Type,
+  type RouteUpdatedEventV1Type,
+  type RouteStationAddedEventV1Type,
+  type RouteStationUpdatedEventV1Type,
+  type RouteStationRemovedEventV1Type,
+  type RouteDeletedEventV1Type,
 } from "@irctc/contracts";
 
 interface PrismaRoute {
@@ -43,13 +49,13 @@ export class RouteEventMapper {
    * @returns The V1 RouteCreatedEvent mapping.
    */
   static toCreatedEvent(route: PrismaRoute): RouteCreatedEventV1Type {
-    return {
+    return RouteCreatedEventV1.parse({
       eventId: crypto.randomUUID(),
       routeId: route.id,
       trainId: route.trainId,
       isActive: route.isActive,
       createdAt: route.createdAt,
-    };
+    });
   }
 
   /**
@@ -59,13 +65,13 @@ export class RouteEventMapper {
    * @returns The V1 RouteUpdatedEvent mapping.
    */
   static toUpdatedEvent(route: PrismaRoute): RouteUpdatedEventV1Type {
-    return {
+    return RouteUpdatedEventV1.parse({
       eventId: crypto.randomUUID(),
       routeId: route.id,
       trainId: route.trainId,
       isActive: route.isActive,
       updatedAt: route.updatedAt,
-    };
+    });
   }
 
   /**
@@ -79,7 +85,7 @@ export class RouteEventMapper {
     trainId: string,
     stop: PrismaRouteStation,
   ): RouteStationAddedEventV1Type {
-    return {
+    return RouteStationAddedEventV1.parse({
       eventId: crypto.randomUUID(),
       routeId: stop.routeId,
       trainId,
@@ -91,7 +97,7 @@ export class RouteEventMapper {
       distanceFromStart: stop.distanceFromStart,
       platformNumber: stop.platformNumber,
       createdAt: stop.createdAt,
-    };
+    });
   }
 
   /**
@@ -105,7 +111,7 @@ export class RouteEventMapper {
     trainId: string,
     stop: PrismaRouteStation,
   ): RouteStationUpdatedEventV1Type {
-    return {
+    return RouteStationUpdatedEventV1.parse({
       eventId: crypto.randomUUID(),
       routeId: stop.routeId,
       trainId,
@@ -118,7 +124,7 @@ export class RouteEventMapper {
       distanceFromStart: stop.distanceFromStart,
       platformNumber: stop.platformNumber,
       updatedAt: stop.updatedAt,
-    };
+    });
   }
 
   /**
@@ -132,7 +138,7 @@ export class RouteEventMapper {
     trainId: string,
     stop: PrismaRouteStation,
   ): RouteStationRemovedEventV1Type {
-    return {
+    return RouteStationRemovedEventV1.parse({
       eventId: crypto.randomUUID(),
       routeId: stop.routeId,
       trainId,
@@ -140,7 +146,7 @@ export class RouteEventMapper {
       stationId: stop.stationId,
       stationCode: stop.station?.code || "",
       removedAt: new Date(),
-    };
+    });
   }
 
   /**
@@ -150,11 +156,11 @@ export class RouteEventMapper {
    * @returns The V1 RouteDeletedEvent mapping.
    */
   static toDeletedEvent(route: PrismaRoute): RouteDeletedEventV1Type {
-    return {
+    return RouteDeletedEventV1.parse({
       eventId: crypto.randomUUID(),
       routeId: route.id,
       trainId: route.trainId,
       deletedAt: new Date(),
-    };
+    });
   }
 }

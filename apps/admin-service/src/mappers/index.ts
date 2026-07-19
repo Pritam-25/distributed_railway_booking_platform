@@ -3,3 +3,4 @@ export * from "./coach.mapper.js";
 export * from "./seat.mapper.js";
 export * from "./station.mapper.js";
 export * from "./route.mapper.js";
+export * from "./schedule.mapper.js";

@@ -62,18 +62,21 @@ export class AdminContainer {
     this.outboxRepository = new PostgresOutboxRepository(prisma);
 
     // 3. Services
+    const adminAuthService = new AdminAuthService(adminAuthRepository);
+
     const stationService = new StationService(
       prisma,
       stationRepository,
       this.outboxRepository,
     );
-    const adminAuthService = new AdminAuthService(adminAuthRepository);
+
     const trainService = new TrainService(
       prisma,
       trainRepository,
       this.outboxRepository,
       scheduleRepository,
     );
+
     const coachService = new CoachService(
       prisma,
       coachRepository,
@@ -81,12 +84,14 @@ export class AdminContainer {
       seatRepository,
       this.outboxRepository,
     );
+
     const seatService = new SeatService(
       prisma,
       coachRepository,
       seatRepository,
       this.outboxRepository,
     );
+
     const routeService = new RouteService(
       prisma,
       routeRepository,
@@ -94,7 +99,14 @@ export class AdminContainer {
       stationRepository,
       this.outboxRepository,
     );
-    const scheduleService = new ScheduleService(scheduleRepository);
+
+    const scheduleService = new ScheduleService(
+      prisma,
+      scheduleRepository,
+      trainRepository,
+      routeRepository,
+      this.outboxRepository,
+    );
 
     // 4. Controllers
     this.stationController = new StationController(stationService);

@@ -30,4 +30,8 @@ export const KAFKA_TOPICS = {
   ROUTE_STATION_ADDED: "admin.route-station-added.v1",
   ROUTE_STATION_UPDATED: "admin.route-station-updated.v1",
   ROUTE_STATION_REMOVED: "admin.route-station-removed.v1",
+
+  // schedule related events
+  SCHEDULE_CREATED: "admin.schedule-created.v1",
+  SCHEDULE_STATUS_CHANGED: "admin.schedule-status-changed.v1",
 } as const;

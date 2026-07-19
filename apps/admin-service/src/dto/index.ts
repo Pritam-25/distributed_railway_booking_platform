@@ -4,3 +4,4 @@ export * from "./auth.dto.js";
 export * from "./coach.dto.js";
 export * from "./station.dto.js";
 export * from "./route.dto.js";
+export * from "./schedule.dto.js";
