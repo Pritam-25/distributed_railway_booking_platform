@@ -3,7 +3,7 @@ import { logger } from "@irctc/logger";
 
 type Producer = KafkaJS.Producer;
 import { KAFKA_HEADERS } from "../headers/kafka-headers.js";
-import type { OutboxRepository } from "./interfaces.js";
+import type { OutboxRepository, OutboxEvent } from "./interfaces.js";
 
 /**
  * Delay interval in milliseconds between successive database poll cycles.
@@ -138,74 +138,128 @@ export class OutboxPublisherWorker {
   private async pollAndPublish(): Promise<void> {
     const events = await this.outboxRepository.claimPendingEvents(BATCH_SIZE);
 
-    if (events.length === 0) return;
+    if (events.length === 0) {
+      return;
+    }
 
     const producer = this.getProducer();
 
     for (const event of events) {
-      try {
-        const headers: Record<string, string> = {};
-
-        if (event.headers && typeof event.headers === "object") {
-          const stored = event.headers as Record<string, string | undefined>;
-          const eventType = stored[KAFKA_HEADERS.EVENT_TYPE];
-          if (eventType) {
-            headers[KAFKA_HEADERS.EVENT_TYPE] = eventType;
-          }
-          const schemaVersion = stored[KAFKA_HEADERS.SCHEMA_VERSION];
-          if (schemaVersion) {
-            headers[KAFKA_HEADERS.SCHEMA_VERSION] = schemaVersion;
-          }
-        }
-
-        const payload = event.payload as Record<string, unknown>;
-        if (payload?.eventId) {
-          if (
-            typeof payload.eventId === "string" ||
-            typeof payload.eventId === "number"
-          ) {
-            headers[KAFKA_HEADERS.EVENT_ID] = String(payload.eventId);
-          } else {
-            logger.warn(
-              { module: "outbox-worker", eventId: event.id },
-              "payload.eventId is not a string or number",
-            );
-          }
-        }
-
-        await producer.send({
-          topic: event.topic,
-          messages: [
-            {
-              key: event.aggregateId,
-              value: JSON.stringify(event.payload),
-              headers,
-            },
-          ],
-        });
-
-        await this.outboxRepository.markPublished(event.id);
-      } catch (error) {
-        const currentRetry = event.retryCount ?? 0;
-
-        try {
-          await this.outboxRepository.markFailed(
-            event.id,
-            String(error),
-            currentRetry,
-          );
-        } catch (markError) {
-          logger.error(
-            { module: "outbox-worker", eventId: event.id, markError },
-            "Failed to persist outbox failure state",
-          );
-        }
-
-        logger.error(
-          { module: "outbox-worker", eventId: event.id, error },
-          "Failed to publish outbox event to Kafka",
-        );
-      }
+      await this.publishEvent(producer, event);
     }
+  }
+
+  private async publishEvent(
+    producer: Producer,
+    event: OutboxEvent,
+  ): Promise<void> {
+    try {
+      await producer.send({
+        topic: event.topic,
+        messages: [
+          {
+            key: event.aggregateId,
+            value: JSON.stringify(event.payload),
+            headers: this.buildHeaders(event),
+          },
+        ],
+      });
+
+      await this.outboxRepository.markPublished(event.id);
+    } catch (error) {
+      await this.handlePublishFailure(event, error);
+    }
+  }
+
+  private buildHeaders(event: OutboxEvent): Record<string, string> {
+    const headers: Record<string, string> = {};
+
+    this.copyStoredHeaders(event.headers, headers);
+    this.addEventIdHeader(event, headers);
+
+    return headers;
+  }
+
+  private copyStoredHeaders(
+    storedHeaders: unknown,
+    headers: Record<string, string>,
+  ): void {
+    if (!storedHeaders || typeof storedHeaders !== "object") {
+      return;
+    }
+
+    const stored = storedHeaders as Record<string, string | undefined>;
+
+    this.copyHeader(stored, headers, KAFKA_HEADERS.EVENT_TYPE);
+    this.copyHeader(stored, headers, KAFKA_HEADERS.SCHEMA_VERSION);
+  }
+
+  private copyHeader(
+    source: Record<string, string | undefined>,
+    target: Record<string, string>,
+    key: string,
+  ): void {
+    const value = source[key];
+
+    if (value) {
+      target[key] = value;
+    }
+  }
+
+  private addEventIdHeader(
+    event: OutboxEvent,
+    headers: Record<string, string>,
+  ): void {
+    const payload = event.payload as Record<string, unknown>;
+
+    const eventId = payload?.eventId;
+
+    if (eventId == null) {
+      return;
+    }
+
+    if (typeof eventId === "string" || typeof eventId === "number") {
+      headers[KAFKA_HEADERS.EVENT_ID] = String(eventId);
+      return;
+    }
+
+    logger.warn(
+      {
+        module: "outbox-worker",
+        eventId: event.id,
+      },
+      "payload.eventId is not a string or number",
+    );
+  }
+
+  private async handlePublishFailure(
+    event: OutboxEvent,
+    error: unknown,
+  ): Promise<void> {
+    try {
+      await this.outboxRepository.markFailed(
+        event.id,
+        String(error),
+        event.retryCount ?? 0,
+      );
+    } catch (markError) {
+      logger.error(
+        {
+          module: "outbox-worker",
+          eventId: event.id,
+          markError,
+        },
+        "Failed to persist outbox failure state",
+      );
+    }
+
+    logger.error(
+      {
+        module: "outbox-worker",
+        eventId: event.id,
+        error,
+      },
+      "Failed to publish outbox event to Kafka",
+    );
   }
 }
