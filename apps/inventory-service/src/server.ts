@@ -1,4 +1,11 @@
-import { env, prisma, initKafka, disconnectKafka } from "@config";
+import {
+  env,
+  prisma,
+  initKafka,
+  disconnectKafka,
+  disconnectRedis,
+  initRedis,
+} from "@config";
 import { logger } from "@irctc/logger";
 import type { Server } from "node:http";
 import { registerErrorMessages } from "@irctc/errors";
@@ -41,9 +48,10 @@ const withTimeout = async <T>(
  * Graceful shutdown sequence to prevent data loss and ensure clean termination in K8s/Docker:
  * 1. Stop HTTP server (draining requests)
  * 2. Disconnect Kafka
- * 3. Disconnect Prisma
- * 4. Shutdown telemetry
- * 5. Exit process with appropriate exit code
+ * 3. Disconnect Redis
+ * 4. Disconnect Prisma
+ * 5. Shutdown telemetry
+ * 6. Exit process with appropriate exit code
  */
 const shutdown = async (signal: NodeJS.Signals, exitCode = 0) => {
   if (isShuttingDown) return;
@@ -85,7 +93,18 @@ const shutdown = async (signal: NodeJS.Signals, exitCode = 0) => {
     hadError = true;
   }
 
-  // 3. Disconnect Prisma
+  // 3. Disconnect Redis
+  try {
+    await withTimeout("Redis disconnect", disconnectRedis());
+    logger.info({ module: "server" }, "Redis connection closed.");
+  } catch (error) {
+    logger.error(
+      { module: "server", err: error },
+      "Error occurred while disconnecting Redis.",
+    );
+    hadError = true;
+  }
+  // 4. Disconnect Prisma
   try {
     await withTimeout("Prisma disconnect", prisma.$disconnect());
     logger.info({ module: "server" }, "Prisma connection closed.");
@@ -96,7 +115,7 @@ const shutdown = async (signal: NodeJS.Signals, exitCode = 0) => {
     );
     hadError = true;
   }
-  // 4. Shutdown telemetry
+  // 5. Shutdown telemetry
   try {
     await withTimeout("Telemetry shutdown", shutdownTelemetry());
     logger.info({ module: "server" }, "Telemetry shutdown successfully.");
@@ -124,6 +143,7 @@ const startServer = async () => {
 
   // Sequential initialization of dependencies to ensure ordered readiness
   await withTimeout("Prisma connect", prisma.$connect());
+  await withTimeout("Redis connect", initRedis());
   await withTimeout("Kafka connect", initKafka());
 
   logger.info({ module: "server" }, "All dependencies connected successfully.");
