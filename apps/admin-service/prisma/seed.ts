@@ -26,11 +26,11 @@ async function main() {
   console.log(`Admin account seeded successfully: ${admin.id}`);
 }
 
-main()
-  .catch((e) => {
-    console.error("Error seeding admin database:", e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+try {
+  await main();
+} catch (e) {
+  console.error("Error seeding admin database:", e);
+  process.exit(1);
+} finally {
+  await prisma.$disconnect();
+}

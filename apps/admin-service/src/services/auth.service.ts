@@ -53,7 +53,7 @@ export class AdminAuthService {
     const accessToken = jwt.sign(
       { sub: admin.id, type: "admin" },
       env.JWT_SECRET,
-      { expiresIn: "7d" },
+      { expiresIn: env.JWT_EXPIRATION_TIME },
     );
 
     logger.info(
