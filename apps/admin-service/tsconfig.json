@@ -41,7 +41,6 @@
       "@utils": ["./src/utils/index.ts"],
       "@dto": ["./src/dto/index.ts"],
       "@mappers": ["./src/mappers/index.js"],
-      "@publishers": ["./src/publishers/index.js"],
       "@generated/*": ["./src/generated/*"]
     },
 

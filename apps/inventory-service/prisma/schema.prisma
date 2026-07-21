@@ -12,3 +12,108 @@ datasource db {
   provider = "postgresql"
 }
 
+enum ScheduleInventoryStatus {
+  ACTIVE
+  CANCELLED
+}
+
+model ScheduleInventory {
+  id            String                  @id @default(uuid())
+  scheduleId    String                  @unique
+  trainId       String
+  trainNumber   String
+  trainName     String
+  departureDate DateTime
+  status        ScheduleInventoryStatus @default(ACTIVE)
+  version       Int                     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  seats SeatInventory[]
+  stops RouteStop[]
+
+  @@index([trainId])
+  @@index([departureDate])
+  @@map("schedule_inventory")
+}
+
+enum SeatType {
+  LOWER
+  MIDDLE
+  UPPER
+  SIDE_LOWER
+  SIDE_UPPER
+}
+
+model SeatInventory {
+  id          String   @id @default(uuid())
+  scheduleId  String
+  trainId     String
+  coachId     String
+  coachNumber String
+  seatId      String
+  seatNumber  Int
+  seatType    SeatType
+  pricePerKm  Decimal  @default(0.0) @db.Decimal(10, 4)
+  version     Int      @default(0)
+
+  schedule  ScheduleInventory @relation(fields: [scheduleId], references: [scheduleId], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([scheduleId, seatId])
+  @@index([scheduleId])
+  @@index([coachId])
+  @@map("seat_inventory")
+}
+
+model RouteStop {
+  id             String @id @default(uuid())
+  scheduleId     String
+  stationId      String
+  stationCode    String
+  stationName    String
+  sequenceNumber Int
+  distanceFromStart Int @default(0)
+
+  schedule  ScheduleInventory @relation(fields: [scheduleId], references: [scheduleId], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([scheduleId, stationId])
+  @@unique([scheduleId, sequenceNumber])
+  @@index([scheduleId, sequenceNumber])
+  @@map("route_stops")
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  PUBLISHED
+  FAILED
+  DEAD
+}
+
+model OutboxEvent {
+  id            String       @id @default(uuid())
+  aggregateType String       @map("aggregate_type")
+  aggregateId   String       @map("aggregate_id")
+  eventType     String       @map("event_type")
+  topic         String
+  payload       Json
+  headers       Json?
+  status        OutboxStatus @default(PENDING)
+  retryCount    Int          @default(0) @map("retry_count")
+  nextRetryAt   DateTime?    @map("next_retry_at")
+  errorMessage  String?      @map("error_message")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+  processedAt   DateTime?    @map("processed_at")
+
+  @@index([status, createdAt])
+  @@index([status, nextRetryAt])
+  @@map("outbox_events")
+}
