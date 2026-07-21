@@ -4,18 +4,21 @@ import { z } from "zod";
 
 export const env = createEnv({
   server: {
-    PORT: z.string().default("4002"),
+    PORT: z.string().default("4003"),
     NODE_ENV: z
       .enum(["development", "production", "test"])
       .default("development"),
     DATABASE_URL: z.url(),
-    JWT_SECRET: z.string().min(1),
-    JWT_EXPIRATION_TIME: z
-      .enum(["15m", "30m", "1h", "1d", "7d", "30d"])
-      .default("7d"),
-    ADMIN_EMAIL: z.email(),
-    ADMIN_PASSWORD: z.string().min(8),
-    SERVICE_NAME: z.string().default("admin-service"),
+    REDIS_URL: z.url().refine(
+      (value) => {
+        const protocol = new URL(value).protocol;
+        return protocol === "redis:" || protocol === "rediss:";
+      },
+      {
+        message: "REDIS_URL must use redis:// or rediss://",
+      },
+    ),
+    SERVICE_NAME: z.string().default("inventory-service"),
     OTEL_EXPORTER_OTLP_ENDPOINT: z.url().default("http://localhost:4318"),
     OTEL_DEBUG: z.enum(["true", "false"]).default("false"),
     LOKI_HOST: z.url().optional(),
@@ -31,7 +34,7 @@ export const env = createEnv({
       .refine((brokers) => brokers.length > 0, {
         message: "KAFKA_BROKERS must include at least one broker",
       }),
-    KAFKA_CLIENT_ID: z.string().default("admin-service"),
+    KAFKA_CLIENT_ID: z.string().default("inventory-service"),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,
