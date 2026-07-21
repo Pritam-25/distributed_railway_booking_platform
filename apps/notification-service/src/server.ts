@@ -143,7 +143,7 @@ const startWorker = async () => {
 
   logger.info(
     { module: "server" },
-    `Notification worker running successfully in ${env.NODE_ENV} mode.`,
+    `Notification Service worker running successfully in ${env.NODE_ENV} mode.`,
   );
 };
 

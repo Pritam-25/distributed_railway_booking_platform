@@ -197,9 +197,7 @@ Consumer group IDs are exported from `@irctc/contracts` as
 `CONSUMER_GROUPS.NOTIFICATION_OTP` and
 `CONSUMER_GROUPS.NOTIFICATION_WELCOME` — never hard-code them.
 
-Both consumers use `RetryPolicies.aggressive()` from `@irctc/kafka` and
-are wrapped in `KafkaConsumerRunner` which propagates OpenTelemetry
-trace context from message headers.
+The OTP consumer uses `RetryPolicies.aggressive()` (optimized for fast delivery since OTPs are valid for only 5 minutes), while the Welcome consumer uses `RetryPolicies.conservative()` (designed for non-critical delivery, providing a longer backoff window for external mail provider recovery). Both are wrapped in `KafkaConsumerRunner` which propagates OpenTelemetry trace context from message headers.
 
 ## Security
 

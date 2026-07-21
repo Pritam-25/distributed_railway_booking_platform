@@ -16,6 +16,7 @@ const PORT = env.PORT;
 
 let isShuttingDown = false;
 let server: Server | undefined;
+let isContainerInitialized = false;
 
 /**
  * Executes a promise-based operation with a maximum timeout threshold.
@@ -47,11 +48,12 @@ const withTimeout = async <T>(
 /**
  * Graceful shutdown sequence to prevent data loss and ensure clean termination in K8s/Docker:
  * 1. Stop HTTP server (draining requests)
- * 2. Disconnect Kafka
- * 3. Disconnect Redis
- * 4. Disconnect Prisma
- * 5. Shutdown telemetry
- * 6. Exit process with appropriate exit code
+ * 2. Stop Kafka event consumers (draining events)
+ * 3. Disconnect Kafka
+ * 4. Disconnect Redis
+ * 5. Disconnect Prisma
+ * 6. Shutdown telemetry
+ * 7. Exit process with appropriate exit code
  */
 const shutdown = async (signal: NodeJS.Signals, exitCode = 0) => {
   if (isShuttingDown) return;
@@ -81,7 +83,26 @@ const shutdown = async (signal: NodeJS.Signals, exitCode = 0) => {
       );
     }
   }
-  // 2. Disconnect Kafka
+
+  // 2. Stop Kafka event consumers first before disconnecting Kafka client
+  if (isContainerInitialized) {
+    try {
+      const { InventoryContainer } = await import("./container/index.js");
+      await withTimeout(
+        "Consumers stop",
+        InventoryContainer.getInstance().disconnect(),
+      );
+      logger.info({ module: "server" }, "Consumers stopped successfully.");
+    } catch (error) {
+      logger.error(
+        { module: "server", err: error },
+        "Error occurred while stopping consumers.",
+      );
+      hadError = true;
+    }
+  }
+
+  // 3. Disconnect Kafka
   try {
     await withTimeout("Kafka disconnect", disconnectKafka());
     logger.info({ module: "server" }, "Kafka connection closed.");
@@ -93,7 +114,7 @@ const shutdown = async (signal: NodeJS.Signals, exitCode = 0) => {
     hadError = true;
   }
 
-  // 3. Disconnect Redis
+  // 4. Disconnect Redis
   try {
     await withTimeout("Redis disconnect", disconnectRedis());
     logger.info({ module: "server" }, "Redis connection closed.");
@@ -104,7 +125,7 @@ const shutdown = async (signal: NodeJS.Signals, exitCode = 0) => {
     );
     hadError = true;
   }
-  // 4. Disconnect Prisma
+  // 5. Disconnect Prisma
   try {
     await withTimeout("Prisma disconnect", prisma.$disconnect());
     logger.info({ module: "server" }, "Prisma connection closed.");
@@ -115,7 +136,7 @@ const shutdown = async (signal: NodeJS.Signals, exitCode = 0) => {
     );
     hadError = true;
   }
-  // 5. Shutdown telemetry
+  // 6. Shutdown telemetry
   try {
     await withTimeout("Telemetry shutdown", shutdownTelemetry());
     logger.info({ module: "server" }, "Telemetry shutdown successfully.");
@@ -147,6 +168,12 @@ const startServer = async () => {
   await withTimeout("Kafka connect", initKafka());
 
   logger.info({ module: "server" }, "All dependencies connected successfully.");
+
+  // Import container dynamically to guarantee initialized network dependencies
+  const { InventoryContainer } = await import("./container/index.js");
+  const container = InventoryContainer.getInstance();
+  await container.start();
+  isContainerInitialized = true;
 
   const { default: app } = await import("./app.js");
 
