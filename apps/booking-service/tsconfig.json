@@ -36,6 +36,7 @@
       "@repository": ["./src/repository/index.js"],
       "@controllers": ["./src/controllers/index.js"],
       "@consumers": ["./src/consumers/index.js"],
+      "@grpc": ["./src/grpc/index.js"],
       "@utils/errors": ["./src/utils/errors/index.js"],
       "@utils": ["./src/utils/index.ts"],
       "@generated/*": ["./src/generated/*"]

@@ -24,6 +24,7 @@
   "dependencies": {
     "@irctc/contracts": "workspace:*",
     "@irctc/errors": "workspace:*",
+    "@irctc/grpc": "workspace:*",
     "@irctc/http": "workspace:*",
     "@irctc/kafka": "workspace:*",
     "@irctc/logger": "workspace:*",
