@@ -220,6 +220,7 @@ export class ScheduleService {
           parsed.scheduleId,
           newStatus,
           parsed.version,
+          scheduleInventory.version,
           tx,
         );
 

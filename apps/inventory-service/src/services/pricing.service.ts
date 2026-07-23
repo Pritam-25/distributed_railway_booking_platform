@@ -1,3 +1,5 @@
+import { ApiError } from "@irctc/errors";
+
 export class PricingService {
   static readonly BASE_RATE_PER_KM = 0.8;
 
@@ -28,11 +30,28 @@ export class PricingService {
    * Calculates the base rate per kilometer for a given coach type and train category.
    */
   static calculatePricePerKm(trainCategory: string, coachType: string): number {
+    const normalizedCategory = trainCategory.toUpperCase();
+    const normalizedCoach = coachType.toUpperCase();
+
     const categoryMult =
-      PricingService.TRAIN_CATEGORY_MULTIPLIER[trainCategory.toUpperCase()] ??
-      1.0;
-    const coachMult =
-      PricingService.COACH_MULTIPLIER[coachType.toUpperCase()] ?? 1.0;
+      PricingService.TRAIN_CATEGORY_MULTIPLIER[normalizedCategory];
+    if (categoryMult === undefined) {
+      throw new ApiError(
+        400,
+        "INVALID_INPUT",
+        `Unknown train category: ${trainCategory}`,
+      );
+    }
+
+    const coachMult = PricingService.COACH_MULTIPLIER[normalizedCoach];
+    if (coachMult === undefined) {
+      throw new ApiError(
+        400,
+        "INVALID_INPUT",
+        `Unknown coach type: ${coachType}`,
+      );
+    }
+
     return PricingService.BASE_RATE_PER_KM * categoryMult * coachMult;
   }
 }

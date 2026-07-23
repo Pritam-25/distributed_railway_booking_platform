@@ -4,11 +4,16 @@ import { z } from "zod";
 
 export const env = createEnv({
   server: {
-    PORT: z.string().default("4001"),
+    PORT: z.coerce.number().int().min(1).max(65535).default(4001),
     NODE_ENV: z
       .enum(["development", "production", "test"])
       .default("development"),
-    DATABASE_URL: z.url(),
+    DATABASE_URL: z
+      .url()
+      .refine(
+        (u) => u.startsWith("postgres:") || u.startsWith("postgresql:"),
+        "DATABASE_URL must be a PostgreSQL connection URL",
+      ),
     REDIS_URL: z.url().refine(
       (value) => {
         const protocol = new URL(value).protocol;
