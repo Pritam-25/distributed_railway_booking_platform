@@ -36,6 +36,6 @@ ENV NODE_ENV=production
 
 COPY --from=build /deploy ./
 
-EXPOSE 4002
+EXPOSE 4004
 USER node
 CMD ["node", "--import", "@irctc/telemetry/instrumentation", "dist/server.js"]

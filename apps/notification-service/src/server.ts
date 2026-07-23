@@ -172,5 +172,5 @@ try {
     { module: "server", err: error },
     "Failed to start notification worker.",
   );
-  process.exit(1);
+  await shutdown("SIGTERM", 1);
 }

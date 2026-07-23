@@ -4,11 +4,16 @@ import { z } from "zod";
 
 export const env = createEnv({
   server: {
-    PORT: z.string().default("4002"),
+    PORT: z.coerce.number().int().min(1).max(65535).default(4002),
     NODE_ENV: z
       .enum(["development", "production", "test"])
       .default("development"),
-    DATABASE_URL: z.url(),
+    DATABASE_URL: z
+      .url()
+      .refine(
+        (u) => u.startsWith("postgres:") || u.startsWith("postgresql:"),
+        "DATABASE_URL must be a PostgreSQL connection URL",
+      ),
     JWT_SECRET: z.string().min(1),
     JWT_EXPIRATION_TIME: z
       .enum(["15m", "30m", "1h", "1d", "7d", "30d"])

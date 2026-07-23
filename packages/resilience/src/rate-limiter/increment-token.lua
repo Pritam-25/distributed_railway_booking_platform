@@ -6,7 +6,7 @@
   application-instance clock skew.
 
   KEYS[1] = rate limit key (e.g. "rl:user:123")
-  ARGV[1] = capacity (max tokens that can be consumed in a second)
+  ARGV[1] = capacity (maximum burst size / tokens in the bucket)
   ARGV[2] = refillPerSec (tokens added per second)
 
   Returns: { allowed (0|1), remaining (int), resetMs (int) }
