@@ -11,6 +11,7 @@ import type { Server } from "node:http";
 import { registerErrorMessages } from "@irctc/errors";
 import { ERROR_MESSAGES } from "@utils/errors";
 import { shutdownTelemetry } from "@irctc/telemetry";
+import { startGrpcServer, stopGrpcServer } from "./grpc/server.js";
 
 const PORT = env.PORT;
 
@@ -102,6 +103,17 @@ const shutdown = async (signal: NodeJS.Signals, exitCode = 0) => {
     }
   }
 
+  // 2. Stop gRPC server
+  try {
+    await withTimeout("gRPC server stop", stopGrpcServer());
+  } catch (error) {
+    logger.error(
+      { module: "server", err: error },
+      "Error occurred while stopping gRPC server.",
+    );
+    hadError = true;
+  }
+
   // 3. Disconnect Kafka
   try {
     await withTimeout("Kafka disconnect", disconnectKafka());
@@ -168,6 +180,9 @@ const startServer = async () => {
   await withTimeout("Kafka connect", initKafka());
 
   logger.info({ module: "server" }, "All dependencies connected successfully.");
+
+  //  start grpc server
+  await startGrpcServer(env.GRPC_PORT);
 
   // Import container dynamically to guarantee initialized network dependencies
   const { InventoryContainer } = await import("./container/index.js");

@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package irctc.inventory.v1;
+
+// InventoryService provides RPC methods to query seat inventory details.
+service InventoryService {
+  // GetSeatDetails queries the seat details for a given schedule and seat ID.
+  rpc GetSeatDetails (GetSeatDetailsRequest) returns (GetSeatDetailsResponse);
+}
+
+// GetSeatDetailsRequest contains the parameters for fetching seat details.
+message GetSeatDetailsRequest {
+  string schedule_id = 1;
+  string seat_id = 2;
+}
+
+// GetSeatDetailsResponse contains detailed seat information.
+message GetSeatDetailsResponse {
+  string schedule_id = 1;
+  string seat_id = 2;
+  string train_id = 3;
+  string coach_id = 4;
+  string coach_number = 5;
+  int32 seat_number = 6;
+  string seat_type = 7;
+  double price_per_km = 8;
+  int32 version = 9;
+}

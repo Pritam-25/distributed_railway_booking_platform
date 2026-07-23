@@ -1,5 +1,5 @@
 {
-  "name": "@irctc/contracts",
+  "name": "@irctc/grpc",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,22 +12,18 @@
     }
   },
   "scripts": {
-    "build": "pnpm buf:generate && tsc",
-    "buf:generate": "buf generate",
-    "buf:lint": "buf lint",
+    "build": "tsc",
     "lint": "eslint . --no-error-on-unmatched-pattern",
     "lint:fix": "eslint . --fix --no-error-on-unmatched-pattern"
   },
   "dependencies": {
-    "@bufbuild/protobuf": "^2.2.3",
-    "nice-grpc-common": "^2.0.2",
-    "zod": "^4.4.3"
+    "@irctc/errors": "workspace:*",
+    "@irctc/logger": "workspace:*",
+    "nice-grpc": "^2.1.10",
+    "nice-grpc-common": "^2.0.2"
   },
   "devDependencies": {
-    "@bufbuild/buf": "^1.72.0",
     "@repo/typescript-config": "workspace:*",
-    "@types/node": "^25.9.3",
-    "nice-grpc": "^2.1.10",
-    "ts-proto": "^2.7.7"
+    "@types/node": "^25.9.4"
   }
 }

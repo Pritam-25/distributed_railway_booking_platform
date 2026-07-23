@@ -24,9 +24,11 @@
   "dependencies": {
     "@irctc/contracts": "workspace:*",
     "@irctc/errors": "workspace:*",
+    "@irctc/grpc": "workspace:*",
     "@irctc/http": "workspace:*",
     "@irctc/kafka": "workspace:*",
     "@irctc/logger": "workspace:*",
+    "nice-grpc": "^2.1.10",
     "@irctc/middleware": "workspace:*",
     "@irctc/redis": "workspace:*",
     "@irctc/telemetry": "workspace:*",
