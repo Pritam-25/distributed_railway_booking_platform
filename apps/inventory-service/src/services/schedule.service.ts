@@ -11,10 +11,10 @@ import {
 } from "@repository";
 import { type OutboxRepository } from "@irctc/kafka";
 import {
-  TOPICS,
   ScheduleCreatedEventV1,
   ScheduleStatusChangedEventV1,
   EVENT_TYPES,
+  KAFKA_TOPICS,
 } from "@irctc/contracts";
 import { logger } from "@irctc/logger";
 import { ApiError } from "@irctc/errors";
@@ -147,7 +147,7 @@ export class ScheduleService {
           aggregateType: "ScheduleInventory",
           aggregateId: parsed.scheduleId,
           eventType: EVENT_TYPES.INVENTORY_SCHEDULE_PROJECTED,
-          topic: TOPICS.INVENTORY_SCHEDULE_PROJECTED,
+          topic: KAFKA_TOPICS.INVENTORY_SCHEDULE_PROJECTED,
           payload: {
             eventId: crypto.randomUUID(),
             scheduleId: parsed.scheduleId,
@@ -241,7 +241,7 @@ export class ScheduleService {
           aggregateType: "ScheduleInventory",
           aggregateId: parsed.scheduleId,
           eventType: EVENT_TYPES.INVENTORY_SCHEDULE_STATUS_CHANGED,
-          topic: TOPICS.INVENTORY_SCHEDULE_STATUS_CHANGED,
+          topic: KAFKA_TOPICS.INVENTORY_SCHEDULE_STATUS_CHANGED,
           payload: {
             eventId: crypto.randomUUID(),
             scheduleId: parsed.scheduleId,

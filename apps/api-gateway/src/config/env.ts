@@ -50,12 +50,12 @@ export const env = createEnv({
     RATE_LIMIT_DEFAULT_REFILL_PER_SEC: z.coerce
       .number()
       .positive()
-      .default(1.6667), // 100 tokens / 60s
+      .default(1.6667), // formula:  (capacity / 60) = (100 / 60) = 1.6667
     RATE_LIMIT_AUTH_CAPACITY: z.coerce.number().int().positive().default(10),
     RATE_LIMIT_AUTH_REFILL_PER_SEC: z.coerce
       .number()
       .positive()
-      .default(0.1667), // 10 tokens / 60s
+      .default(0.1667), // formula: (capacity / 60) = (10 / 60) = 0.1667
 
     /** Whether to trust X-Forwarded-* headers (set when behind a proxy). */
     TRUST_PROXY: z.enum(["true", "false"]).default("false"),
