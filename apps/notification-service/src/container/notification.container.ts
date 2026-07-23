@@ -74,23 +74,24 @@ export class NotificationContainer {
       logger,
     );
 
-    // 4. Configure consumer retry policy.
-    const retryPolicy = RetryPolicies.aggressive();
+    // 4. Configure consumer retry policies.
+    const otpRetryPolicy = RetryPolicies.aggressive();
+    const welcomeRetryPolicy = RetryPolicies.conservative();
 
     /**
      * 5. Initialize the Kafka consumers
-     * - OTP requested topic
-     * - User logged in topic
+     * - OTP requested topic (using aggressive retry policy)
+     * - User logged in topic (using conservative retry policy)
      */
     const otpKafkaConsumer = createConsumer(
       kafka,
       CONSUMER_GROUPS.NOTIFICATION_OTP,
-      retryPolicy,
+      otpRetryPolicy,
     );
     const welcomeKafkaConsumer = createConsumer(
       kafka,
       CONSUMER_GROUPS.NOTIFICATION_WELCOME,
-      retryPolicy,
+      welcomeRetryPolicy,
     );
 
     /**
@@ -99,7 +100,7 @@ export class NotificationContainer {
     const otpRunner = new KafkaConsumerRunner(otpKafkaConsumer, logger);
     const welcomeRunner = new KafkaConsumerRunner(welcomeKafkaConsumer, logger);
 
-    // 7. Instantiate the high-level orchestrating consumers to execute business logic.
+    // 7. Instantiate the high-level event consumers to execute business logic.
     this.otpConsumer = new OtpRequestedConsumer(otpRunner, otpService, logger);
     this.welcomeConsumer = new UserLoggedInConsumer(
       welcomeRunner,

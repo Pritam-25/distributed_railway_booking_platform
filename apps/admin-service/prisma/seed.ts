@@ -1,12 +1,10 @@
 import { prisma } from "../src/config/prisma.js";
 import bcrypt from "bcryptjs";
+import { env } from "../src/config/env.js";
 
 async function main() {
-  const email = process.env.ADMIN_EMAIL;
-  const rawPassword = process.env.ADMIN_PASSWORD;
-  if (!email || !rawPassword) {
-    throw new Error("ADMIN_EMAIL and ADMIN_PASSWORD are required for seeding");
-  }
+  const email = env.ADMIN_EMAIL;
+  const rawPassword = env.ADMIN_PASSWORD;
 
   console.log(`Seeding admin account for ${email}...`);
 
@@ -26,11 +24,11 @@ async function main() {
   console.log(`Admin account seeded successfully: ${admin.id}`);
 }
 
-main()
-  .catch((e) => {
-    console.error("Error seeding admin database:", e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+try {
+  await main();
+} catch (e) {
+  console.error("Error seeding admin database:", e);
+  process.exitCode = 1;
+} finally {
+  await prisma.$disconnect();
+}

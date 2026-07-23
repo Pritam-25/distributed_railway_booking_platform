@@ -1,5 +1,5 @@
-import type { RequestHandler } from "express";
-import { createProxyMiddleware as createHPM } from "http-proxy-middleware";
+import type { Request, RequestHandler } from "express";
+import { createProxyMiddleware } from "http-proxy-middleware";
 import type {
   Options as HPMOptions,
   RequestHandler as HPMRequestHandler,
@@ -34,7 +34,7 @@ const getOrCreateProxy = (
     changeOrigin: true,
     pathRewrite: (_path, req) => {
       // Reconstruct path from originalUrl (since Express app.use strips baseUrl from req.url)
-      return (req as any).originalUrl.replace(/^\/api\/v1/, "");
+      return (req as Request).originalUrl.replace(/^\/api\/v1/, "");
     },
     on: {
       error: (err, _req, res) => {
@@ -46,12 +46,12 @@ const getOrCreateProxy = (
           `Proxy error for upstream "${upstreamName}"`,
         );
         // Emit the error so the per-request promise in runProxy can reject.
-        (res as any).emit?.("proxyError", err);
+        res.emit("proxyError", err);
       },
     },
   };
 
-  const proxy = createHPM(options);
+  const proxy = createProxyMiddleware(options);
   proxyCache.set(upstreamName, proxy);
   return proxy;
 };
@@ -126,12 +126,11 @@ export const createProxyHandler = (route: RouteConfig): RequestHandler => {
 
     const startTime = Date.now();
     const requestId =
-      (req as { requestId?: string }).requestId ??
+      req.requestId ??
       (req.headers["x-request-id"] as string | undefined) ??
       "";
     const traceId = (res.getHeader("X-Trace-Id") as string | undefined) ?? "";
-    const userId =
-      (req as { user?: { userId?: string } }).user?.userId ?? "anonymous";
+    const userId = req.user?.userId ?? "anonymous";
     const upstream = route.upstream.name;
     const circuitName = route.upstream.circuitName;
     const logBase = {

@@ -155,5 +155,5 @@ try {
   await startServer();
 } catch (error) {
   logger.error({ module: "server", err: error }, "Failed to start server.");
-  process.exit(1);
+  await shutdown("SIGTERM", 1);
 }

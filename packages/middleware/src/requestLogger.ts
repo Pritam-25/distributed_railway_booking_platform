@@ -26,7 +26,7 @@ export const requestLoggerMiddleware = (
     const logMeta = {
       method: req.method,
       path: sanitizedPath,
-      requestId: (req as any).requestId,
+      requestId: req.requestId,
       traceId: getTraceId(),
       statusCode: res.statusCode,
       durationMs: duration,
@@ -35,7 +35,7 @@ export const requestLoggerMiddleware = (
     };
 
     const message = "request completed";
-    const log = (req as any).logger ?? logger;
+    const log = req.logger ?? logger;
 
     if (res.statusCode >= 500) {
       log.error(logMeta, message);

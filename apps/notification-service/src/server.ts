@@ -143,7 +143,7 @@ const startWorker = async () => {
 
   logger.info(
     { module: "server" },
-    `Notification worker running successfully in ${env.NODE_ENV} mode.`,
+    `Notification Service worker running successfully in ${env.NODE_ENV} mode.`,
   );
 };
 
@@ -172,5 +172,5 @@ try {
     { module: "server", err: error },
     "Failed to start notification worker.",
   );
-  process.exit(1);
+  await shutdown("SIGTERM", 1);
 }
