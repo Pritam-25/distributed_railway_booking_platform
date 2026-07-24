@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --import @irctc/telemetry/instrumentation ./src/server.ts",
-    "build": "tsc && tsc-alias",
+    "build": "tsx scripts/merge-specs.ts && tsc && tsc-alias",
+    "build:spec": "tsx scripts/merge-specs.ts",
     "check-types": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

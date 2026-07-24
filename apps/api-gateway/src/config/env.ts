@@ -61,6 +61,8 @@ export const env = createEnv({
     TRUST_PROXY: z.enum(["true", "false"]).default("false"),
     /** Reserved for future OpenAPI/Scalar UI — currently a no-op. */
     SCALAR_ENABLED: z.enum(["true", "false"]).default("false"),
+    /** Optional explicit path to openapi.json specification file */
+    OPENAPI_SPEC_PATH: z.string().optional(),
 
     SERVICE_NAME: z.string().default("api-gateway"),
     OTEL_EXPORTER_OTLP_ENDPOINT: z.url().default("http://localhost:4318"),

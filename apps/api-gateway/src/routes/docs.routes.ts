@@ -2,25 +2,38 @@ import { Router } from "express";
 import { apiReference } from "@scalar/express-api-reference";
 import fs from "node:fs";
 import path from "node:path";
+import { env } from "@config";
 
 const docsRouter: Router = Router();
 
 /**
- * Locate openapi.json file (Gateway merged or User Service)
+ * Locate openapi.json file (Explicit ENV from env config, Deployed /deploy runtime artifact, or local dev fallback)
  */
 const getOpenApiSpecPath = (): string => {
-  const gatewaySpecPath = path.resolve(process.cwd(), "openapi.json");
-  if (fs.existsSync(gatewaySpecPath)) {
-    return gatewaySpecPath;
+  // 1. Configured explicit environment variable path from validated env config
+  if (env.OPENAPI_SPEC_PATH) {
+    const envPath = path.resolve(env.OPENAPI_SPEC_PATH);
+    if (fs.existsSync(envPath)) {
+      return envPath;
+    }
   }
-  const userServiceSpecPath = path.resolve(
+
+  // 2. Deployed runtime artifact location (e.g. /deploy/openapi.json or process.cwd()/openapi.json)
+  const artifactSpecPath = path.resolve(process.cwd(), "openapi.json");
+  if (fs.existsSync(artifactSpecPath)) {
+    return artifactSpecPath;
+  }
+
+  // 3. Local monorepo development mode fallback (relative path from apps/api-gateway to apps/user-service)
+  const repoDevSpecPath = path.resolve(
     process.cwd(),
     "../user-service/openapi.json",
   );
-  if (fs.existsSync(userServiceSpecPath)) {
-    return userServiceSpecPath;
+  if (fs.existsSync(repoDevSpecPath)) {
+    return repoDevSpecPath;
   }
-  return gatewaySpecPath;
+
+  return artifactSpecPath;
 };
 
 /**
