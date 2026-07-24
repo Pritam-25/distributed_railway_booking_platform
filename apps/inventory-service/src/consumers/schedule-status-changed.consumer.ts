@@ -3,6 +3,7 @@ import type { logger as irctcLogger } from "@irctc/logger";
 import type { ScheduleService } from "@services";
 import { KAFKA_TOPICS } from "@irctc/contracts";
 import { ZodError } from "zod";
+import { ApiError } from "@irctc/errors";
 
 /**
  * Kafka event consumer for the schedule status changed topic.
@@ -39,10 +40,14 @@ export class ScheduleStatusChangedConsumer {
       const event = JSON.parse(message.value.toString("utf8"));
       await this.service.processStatusChanged(event);
     } catch (err) {
-      const isValidationError =
-        err instanceof SyntaxError || err instanceof ZodError;
+      const isNonRetryableError =
+        err instanceof SyntaxError ||
+        err instanceof ZodError ||
+        (err instanceof ApiError &&
+          err.statusCode >= 400 &&
+          err.statusCode < 500);
 
-      if (isValidationError) {
+      if (isNonRetryableError) {
         this.logger.error(
           {
             err:

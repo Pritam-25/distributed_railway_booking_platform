@@ -1,0 +1,42 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  PUBLISHED
+  FAILED
+  DEAD
+}
+
+model OutboxEvent {
+  id            String       @id @default(uuid())
+  aggregateType String       @map("aggregate_type")
+  aggregateId   String       @map("aggregate_id")
+  eventType     String       @map("event_type")
+  topic         String
+  payload       Json
+  headers       Json?
+  status        OutboxStatus @default(PENDING)
+  retryCount    Int          @default(0) @map("retry_count")
+  nextRetryAt   DateTime?    @map("next_retry_at")
+  errorMessage  String?      @map("error_message")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+  processedAt   DateTime?    @map("processed_at")
+
+  @@index([status, createdAt])
+  @@index([status, nextRetryAt])
+  @@map("outbox_events")
+}

@@ -50,7 +50,7 @@ export const inventoryHandler: InventoryServiceImplementation = {
       coachNumber: seat.coachNumber,
       seatNumber: seat.seatNumber,
       seatType: seat.seatType,
-      pricePerKm: Number(seat.pricePerKm),
+      pricePerKm: seat.pricePerKm.toString(),
       version: seat.version,
     };
   },

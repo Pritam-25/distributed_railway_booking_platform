@@ -17,9 +17,7 @@ export function mapToGrpcError(error: unknown): ServerError {
     return new ServerError(status, error.message);
   }
 
-  const message =
-    error instanceof Error ? error.message : "Internal server error";
-  return new ServerError(Status.INTERNAL, message);
+  return new ServerError(Status.INTERNAL, "Internal server error");
 }
 
 /**

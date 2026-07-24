@@ -32,6 +32,7 @@ const withTimeout = async <T>(
   ms = 5000,
 ): Promise<T> => {
   let timer: NodeJS.Timeout | undefined;
+  op.catch(() => {});
   try {
     return await Promise.race([
       op,

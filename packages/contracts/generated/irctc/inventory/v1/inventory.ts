@@ -25,7 +25,8 @@ export interface GetSeatDetailsResponse {
   coachNumber: string;
   seatNumber: number;
   seatType: string;
-  pricePerKm: number;
+  /** Price rate per kilometer (decimal string). */
+  pricePerKm: string;
   version: number;
 }
 
@@ -119,7 +120,7 @@ function createBaseGetSeatDetailsResponse(): GetSeatDetailsResponse {
     coachNumber: "",
     seatNumber: 0,
     seatType: "",
-    pricePerKm: 0,
+    pricePerKm: "",
     version: 0,
   };
 }
@@ -150,8 +151,8 @@ export const GetSeatDetailsResponse: MessageFns<GetSeatDetailsResponse> = {
     if (message.seatType !== "") {
       writer.uint32(58).string(message.seatType);
     }
-    if (message.pricePerKm !== 0) {
-      writer.uint32(65).double(message.pricePerKm);
+    if (message.pricePerKm !== "") {
+      writer.uint32(66).string(message.pricePerKm);
     }
     if (message.version !== 0) {
       writer.uint32(72).int32(message.version);
@@ -227,11 +228,11 @@ export const GetSeatDetailsResponse: MessageFns<GetSeatDetailsResponse> = {
           continue;
         }
         case 8: {
-          if (tag !== 65) {
+          if (tag !== 66) {
             break;
           }
 
-          message.pricePerKm = reader.double();
+          message.pricePerKm = reader.string();
           continue;
         }
         case 9: {
@@ -289,10 +290,10 @@ export const GetSeatDetailsResponse: MessageFns<GetSeatDetailsResponse> = {
           ? globalThis.String(object.seat_type)
           : "",
       pricePerKm: isSet(object.pricePerKm)
-        ? globalThis.Number(object.pricePerKm)
+        ? globalThis.String(object.pricePerKm)
         : isSet(object.price_per_km)
-          ? globalThis.Number(object.price_per_km)
-          : 0,
+          ? globalThis.String(object.price_per_km)
+          : "",
       version: isSet(object.version) ? globalThis.Number(object.version) : 0,
     };
   },
@@ -320,7 +321,7 @@ export const GetSeatDetailsResponse: MessageFns<GetSeatDetailsResponse> = {
     if (message.seatType !== "") {
       obj.seatType = message.seatType;
     }
-    if (message.pricePerKm !== 0) {
+    if (message.pricePerKm !== "") {
       obj.pricePerKm = message.pricePerKm;
     }
     if (message.version !== 0) {

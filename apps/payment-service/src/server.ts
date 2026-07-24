@@ -11,7 +11,7 @@ import type { Server } from "node:http";
 import { registerErrorMessages } from "@irctc/errors";
 import { ERROR_MESSAGES } from "@utils/errors";
 import { shutdownTelemetry } from "@irctc/telemetry";
-import { closeInventoryGrpcChannel, getInventoryGrpcClient } from "@grpc";
+import { closeBookingGrpcChannel, getBookingGrpcClient } from "@grpc";
 
 const PORT = env.PORT;
 
@@ -106,7 +106,7 @@ const shutdown = async (signal: NodeJS.Signals, exitCode = 0) => {
 
   // 2. Close gRPC Client Channel
   try {
-    await withTimeout("gRPC client channel close", closeInventoryGrpcChannel());
+    await withTimeout("gRPC client channel close", closeBookingGrpcChannel());
   } catch (error) {
     logger.error(
       { module: "server", err: error },
@@ -183,7 +183,7 @@ const startServer = async () => {
   logger.info({ module: "server" }, "All dependencies connected successfully.");
 
   // Eagerly initialize gRPC client on boot
-  getInventoryGrpcClient();
+  getBookingGrpcClient();
 
   // Import container dynamically to guarantee initialized network dependencies
   const { BookingContainer } = await import("./container/index.js");

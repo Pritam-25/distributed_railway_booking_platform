@@ -23,6 +23,7 @@ message GetSeatDetailsResponse {
   string coach_number = 5;
   int32 seat_number = 6;
   string seat_type = 7;
-  double price_per_km = 8;
+  // Price rate per kilometer (decimal string).
+  string price_per_km = 8;
   int32 version = 9;
 }

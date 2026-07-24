@@ -54,7 +54,7 @@ app.use("/health", healthRoutes);
  */
 app.get("/", (_req: Request, res: Response) => {
   res.status(statusCode.success).json(
-    successResponse("Welcome to Booking Service API", {
+    successResponse("Welcome to Payment Service API", {
       version: "1.0.0",
       endpoints: {
         health: "/health",
