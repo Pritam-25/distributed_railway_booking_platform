@@ -54,18 +54,7 @@
           "password": {
             "type": "string",
             "minLength": 6,
-            "pattern": "[A-Z]",
-            "allOf": [
-              {
-                "pattern": "[A-Z]"
-              },
-              {
-                "pattern": "d"
-              },
-              {
-                "pattern": "[^a-zA-Z0-9]"
-              }
-            ],
+            "pattern": "^(?=.*[A-Z])(?=.*\\d)(?=.*[^a-zA-Z0-9]).{6,}$",
             "example": "Password@123",
             "description": "### Password Requirements\n\n- Minimum **6** characters\n- At least **1 uppercase** letter\n- At least **1 number**\n- At least **1 special character**"
           }
@@ -83,18 +72,7 @@
           "password": {
             "type": "string",
             "minLength": 6,
-            "pattern": "[A-Z]",
-            "allOf": [
-              {
-                "pattern": "[A-Z]"
-              },
-              {
-                "pattern": "d"
-              },
-              {
-                "pattern": "[^a-zA-Z0-9]"
-              }
-            ],
+            "pattern": "^(?=.*[A-Z])(?=.*\\d)(?=.*[^a-zA-Z0-9]).{6,}$",
             "example": "Password@123",
             "description": "### Password Requirements\n\n- Minimum **6** characters\n- At least **1 uppercase** letter\n- At least **1 number**\n- At least **1 special character**"
           }
@@ -128,10 +106,10 @@
       "VerifyResetOtpRequest": {
         "type": "object",
         "properties": {
-          "email": {
+          "sessionId": {
             "type": "string",
-            "format": "email",
-            "example": "rahul.sharma@example.com"
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
           },
           "otp": {
             "type": "string",
@@ -141,7 +119,7 @@
             "example": "123456"
           }
         },
-        "required": ["email", "otp"]
+        "required": ["sessionId", "otp"]
       },
       "ResetPasswordRequest": {
         "type": "object",
@@ -151,26 +129,15 @@
             "format": "uuid",
             "example": "550e8400-e29b-41d4-a716-446655440000"
           },
-          "newPassword": {
+          "password": {
             "type": "string",
             "minLength": 6,
-            "pattern": "[A-Z]",
-            "allOf": [
-              {
-                "pattern": "[A-Z]"
-              },
-              {
-                "pattern": "d"
-              },
-              {
-                "pattern": "[^a-zA-Z0-9]"
-              }
-            ],
+            "pattern": "^(?=.*[A-Z])(?=.*\\d)(?=.*[^a-zA-Z0-9]).{6,}$",
             "example": "Password@123",
             "description": "### Password Requirements\n\n- Minimum **6** characters\n- At least **1 uppercase** letter\n- At least **1 number**\n- At least **1 special character**"
           }
         },
-        "required": ["passwordResetToken", "newPassword"]
+        "required": ["passwordResetToken", "password"]
       },
       "UserResponse": {
         "type": "object",
@@ -236,10 +203,7 @@
             "type": "string",
             "example": "Invalid input payload"
           },
-          "details": {
-            "type": "object",
-            "properties": {}
-          }
+          "details": {}
         },
         "required": ["code", "message"]
       },
@@ -301,10 +265,7 @@
                 "type": "string",
                 "example": "Bad request."
               },
-              "details": {
-                "type": "object",
-                "properties": {}
-              }
+              "details": {}
             },
             "required": ["code", "message"],
             "description": "Error Detail Payload"
@@ -335,10 +296,7 @@
                 "type": "string",
                 "example": "Rate limit exceeded."
               },
-              "details": {
-                "type": "object",
-                "properties": {}
-              }
+              "details": {}
             },
             "required": ["code", "message"],
             "description": "Error Detail Payload"
@@ -369,10 +327,7 @@
                 "type": "string",
                 "example": "Internal server error."
               },
-              "details": {
-                "type": "object",
-                "properties": {}
-              }
+              "details": {}
             },
             "required": ["code", "message"],
             "description": "Error Detail Payload"
@@ -403,10 +358,7 @@
                 "type": "string",
                 "example": "Unauthorized."
               },
-              "details": {
-                "type": "object",
-                "properties": {}
-              }
+              "details": {}
             },
             "required": ["code", "message"],
             "description": "Error Detail Payload"
@@ -499,10 +451,7 @@
                           "type": "string",
                           "example": "User already exists."
                         },
-                        "details": {
-                          "type": "object",
-                          "properties": {}
-                        }
+                        "details": {}
                       },
                       "required": ["code", "message"],
                       "description": "Error Detail Payload"
@@ -607,10 +556,7 @@
                           "type": "string",
                           "example": "Invalid or expired OTP code"
                         },
-                        "details": {
-                          "type": "object",
-                          "properties": {}
-                        }
+                        "details": {}
                       },
                       "required": ["code", "message"],
                       "description": "Error Detail Payload"
@@ -725,10 +671,7 @@
                           "type": "string",
                           "example": "Invalid email or password."
                         },
-                        "details": {
-                          "type": "object",
-                          "properties": {}
-                        }
+                        "details": {}
                       },
                       "required": ["code", "message"],
                       "description": "Error Detail Payload"
@@ -841,10 +784,7 @@
                           "type": "string",
                           "example": "Refresh token is invalid."
                         },
-                        "details": {
-                          "type": "object",
-                          "properties": {}
-                        }
+                        "details": {}
                       },
                       "required": ["code", "message"],
                       "description": "Error Detail Payload"
@@ -1093,10 +1033,7 @@
                           "type": "string",
                           "example": "Active session not found"
                         },
-                        "details": {
-                          "type": "object",
-                          "properties": {}
-                        }
+                        "details": {}
                       },
                       "required": ["code", "message"],
                       "description": "Error Detail Payload"
@@ -1383,10 +1320,7 @@
                           "type": "string",
                           "example": "User not found."
                         },
-                        "details": {
-                          "type": "object",
-                          "properties": {}
-                        }
+                        "details": {}
                       },
                       "required": ["code", "message"],
                       "description": "Error Detail Payload"
@@ -1499,10 +1433,7 @@
                           "type": "string",
                           "example": "Invalid or expired reset OTP"
                         },
-                        "details": {
-                          "type": "object",
-                          "properties": {}
-                        }
+                        "details": {}
                       },
                       "required": ["code", "message"],
                       "description": "Error Detail Payload"
@@ -1703,10 +1634,7 @@
                           "type": "string",
                           "example": "User not found."
                         },
-                        "details": {
-                          "type": "object",
-                          "properties": {}
-                        }
+                        "details": {}
                       },
                       "required": ["code", "message"],
                       "description": "Error Detail Payload"

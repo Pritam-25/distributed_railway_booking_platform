@@ -32,7 +32,7 @@ export interface LoginRequest {
    * - At least **1 number**
    * - At least **1 special character**
    * @minLength 6
-   * @pattern [A-Z]
+   * @pattern ^(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z0-9]).{6,}$
    */
   password: string
 }

@@ -21,7 +21,6 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { BadRequestErrorResponseErrorDetails } from "./badRequestErrorResponseErrorDetails"
 
 /**
  * Error Detail Payload
@@ -29,5 +28,5 @@ import type { BadRequestErrorResponseErrorDetails } from "./badRequestErrorRespo
 export type BadRequestErrorResponseError = {
   code: string
   message: string
-  details?: BadRequestErrorResponseErrorDetails
+  details?: unknown
 }

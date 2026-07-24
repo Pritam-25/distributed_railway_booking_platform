@@ -23,7 +23,7 @@
  */
 
 export interface VerifyResetOtpRequest {
-  email: string
+  sessionId: string
   /**
    * @minLength 6
    * @maxLength 6

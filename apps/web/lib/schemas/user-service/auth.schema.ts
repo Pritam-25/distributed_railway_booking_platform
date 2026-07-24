@@ -59,7 +59,7 @@ export const ForgotPasswordRequestSchema = z.object({
  * Verify Reset OTP DTO Schema
  */
 export const VerifyResetOtpRequestSchema = z.object({
-  email: z.email("Invalid email format").trim(),
+  sessionId: z.uuid("Invalid session ID format"),
   otp: z
     .string()
     .length(6, "OTP must be exactly 6 digits")
@@ -71,5 +71,5 @@ export const VerifyResetOtpRequestSchema = z.object({
  */
 export const ResetPasswordRequestSchema = z.object({
   passwordResetToken: z.uuid("Invalid reset token format"),
-  newPassword: passwordSchema,
+  password: passwordSchema,
 })

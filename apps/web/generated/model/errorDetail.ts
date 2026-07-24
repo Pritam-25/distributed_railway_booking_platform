@@ -21,10 +21,9 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { ErrorDetailDetails } from "./errorDetailDetails"
 
 export interface ErrorDetail {
   code: string
   message: string
-  details?: ErrorDetailDetails
+  details?: unknown
 }

@@ -21,7 +21,6 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { ForgotPassword404ErrorDetails } from "./forgotPassword404ErrorDetails"
 
 /**
  * Error Detail Payload
@@ -29,5 +28,5 @@ import type { ForgotPassword404ErrorDetails } from "./forgotPassword404ErrorDeta
 export type ForgotPassword404Error = {
   code: string
   message: string
-  details?: ForgotPassword404ErrorDetails
+  details?: unknown
 }

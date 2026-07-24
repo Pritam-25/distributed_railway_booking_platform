@@ -21,7 +21,6 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { VerifyResetOtp400ErrorDetails } from "./verifyResetOtp400ErrorDetails"
 
 /**
  * Error Detail Payload
@@ -29,5 +28,5 @@ import type { VerifyResetOtp400ErrorDetails } from "./verifyResetOtp400ErrorDeta
 export type VerifyResetOtp400Error = {
   code: string
   message: string
-  details?: VerifyResetOtp400ErrorDetails
+  details?: unknown
 }

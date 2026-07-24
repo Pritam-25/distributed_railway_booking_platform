@@ -21,7 +21,6 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { RevokeSession404ErrorDetails } from "./revokeSession404ErrorDetails"
 
 /**
  * Error Detail Payload
@@ -29,5 +28,5 @@ import type { RevokeSession404ErrorDetails } from "./revokeSession404ErrorDetail
 export type RevokeSession404Error = {
   code: string
   message: string
-  details?: RevokeSession404ErrorDetails
+  details?: unknown
 }

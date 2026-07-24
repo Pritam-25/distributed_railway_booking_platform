@@ -21,7 +21,6 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { RefreshToken401ErrorDetails } from "./refreshToken401ErrorDetails"
 
 /**
  * Error Detail Payload
@@ -29,5 +28,5 @@ import type { RefreshToken401ErrorDetails } from "./refreshToken401ErrorDetails"
 export type RefreshToken401Error = {
   code: string
   message: string
-  details?: RefreshToken401ErrorDetails
+  details?: unknown
 }

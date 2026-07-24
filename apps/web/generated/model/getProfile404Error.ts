@@ -21,7 +21,6 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { GetProfile404ErrorDetails } from "./getProfile404ErrorDetails"
 
 /**
  * Error Detail Payload
@@ -29,5 +28,5 @@ import type { GetProfile404ErrorDetails } from "./getProfile404ErrorDetails"
 export type GetProfile404Error = {
   code: string
   message: string
-  details?: GetProfile404ErrorDetails
+  details?: unknown
 }

@@ -21,7 +21,6 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { Login401ErrorDetails } from "./login401ErrorDetails"
 
 /**
  * Error Detail Payload
@@ -29,5 +28,5 @@ import type { Login401ErrorDetails } from "./login401ErrorDetails"
 export type Login401Error = {
   code: string
   message: string
-  details?: Login401ErrorDetails
+  details?: unknown
 }

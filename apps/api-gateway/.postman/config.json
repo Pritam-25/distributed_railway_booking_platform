@@ -7,7 +7,7 @@
     "flows": [],
     "globals": [],
     "mocks": [],
-    "specs": ["..\\openapi.json"],
+    "specs": ["../openapi.json"],
     "collections": []
   }
 }

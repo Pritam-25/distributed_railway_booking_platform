@@ -21,7 +21,6 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { VerifyOtp400ErrorDetails } from "./verifyOtp400ErrorDetails"
 
 /**
  * Error Detail Payload
@@ -29,5 +28,5 @@ import type { VerifyOtp400ErrorDetails } from "./verifyOtp400ErrorDetails"
 export type VerifyOtp400Error = {
   code: string
   message: string
-  details?: VerifyOtp400ErrorDetails
+  details?: unknown
 }

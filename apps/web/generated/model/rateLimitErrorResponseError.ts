@@ -21,7 +21,6 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { RateLimitErrorResponseErrorDetails } from "./rateLimitErrorResponseErrorDetails"
 
 /**
  * Error Detail Payload
@@ -29,5 +28,5 @@ import type { RateLimitErrorResponseErrorDetails } from "./rateLimitErrorRespons
 export type RateLimitErrorResponseError = {
   code: string
   message: string
-  details?: RateLimitErrorResponseErrorDetails
+  details?: unknown
 }

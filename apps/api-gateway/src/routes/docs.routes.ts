@@ -2,6 +2,7 @@ import { Router } from "express";
 import { apiReference } from "@scalar/express-api-reference";
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import { env } from "@config";
 
 const docsRouter: Router = Router();
@@ -37,31 +38,6 @@ const getOpenApiSpecPath = (): string => {
 };
 
 /**
- * Build Scalar UI API Reference middleware with spec content embedded
- */
-const createScalarMiddleware = () => {
-  const specPath = getOpenApiSpecPath();
-  let specContent: Record<string, unknown> = {};
-  if (fs.existsSync(specPath)) {
-    try {
-      specContent = JSON.parse(fs.readFileSync(specPath, "utf-8")) as Record<
-        string,
-        unknown
-      >;
-    } catch (err) {
-      console.error("Failed to parse OpenAPI spec for Scalar UI:", err);
-    }
-  }
-
-  return apiReference({
-    theme: "deepSpace",
-    spec: {
-      content: specContent,
-    },
-  });
-};
-
-/**
  * GET /openapi.json
  * Expose raw OpenAPI JSON specification
  */
@@ -80,17 +56,49 @@ docsRouter.get("/openapi.json", (_req, res) => {
 
 /**
  * GET /docs
- * Serve interactive Scalar UI documentation with embedded spec
+ * Serve interactive Scalar UI documentation with embedded spec and request-specific CSP nonce
  */
-docsRouter.use(
-  "/docs",
-  (_req, res, next) => {
-    // Disable restrictive Helmet CSP & COOP headers so Scalar UI client bundle can render
-    res.removeHeader("Content-Security-Policy");
-    res.removeHeader("Cross-Origin-Opener-Policy");
-    next();
-  },
-  createScalarMiddleware(),
-);
+docsRouter.use("/docs", (req, res, next) => {
+  const nonce = crypto.randomBytes(16).toString("base64");
+
+  // Re-enable and configure secure CSP & COOP headers instead of removing them
+  res.setHeader(
+    "Content-Security-Policy",
+    `default-src 'self'; ` +
+      `script-src 'self' 'nonce-${nonce}' https://cdn.jsdelivr.net; ` +
+      `style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; ` +
+      `font-src 'self' https://cdn.jsdelivr.net; ` +
+      `img-src 'self' data: https://cdn.jsdelivr.net; ` +
+      `connect-src 'self' https: http:; ` +
+      `frame-src 'self';`,
+  );
+
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+
+  // Get the spec content
+  const specPath = getOpenApiSpecPath();
+  let specContent: Record<string, unknown> = {};
+  if (fs.existsSync(specPath)) {
+    try {
+      specContent = JSON.parse(fs.readFileSync(specPath, "utf-8")) as Record<
+        string,
+        unknown
+      >;
+    } catch (err) {
+      console.error("Failed to parse OpenAPI spec for Scalar UI:", err);
+    }
+  }
+
+  // Create the middleware instance dynamically with the request's unique nonce
+  const scalarMiddleware = apiReference({
+    theme: "deepSpace",
+    spec: {
+      content: specContent,
+    },
+    nonce,
+  });
+
+  scalarMiddleware(req as any, res as any, next);
+});
 
 export { docsRouter };

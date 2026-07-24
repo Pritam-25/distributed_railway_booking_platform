@@ -1,5 +1,6 @@
 import "@irctc/openapi";
 import { z } from "zod";
+import type { UserResponseDto } from "@dto";
 
 /**
  * Reusable Password Schema
@@ -15,11 +16,7 @@ export const passwordSchema = z
   .regex(/\d/, "Password must contain at least one number")
   .regex(/[^a-zA-Z0-9]/, "Password must contain at least one special character")
   .openapi({
-    allOf: [
-      { pattern: "[A-Z]" },
-      { pattern: "d" },
-      { pattern: "[^a-zA-Z0-9]" },
-    ],
+    pattern: "^(?=.*[A-Z])(?=.*\\d)(?=.*[^a-zA-Z0-9]).{6,}$",
     example: "Password@123",
     description:
       "### Password Requirements\n\n- Minimum **6** characters\n- At least **1 uppercase** letter\n- At least **1 number**\n- At least **1 special character**",
@@ -80,6 +77,14 @@ export const VerifyOtpRequestSchema = z
 
 export type VerifyOtpRequestDto = z.infer<typeof VerifyOtpRequestSchema>;
 
+export interface AuthResponseDto {
+  user: UserResponseDto;
+  tokens: {
+    accessToken: string;
+    refreshToken: string;
+  };
+}
+
 /**
  * Forgot Password Request DTO Schema
  */
@@ -101,10 +106,9 @@ export type ForgotPasswordRequestDto = z.infer<
  */
 export const VerifyResetOtpRequestSchema = z
   .object({
-    email: z
-      .email("Invalid email format")
-      .trim()
-      .openapi({ example: "rahul.sharma@example.com" }),
+    sessionId: z.uuid("Invalid session ID format").openapi({
+      example: "550e8400-e29b-41d4-a716-446655440000",
+    }),
     otp: z
       .string()
       .length(6, "OTP must be exactly 6 digits")
@@ -125,7 +129,7 @@ export const ResetPasswordRequestSchema = z
     passwordResetToken: z.uuid("Invalid reset token format").openapi({
       example: "550e8400-e29b-41d4-a716-446655440000",
     }),
-    newPassword: passwordSchema,
+    password: passwordSchema,
   })
   .openapi("ResetPasswordRequest");
 

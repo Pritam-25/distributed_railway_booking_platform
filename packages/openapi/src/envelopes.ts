@@ -84,7 +84,7 @@ export const ErrorDetailSchema = z
   .object({
     code: z.string().openapi({ example: "BAD_REQUEST" }),
     message: z.string().openapi({ example: "Invalid input payload" }),
-    details: z.object({}).optional(),
+    details: z.unknown().optional(),
   })
   .openapi("ErrorDetail");
 
@@ -118,7 +118,7 @@ export const createErrorResponseSchema = (
         .object({
           code: z.string().openapi({ example: code }),
           message: z.string().openapi({ example: message }),
-          details: z.object({}).optional(),
+          details: z.unknown().optional(),
         })
         .openapi({ description: "Error Detail Payload" }),
       meta: MetaSchema,

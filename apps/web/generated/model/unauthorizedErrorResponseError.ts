@@ -21,7 +21,6 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { UnauthorizedErrorResponseErrorDetails } from "./unauthorizedErrorResponseErrorDetails"
 
 /**
  * Error Detail Payload
@@ -29,5 +28,5 @@ import type { UnauthorizedErrorResponseErrorDetails } from "./unauthorizedErrorR
 export type UnauthorizedErrorResponseError = {
   code: string
   message: string
-  details?: UnauthorizedErrorResponseErrorDetails
+  details?: unknown
 }

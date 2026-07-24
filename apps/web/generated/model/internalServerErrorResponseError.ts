@@ -21,7 +21,6 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { InternalServerErrorResponseErrorDetails } from "./internalServerErrorResponseErrorDetails"
 
 /**
  * Error Detail Payload
@@ -29,5 +28,5 @@ import type { InternalServerErrorResponseErrorDetails } from "./internalServerEr
 export type InternalServerErrorResponseError = {
   code: string
   message: string
-  details?: InternalServerErrorResponseErrorDetails
+  details?: unknown
 }

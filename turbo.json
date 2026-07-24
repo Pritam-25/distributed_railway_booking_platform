@@ -22,6 +22,17 @@
     "dev": {
       "cache": false,
       "persistent": true
+    },
+    "build:spec": {
+      "cache": false
+    },
+    "api-gateway#build:spec": {
+      "dependsOn": ["user-service#build:spec"],
+      "cache": false
+    },
+    "web#generate:api": {
+      "dependsOn": ["api-gateway#build:spec"],
+      "cache": false
     }
   }
 }

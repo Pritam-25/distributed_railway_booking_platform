@@ -21,7 +21,6 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { SendOtp409ErrorDetails } from "./sendOtp409ErrorDetails"
 
 /**
  * Error Detail Payload
@@ -29,5 +28,5 @@ import type { SendOtp409ErrorDetails } from "./sendOtp409ErrorDetails"
 export type SendOtp409Error = {
   code: string
   message: string
-  details?: SendOtp409ErrorDetails
+  details?: unknown
 }
