@@ -3,16 +3,16 @@
   "info": {
     "title": "User Service API",
     "version": "1.0.0",
-    "description": "Microservice for managing users, authentication, OTPs, and user sessions"
+    "description": "\n# User Service API\n\nMicroservice handling authentication, identity management, OTP verification, and user sessions for the IRCTC Railway Booking Platform.\n\n## Core Capabilities\n\n- **Registration & Verification**: Multi-step signup with 6-digit email OTP verification.\n- **Authentication**: JWT Access Tokens (Bearer / Cookie) and Refresh Token rotation.\n- **Session Management**: Active session tracking, single session revoke, and global logout-all.\n- **Password Management**: Self-service OTP password resets.\n\n## Authentication Schemes\n\n- **Bearer JWT**: `Authorization: Bearer <access_token>`\n- **Cookie Auth**: `access_token` HTTP-only cookie\n"
   },
   "servers": [
     {
-      "url": "http://localhost:4001",
-      "description": "Local Direct Service URL"
-    },
-    {
       "url": "http://localhost:4000/user-service",
       "description": "API Gateway Proxy URL"
+    },
+    {
+      "url": "http://localhost:4001",
+      "description": "Local Direct Service URL"
     }
   ],
   "components": {
@@ -37,11 +37,13 @@
           "firstName": {
             "type": "string",
             "minLength": 3,
+            "maxLength": 50,
             "example": "Jhon"
           },
           "lastName": {
             "type": "string",
             "minLength": 2,
+            "maxLength": 50,
             "example": "Doe"
           },
           "email": {
@@ -53,24 +55,22 @@
             "type": "string",
             "minLength": 6,
             "pattern": "[A-Z]",
-            "description": "User password",
-            "example": "Password@123"
-          },
-          "confirmPassword": {
-            "type": "string",
-            "minLength": 6,
-            "pattern": "[A-Z]",
-            "description": "User password",
-            "example": "Password@123"
+            "allOf": [
+              {
+                "pattern": "[A-Z]"
+              },
+              {
+                "pattern": "d"
+              },
+              {
+                "pattern": "[^a-zA-Z0-9]"
+              }
+            ],
+            "example": "Password@123",
+            "description": "### Password Requirements\n\n- Minimum **6** characters\n- At least **1 uppercase** letter\n- At least **1 number**\n- At least **1 special character**"
           }
         },
-        "required": [
-          "firstName",
-          "lastName",
-          "email",
-          "password",
-          "confirmPassword"
-        ]
+        "required": ["firstName", "lastName", "email", "password"]
       },
       "LoginRequest": {
         "type": "object",
@@ -78,14 +78,25 @@
           "email": {
             "type": "string",
             "format": "email",
-            "example": "jhon@example.co"
+            "example": "jhon@example.com"
           },
           "password": {
             "type": "string",
             "minLength": 6,
             "pattern": "[A-Z]",
-            "description": "User password",
-            "example": "Password@123"
+            "allOf": [
+              {
+                "pattern": "[A-Z]"
+              },
+              {
+                "pattern": "d"
+              },
+              {
+                "pattern": "[^a-zA-Z0-9]"
+              }
+            ],
+            "example": "Password@123",
+            "description": "### Password Requirements\n\n- Minimum **6** characters\n- At least **1 uppercase** letter\n- At least **1 number**\n- At least **1 special character**"
           }
         },
         "required": ["email", "password"]
@@ -95,6 +106,8 @@
         "properties": {
           "otp": {
             "type": "string",
+            "minLength": 6,
+            "maxLength": 6,
             "pattern": "^\\d{6}$",
             "example": "123456"
           }
@@ -107,7 +120,7 @@
           "email": {
             "type": "string",
             "format": "email",
-            "example": "jhon@example.com"
+            "example": "rahul.sharma@example.com"
           }
         },
         "required": ["email"]
@@ -115,18 +128,20 @@
       "VerifyResetOtpRequest": {
         "type": "object",
         "properties": {
-          "sessionId": {
+          "email": {
             "type": "string",
-            "format": "uuid",
-            "example": "550e8400-e29b-41d4-a716-446655440000"
+            "format": "email",
+            "example": "rahul.sharma@example.com"
           },
           "otp": {
             "type": "string",
+            "minLength": 6,
+            "maxLength": 6,
             "pattern": "^\\d{6}$",
             "example": "123456"
           }
         },
-        "required": ["sessionId", "otp"]
+        "required": ["email", "otp"]
       },
       "ResetPasswordRequest": {
         "type": "object",
@@ -136,22 +151,26 @@
             "format": "uuid",
             "example": "550e8400-e29b-41d4-a716-446655440000"
           },
-          "password": {
+          "newPassword": {
             "type": "string",
             "minLength": 6,
             "pattern": "[A-Z]",
-            "description": "User password",
-            "example": "Password@123"
-          },
-          "confirmPassword": {
-            "type": "string",
-            "minLength": 6,
-            "pattern": "[A-Z]",
-            "description": "User password",
-            "example": "Password@123"
+            "allOf": [
+              {
+                "pattern": "[A-Z]"
+              },
+              {
+                "pattern": "d"
+              },
+              {
+                "pattern": "[^a-zA-Z0-9]"
+              }
+            ],
+            "example": "Password@123",
+            "description": "### Password Requirements\n\n- Minimum **6** characters\n- At least **1 uppercase** letter\n- At least **1 number**\n- At least **1 special character**"
           }
         },
-        "required": ["passwordResetToken", "password", "confirmPassword"]
+        "required": ["passwordResetToken", "newPassword"]
       },
       "UserResponse": {
         "type": "object",
@@ -195,18 +214,51 @@
           "firstName": {
             "type": "string",
             "minLength": 3,
+            "maxLength": 50,
             "example": "Jhon"
           },
           "lastName": {
             "type": "string",
             "minLength": 2,
+            "maxLength": 50,
             "example": "Doe"
           }
         }
       },
-      "EmptyResponse": {
+      "ErrorDetail": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "BAD_REQUEST"
+          },
+          "message": {
+            "type": "string",
+            "example": "Invalid input payload"
+          },
+          "details": {
+            "type": "object",
+            "properties": {}
+          }
+        },
+        "required": ["code", "message"]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [false],
+            "example": false
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResponseMeta"
+          }
+        },
+        "required": ["success", "error", "meta"]
       },
       "ResponseMeta": {
         "type": "object",
@@ -225,6 +277,10 @@
           }
         },
         "required": ["requestId", "traceId", "timestamp"]
+      },
+      "EmptyResponse": {
+        "type": "object",
+        "properties": {}
       },
       "BadRequestErrorResponse": {
         "type": "object",
@@ -245,7 +301,10 @@
                 "type": "string",
                 "example": "Bad request."
               },
-              "details": {}
+              "details": {
+                "type": "object",
+                "properties": {}
+              }
             },
             "required": ["code", "message"],
             "description": "Error Detail Payload"
@@ -276,7 +335,10 @@
                 "type": "string",
                 "example": "Rate limit exceeded."
               },
-              "details": {}
+              "details": {
+                "type": "object",
+                "properties": {}
+              }
             },
             "required": ["code", "message"],
             "description": "Error Detail Payload"
@@ -307,7 +369,10 @@
                 "type": "string",
                 "example": "Internal server error."
               },
-              "details": {}
+              "details": {
+                "type": "object",
+                "properties": {}
+              }
             },
             "required": ["code", "message"],
             "description": "Error Detail Payload"
@@ -338,7 +403,10 @@
                 "type": "string",
                 "example": "Unauthorized."
               },
-              "details": {}
+              "details": {
+                "type": "object",
+                "properties": {}
+              }
             },
             "required": ["code", "message"],
             "description": "Error Detail Payload"
@@ -356,51 +424,14 @@
   "paths": {
     "/api/v1/auth/send-otp": {
       "post": {
+        "operationId": "sendOtp",
         "tags": ["Authentication"],
         "summary": "Send OTP for User Registration",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "firstName": {
-                    "type": "string",
-                    "minLength": 3,
-                    "example": "Jhon"
-                  },
-                  "lastName": {
-                    "type": "string",
-                    "minLength": 2,
-                    "example": "Doe"
-                  },
-                  "email": {
-                    "type": "string",
-                    "format": "email",
-                    "example": "jhon@example.com"
-                  },
-                  "password": {
-                    "type": "string",
-                    "minLength": 6,
-                    "pattern": "[A-Z]",
-                    "description": "User password",
-                    "example": "Password@123"
-                  },
-                  "confirmPassword": {
-                    "type": "string",
-                    "minLength": 6,
-                    "pattern": "[A-Z]",
-                    "description": "User password",
-                    "example": "Password@123"
-                  }
-                },
-                "required": [
-                  "firstName",
-                  "lastName",
-                  "email",
-                  "password",
-                  "confirmPassword"
-                ]
+                "$ref": "#/components/schemas/RegisterRequest"
               }
             }
           }
@@ -468,7 +499,10 @@
                           "type": "string",
                           "example": "User already exists."
                         },
-                        "details": {}
+                        "details": {
+                          "type": "object",
+                          "properties": {}
+                        }
                       },
                       "required": ["code", "message"],
                       "description": "Error Detail Payload"
@@ -508,21 +542,14 @@
     },
     "/api/v1/auth/verify-otp": {
       "post": {
+        "operationId": "verifyOtp",
         "tags": ["Authentication"],
         "summary": "Verify OTP & Complete Registration",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "otp": {
-                    "type": "string",
-                    "pattern": "^\\d{6}$",
-                    "example": "123456"
-                  }
-                },
-                "required": ["otp"]
+                "$ref": "#/components/schemas/VerifyOtpRequest"
               }
             }
           }
@@ -545,46 +572,7 @@
                       "example": "Registration successful"
                     },
                     "data": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "type": "string",
-                          "format": "uuid",
-                          "example": "550e8400-e29b-41d4-a716-446655440000"
-                        },
-                        "firstName": {
-                          "type": "string",
-                          "example": "Jhon"
-                        },
-                        "lastName": {
-                          "type": "string",
-                          "example": "Doe"
-                        },
-                        "email": {
-                          "type": "string",
-                          "format": "email",
-                          "example": "jhon@example.com"
-                        },
-                        "createdAt": {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "format": "date-time"
-                            },
-                            {
-                              "type": "string"
-                            }
-                          ],
-                          "example": "2026-07-24T00:00:00.000Z"
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "firstName",
-                        "lastName",
-                        "email",
-                        "createdAt"
-                      ]
+                      "$ref": "#/components/schemas/UserResponse"
                     },
                     "meta": {
                       "$ref": "#/components/schemas/ResponseMeta"
@@ -619,7 +607,10 @@
                           "type": "string",
                           "example": "Invalid or expired OTP code"
                         },
-                        "details": {}
+                        "details": {
+                          "type": "object",
+                          "properties": {}
+                        }
                       },
                       "required": ["code", "message"],
                       "description": "Error Detail Payload"
@@ -659,28 +650,14 @@
     },
     "/api/v1/auth/login": {
       "post": {
+        "operationId": "login",
         "tags": ["Authentication"],
         "summary": "Login User",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "email": {
-                    "type": "string",
-                    "format": "email",
-                    "example": "jhon@example.co"
-                  },
-                  "password": {
-                    "type": "string",
-                    "minLength": 6,
-                    "pattern": "[A-Z]",
-                    "description": "User password",
-                    "example": "Password@123"
-                  }
-                },
-                "required": ["email", "password"]
+                "$ref": "#/components/schemas/LoginRequest"
               }
             }
           }
@@ -703,46 +680,7 @@
                       "example": "Login successful"
                     },
                     "data": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "type": "string",
-                          "format": "uuid",
-                          "example": "550e8400-e29b-41d4-a716-446655440000"
-                        },
-                        "firstName": {
-                          "type": "string",
-                          "example": "Jhon"
-                        },
-                        "lastName": {
-                          "type": "string",
-                          "example": "Doe"
-                        },
-                        "email": {
-                          "type": "string",
-                          "format": "email",
-                          "example": "jhon@example.com"
-                        },
-                        "createdAt": {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "format": "date-time"
-                            },
-                            {
-                              "type": "string"
-                            }
-                          ],
-                          "example": "2026-07-24T00:00:00.000Z"
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "firstName",
-                        "lastName",
-                        "email",
-                        "createdAt"
-                      ]
+                      "$ref": "#/components/schemas/UserResponse"
                     },
                     "meta": {
                       "$ref": "#/components/schemas/ResponseMeta"
@@ -787,7 +725,10 @@
                           "type": "string",
                           "example": "Invalid email or password."
                         },
-                        "details": {}
+                        "details": {
+                          "type": "object",
+                          "properties": {}
+                        }
                       },
                       "required": ["code", "message"],
                       "description": "Error Detail Payload"
@@ -827,6 +768,7 @@
     },
     "/api/v1/auth/refresh": {
       "post": {
+        "operationId": "refreshToken",
         "tags": ["Authentication"],
         "summary": "Refresh Access Token",
         "responses": {
@@ -899,7 +841,10 @@
                           "type": "string",
                           "example": "Refresh token is invalid."
                         },
-                        "details": {}
+                        "details": {
+                          "type": "object",
+                          "properties": {}
+                        }
                       },
                       "required": ["code", "message"],
                       "description": "Error Detail Payload"
@@ -939,6 +884,7 @@
     },
     "/api/v1/auth/sessions": {
       "get": {
+        "operationId": "getSessions",
         "tags": ["Authentication"],
         "summary": "Get Active User Sessions",
         "security": [
@@ -1051,6 +997,7 @@
     },
     "/api/v1/auth/sessions/{sessionId}": {
       "delete": {
+        "operationId": "revokeSession",
         "tags": ["Authentication"],
         "summary": "Revoke Active Session",
         "security": [
@@ -1146,7 +1093,10 @@
                           "type": "string",
                           "example": "Active session not found"
                         },
-                        "details": {}
+                        "details": {
+                          "type": "object",
+                          "properties": {}
+                        }
                       },
                       "required": ["code", "message"],
                       "description": "Error Detail Payload"
@@ -1186,6 +1136,7 @@
     },
     "/api/v1/auth/logout": {
       "post": {
+        "operationId": "logout",
         "tags": ["Authentication"],
         "summary": "Logout Current Session",
         "security": [
@@ -1271,6 +1222,7 @@
     },
     "/api/v1/auth/logout-all": {
       "post": {
+        "operationId": "logoutAll",
         "tags": ["Authentication"],
         "summary": "Logout All Sessions",
         "security": [
@@ -1356,21 +1308,14 @@
     },
     "/api/v1/auth/forgot-password": {
       "post": {
+        "operationId": "forgotPassword",
         "tags": ["Authentication"],
         "summary": "Request Password Reset OTP",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "email": {
-                    "type": "string",
-                    "format": "email",
-                    "example": "jhon@example.com"
-                  }
-                },
-                "required": ["email"]
+                "$ref": "#/components/schemas/ForgotPasswordRequest"
               }
             }
           }
@@ -1438,7 +1383,10 @@
                           "type": "string",
                           "example": "User not found."
                         },
-                        "details": {}
+                        "details": {
+                          "type": "object",
+                          "properties": {}
+                        }
                       },
                       "required": ["code", "message"],
                       "description": "Error Detail Payload"
@@ -1478,26 +1426,14 @@
     },
     "/api/v1/auth/verify-reset-otp": {
       "post": {
+        "operationId": "verifyResetOtp",
         "tags": ["Authentication"],
         "summary": "Verify Password Reset OTP",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "sessionId": {
-                    "type": "string",
-                    "format": "uuid",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
-                  },
-                  "otp": {
-                    "type": "string",
-                    "pattern": "^\\d{6}$",
-                    "example": "123456"
-                  }
-                },
-                "required": ["sessionId", "otp"]
+                "$ref": "#/components/schemas/VerifyResetOtpRequest"
               }
             }
           }
@@ -1563,7 +1499,10 @@
                           "type": "string",
                           "example": "Invalid or expired reset OTP"
                         },
-                        "details": {}
+                        "details": {
+                          "type": "object",
+                          "properties": {}
+                        }
                       },
                       "required": ["code", "message"],
                       "description": "Error Detail Payload"
@@ -1603,39 +1542,14 @@
     },
     "/api/v1/auth/reset-password": {
       "post": {
+        "operationId": "resetPassword",
         "tags": ["Authentication"],
         "summary": "Reset Password",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "passwordResetToken": {
-                    "type": "string",
-                    "format": "uuid",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
-                  },
-                  "password": {
-                    "type": "string",
-                    "minLength": 6,
-                    "pattern": "[A-Z]",
-                    "description": "User password",
-                    "example": "Password@123"
-                  },
-                  "confirmPassword": {
-                    "type": "string",
-                    "minLength": 6,
-                    "pattern": "[A-Z]",
-                    "description": "User password",
-                    "example": "Password@123"
-                  }
-                },
-                "required": [
-                  "passwordResetToken",
-                  "password",
-                  "confirmPassword"
-                ]
+                "$ref": "#/components/schemas/ResetPasswordRequest"
               }
             }
           }
@@ -1705,6 +1619,7 @@
     },
     "/api/v1/users/me": {
       "get": {
+        "operationId": "getProfile",
         "tags": ["User Profile"],
         "summary": "Get Current User Profile",
         "security": [
@@ -1733,46 +1648,7 @@
                       "example": "User profile retrieved successfully"
                     },
                     "data": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "type": "string",
-                          "format": "uuid",
-                          "example": "550e8400-e29b-41d4-a716-446655440000"
-                        },
-                        "firstName": {
-                          "type": "string",
-                          "example": "Jhon"
-                        },
-                        "lastName": {
-                          "type": "string",
-                          "example": "Doe"
-                        },
-                        "email": {
-                          "type": "string",
-                          "format": "email",
-                          "example": "jhon@example.com"
-                        },
-                        "createdAt": {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "format": "date-time"
-                            },
-                            {
-                              "type": "string"
-                            }
-                          ],
-                          "example": "2026-07-24T00:00:00.000Z"
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "firstName",
-                        "lastName",
-                        "email",
-                        "createdAt"
-                      ]
+                      "$ref": "#/components/schemas/UserResponse"
                     },
                     "meta": {
                       "$ref": "#/components/schemas/ResponseMeta"
@@ -1827,7 +1703,10 @@
                           "type": "string",
                           "example": "User not found."
                         },
-                        "details": {}
+                        "details": {
+                          "type": "object",
+                          "properties": {}
+                        }
                       },
                       "required": ["code", "message"],
                       "description": "Error Detail Payload"
@@ -1865,6 +1744,7 @@
         }
       },
       "put": {
+        "operationId": "updateProfile",
         "tags": ["User Profile"],
         "summary": "Update Current User Profile",
         "security": [
@@ -1879,19 +1759,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "firstName": {
-                    "type": "string",
-                    "minLength": 3,
-                    "example": "Jhon"
-                  },
-                  "lastName": {
-                    "type": "string",
-                    "minLength": 2,
-                    "example": "Doe"
-                  }
-                }
+                "$ref": "#/components/schemas/UserUpdateRequest"
               }
             }
           }
@@ -1914,46 +1782,7 @@
                       "example": "User profile updated successfully"
                     },
                     "data": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "type": "string",
-                          "format": "uuid",
-                          "example": "550e8400-e29b-41d4-a716-446655440000"
-                        },
-                        "firstName": {
-                          "type": "string",
-                          "example": "Jhon"
-                        },
-                        "lastName": {
-                          "type": "string",
-                          "example": "Doe"
-                        },
-                        "email": {
-                          "type": "string",
-                          "format": "email",
-                          "example": "jhon@example.com"
-                        },
-                        "createdAt": {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "format": "date-time"
-                            },
-                            {
-                              "type": "string"
-                            }
-                          ],
-                          "example": "2026-07-24T00:00:00.000Z"
-                        }
-                      },
-                      "required": [
-                        "id",
-                        "firstName",
-                        "lastName",
-                        "email",
-                        "createdAt"
-                      ]
+                      "$ref": "#/components/schemas/UserResponse"
                     },
                     "meta": {
                       "$ref": "#/components/schemas/ResponseMeta"

@@ -1,7 +1,7 @@
 import { env } from "@config";
 
 export const COOKIE_NAMES = {
-  ACCESS_TOKEN: "auth_token",
+  ACCESS_TOKEN: "access_token",
   REFRESH_TOKEN: "refresh_token",
   OTP_SESSION: "otp_session",
 } as const;

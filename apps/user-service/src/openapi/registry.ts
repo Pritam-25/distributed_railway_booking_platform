@@ -8,6 +8,8 @@ import {
   EmptySchema,
   registerGatewayAuth,
   GatewayAuthSecurity,
+  ErrorResponseSchema,
+  ErrorDetailSchema,
   z,
 } from "@irctc/openapi";
 import { ERROR_CODES } from "@irctc/errors";
@@ -36,6 +38,8 @@ registry.register("VerifyResetOtpRequest", VerifyResetOtpRequestSchema);
 registry.register("ResetPasswordRequest", ResetPasswordRequestSchema);
 registry.register("UserResponse", UserResponseSchema);
 registry.register("UserUpdateRequest", UserUpdateSchema);
+registry.register("ErrorDetail", ErrorDetailSchema);
+registry.register("ErrorResponse", ErrorResponseSchema);
 
 /**
  * Security Schemes (Bearer JWT & access_token Cookie for Gateway Auth)
@@ -48,6 +52,7 @@ registerGatewayAuth(registry);
 registry.registerPath({
   method: "post",
   path: "/api/v1/auth/send-otp",
+  operationId: "sendOtp",
   tags: ["Authentication"],
   summary: "Send OTP for User Registration",
   request: {
@@ -78,6 +83,7 @@ registry.registerPath({
 registry.registerPath({
   method: "post",
   path: "/api/v1/auth/verify-otp",
+  operationId: "verifyOtp",
   tags: ["Authentication"],
   summary: "Verify OTP & Complete Registration",
   request: {
@@ -108,6 +114,7 @@ registry.registerPath({
 registry.registerPath({
   method: "post",
   path: "/api/v1/auth/login",
+  operationId: "login",
   tags: ["Authentication"],
   summary: "Login User",
   request: {
@@ -138,6 +145,7 @@ registry.registerPath({
 registry.registerPath({
   method: "post",
   path: "/api/v1/auth/refresh",
+  operationId: "refreshToken",
   tags: ["Authentication"],
   summary: "Refresh Access Token",
   responses: {
@@ -164,6 +172,7 @@ registry.registerPath({
 registry.registerPath({
   method: "get",
   path: "/api/v1/auth/sessions",
+  operationId: "getSessions",
   tags: ["Authentication"],
   summary: "Get Active User Sessions",
   security: GatewayAuthSecurity,
@@ -192,6 +201,7 @@ registry.registerPath({
 registry.registerPath({
   method: "delete",
   path: "/api/v1/auth/sessions/{sessionId}",
+  operationId: "revokeSession",
   tags: ["Authentication"],
   summary: "Revoke Active Session",
   security: GatewayAuthSecurity,
@@ -223,6 +233,7 @@ registry.registerPath({
 registry.registerPath({
   method: "post",
   path: "/api/v1/auth/logout",
+  operationId: "logout",
   tags: ["Authentication"],
   summary: "Logout Current Session",
   security: GatewayAuthSecurity,
@@ -239,6 +250,7 @@ registry.registerPath({
 registry.registerPath({
   method: "post",
   path: "/api/v1/auth/logout-all",
+  operationId: "logoutAll",
   tags: ["Authentication"],
   summary: "Logout All Sessions",
   security: GatewayAuthSecurity,
@@ -258,6 +270,7 @@ registry.registerPath({
 registry.registerPath({
   method: "post",
   path: "/api/v1/auth/forgot-password",
+  operationId: "forgotPassword",
   tags: ["Authentication"],
   summary: "Request Password Reset OTP",
   request: {
@@ -291,6 +304,7 @@ registry.registerPath({
 registry.registerPath({
   method: "post",
   path: "/api/v1/auth/verify-reset-otp",
+  operationId: "verifyResetOtp",
   tags: ["Authentication"],
   summary: "Verify Password Reset OTP",
   request: {
@@ -329,6 +343,7 @@ registry.registerPath({
 registry.registerPath({
   method: "post",
   path: "/api/v1/auth/reset-password",
+  operationId: "resetPassword",
   tags: ["Authentication"],
   summary: "Reset Password",
   request: {
@@ -355,6 +370,7 @@ registry.registerPath({
 registry.registerPath({
   method: "get",
   path: "/api/v1/users/me",
+  operationId: "getProfile",
   tags: ["User Profile"],
   summary: "Get Current User Profile",
   security: GatewayAuthSecurity,
@@ -381,6 +397,7 @@ registry.registerPath({
 registry.registerPath({
   method: "put",
   path: "/api/v1/users/me",
+  operationId: "updateProfile",
   tags: ["User Profile"],
   summary: "Update Current User Profile",
   security: GatewayAuthSecurity,

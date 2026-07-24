@@ -78,6 +78,32 @@ export const PaginatedResponseSchema = <T extends z.ZodTypeAny>(
     .openapi({ description: "Paginated Response Envelope" });
 
 /**
+ * Error Detail Schema and Type
+ */
+export const ErrorDetailSchema = z
+  .object({
+    code: z.string().openapi({ example: "BAD_REQUEST" }),
+    message: z.string().openapi({ example: "Invalid input payload" }),
+    details: z.object({}).optional(),
+  })
+  .openapi("ErrorDetail");
+
+export type ErrorDetailDto = z.infer<typeof ErrorDetailSchema>;
+
+/**
+ * Error Response Envelope Schema and Type
+ */
+export const ErrorResponseSchema = z
+  .object({
+    success: z.literal(false).openapi({ example: false }),
+    error: ErrorDetailSchema,
+    meta: MetaSchema,
+  })
+  .openapi("ErrorResponse");
+
+export type ErrorResponseDto = z.infer<typeof ErrorResponseSchema>;
+
+/**
  * Error envelope builder matching `@irctc/http` errorResponse payload format.
  */
 export const createErrorResponseSchema = (
@@ -92,7 +118,7 @@ export const createErrorResponseSchema = (
         .object({
           code: z.string().openapi({ example: code }),
           message: z.string().openapi({ example: message }),
-          details: z.unknown().optional(),
+          details: z.object({}).optional(),
         })
         .openapi({ description: "Error Detail Payload" }),
       meta: MetaSchema,

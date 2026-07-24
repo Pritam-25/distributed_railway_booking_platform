@@ -2,7 +2,6 @@ import { Router } from "express";
 import { apiReference } from "@scalar/express-api-reference";
 import fs from "node:fs";
 import path from "node:path";
-import crypto from "node:crypto";
 import { env } from "@config";
 
 const docsRouter: Router = Router();
@@ -38,6 +37,31 @@ const getOpenApiSpecPath = (): string => {
 };
 
 /**
+ * Build Scalar UI API Reference middleware with spec content embedded
+ */
+const createScalarMiddleware = () => {
+  const specPath = getOpenApiSpecPath();
+  let specContent: Record<string, unknown> = {};
+  if (fs.existsSync(specPath)) {
+    try {
+      specContent = JSON.parse(fs.readFileSync(specPath, "utf-8")) as Record<
+        string,
+        unknown
+      >;
+    } catch (err) {
+      console.error("Failed to parse OpenAPI spec for Scalar UI:", err);
+    }
+  }
+
+  return apiReference({
+    theme: "deepSpace",
+    spec: {
+      content: specContent,
+    },
+  });
+};
+
+/**
  * GET /openapi.json
  * Expose raw OpenAPI JSON specification
  */
@@ -56,30 +80,17 @@ docsRouter.get("/openapi.json", (_req, res) => {
 
 /**
  * GET /docs
- * Serve interactive Scalar UI documentation with docs-specific CSP
+ * Serve interactive Scalar UI documentation with embedded spec
  */
 docsRouter.use(
   "/docs",
   (_req, res, next) => {
-    const nonce = crypto.randomBytes(16).toString("base64");
-    const docsCsp = [
-      "default-src 'self'",
-      `script-src 'self' 'unsafe-inline' 'nonce-${nonce}' https://cdn.jsdelivr.net`,
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "font-src 'self' https://fonts.gstatic.com data:",
-      "img-src 'self' data: https: blob:",
-      "connect-src 'self' https:",
-    ].join("; ");
-
-    res.setHeader("Content-Security-Policy", docsCsp);
+    // Disable restrictive Helmet CSP & COOP headers so Scalar UI client bundle can render
+    res.removeHeader("Content-Security-Policy");
+    res.removeHeader("Cross-Origin-Opener-Policy");
     next();
   },
-  apiReference({
-    theme: "purple",
-    spec: {
-      url: "/openapi.json",
-    },
-  }),
+  createScalarMiddleware(),
 );
 
 export { docsRouter };
