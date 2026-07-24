@@ -21,7 +21,7 @@ WORKDIR /repo
 COPY --from=pruner /repo/out/json ./
 RUN pnpm install --no-frozen-lockfile --ignore-scripts
 
-# Copy full pruned source and build
+# Copy full pruned source and build (runs merge-specs.ts automatically during pnpm build)
 COPY --from=pruner /repo/out/full ./
 RUN npx turbo run build --filter=api-gateway
 

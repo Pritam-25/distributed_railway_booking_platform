@@ -83,6 +83,8 @@ app.get("/", (_req, res) => {
     successResponse("Welcome to API Gateway", {
       version: "1.0.0",
       endpoints: {
+        docs: "/docs",
+        openapi: "/openapi.json",
         health: "/health",
         auth: "/api/v1/auth",
         users: "/api/v1/users",
