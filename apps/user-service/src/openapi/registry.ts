@@ -6,7 +6,8 @@ import {
   ErrorResponses,
   createErrorResponseSchema,
   EmptySchema,
-  registerBearerAuth,
+  registerGatewayAuth,
+  GatewayAuthSecurity,
   z,
 } from "@irctc/openapi";
 import { ERROR_CODES } from "@irctc/errors";
@@ -37,9 +38,9 @@ registry.register("UserResponse", UserResponseSchema);
 registry.register("UserUpdateRequest", UserUpdateSchema);
 
 /**
- * Security Schemes
+ * Security Schemes (Bearer JWT & access_token Cookie for Gateway Auth)
  */
-registerBearerAuth(registry);
+registerGatewayAuth(registry);
 
 /**
  * Authentication Endpoints
@@ -165,7 +166,7 @@ registry.registerPath({
   path: "/api/v1/auth/sessions",
   tags: ["Authentication"],
   summary: "Get Active User Sessions",
-  security: [{ bearerAuth: [] }],
+  security: GatewayAuthSecurity,
   responses: {
     200: createOpenApiResponse(
       "List of active sessions",
@@ -193,7 +194,7 @@ registry.registerPath({
   path: "/api/v1/auth/sessions/{sessionId}",
   tags: ["Authentication"],
   summary: "Revoke Active Session",
-  security: [{ bearerAuth: [] }],
+  security: GatewayAuthSecurity,
   request: {
     params: z.object({
       sessionId: z.string().openapi({
@@ -224,7 +225,7 @@ registry.registerPath({
   path: "/api/v1/auth/logout",
   tags: ["Authentication"],
   summary: "Logout Current Session",
-  security: [{ bearerAuth: [] }],
+  security: GatewayAuthSecurity,
   responses: {
     200: createOpenApiResponse(
       "Logged out successfully",
@@ -240,7 +241,7 @@ registry.registerPath({
   path: "/api/v1/auth/logout-all",
   tags: ["Authentication"],
   summary: "Logout All Sessions",
-  security: [{ bearerAuth: [] }],
+  security: GatewayAuthSecurity,
   responses: {
     200: createOpenApiResponse(
       "Logged out from all sessions",
@@ -356,7 +357,7 @@ registry.registerPath({
   path: "/api/v1/users/me",
   tags: ["User Profile"],
   summary: "Get Current User Profile",
-  security: [{ bearerAuth: [] }],
+  security: GatewayAuthSecurity,
   responses: {
     200: createOpenApiResponse(
       "User profile retrieved successfully",
@@ -382,7 +383,7 @@ registry.registerPath({
   path: "/api/v1/users/me",
   tags: ["User Profile"],
   summary: "Update Current User Profile",
-  security: [{ bearerAuth: [] }],
+  security: GatewayAuthSecurity,
   request: {
     body: {
       content: {

@@ -1,7 +1,12 @@
 import "./extend-zod.js";
 import { z } from "zod";
-import type { OpenAPIRegistry } from "@asteasolutions/zod-to-openapi";
+import type {
+  OpenAPIRegistry,
+  RouteConfig,
+} from "@asteasolutions/zod-to-openapi";
 import { ERROR_CODES, ERROR_MESSAGES, type ErrorCode } from "@irctc/errors";
+
+export type SecurityRequirementObject = NonNullable<RouteConfig["security"]>;
 
 /**
  * Metadata block included in API response envelopes.
@@ -35,7 +40,7 @@ export const SuccessResponseSchema = <T extends z.ZodTypeAny>(
 ) =>
   z
     .object({
-      success: z.boolean().openapi({ example: true }),
+      success: z.literal(true).openapi({ example: true }),
       message: z.string().openapi({ example: messageExample }),
       data: dataSchema,
       meta: MetaSchema,
@@ -65,7 +70,7 @@ export const PaginatedResponseSchema = <T extends z.ZodTypeAny>(
 ) =>
   z
     .object({
-      success: z.boolean().openapi({ example: true }),
+      success: z.literal(true).openapi({ example: true }),
       message: z.string().openapi({ example: messageExample }),
       data: z.array(itemSchema),
       meta: MetaSchema.extend(PaginationMetadataSchema.shape),
@@ -82,7 +87,7 @@ export const createErrorResponseSchema = (
 ) => {
   const schema = z
     .object({
-      success: z.boolean().openapi({ example: false }),
+      success: z.literal(false).openapi({ example: false }),
       error: z
         .object({
           code: z.string().openapi({ example: code }),
@@ -203,8 +208,46 @@ export const bearerAuthScheme = {
 };
 
 /**
+ * Standard Security Scheme configuration for access_token HTTP-only Cookie
+ */
+export const cookieAuthScheme = {
+  type: "apiKey" as const,
+  in: "cookie" as const,
+  name: "access_token",
+  description: "Access token stored in HTTP-only cookie for browser clients",
+};
+
+/**
  * Helper to register Bearer JWT security scheme on an OpenAPI registry
  */
 export const registerBearerAuth = (registry: OpenAPIRegistry) => {
   registry.registerComponent("securitySchemes", "bearerAuth", bearerAuthScheme);
 };
+
+/**
+ * Helper to register Cookie security scheme on an OpenAPI registry
+ */
+export const registerCookieAuth = (registry: OpenAPIRegistry) => {
+  registry.registerComponent("securitySchemes", "cookieAuth", cookieAuthScheme);
+};
+
+/**
+ * Helper to register all standard API Gateway authentication security schemes (Bearer + Cookie)
+ */
+export const registerGatewayAuth = (registry: OpenAPIRegistry) => {
+  registerBearerAuth(registry);
+  registerCookieAuth(registry);
+};
+
+/**
+ * Standard Security Requirements arrays for API route registration.
+ * Usage in registerPath: `security: GatewayAuthSecurity` or `security: SecurityRequirements.bearerAuth`
+ */
+export const SecurityRequirements: Record<string, SecurityRequirementObject> = {
+  bearerAuth: [{ bearerAuth: [] }],
+  cookieAuth: [{ cookieAuth: [] }],
+  gatewayAuth: [{ bearerAuth: [] }, { cookieAuth: [] }],
+};
+
+export const GatewayAuthSecurity: SecurityRequirementObject =
+  SecurityRequirements["gatewayAuth"]!;

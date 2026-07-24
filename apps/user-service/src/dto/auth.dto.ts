@@ -67,7 +67,7 @@ export const LoginSchema = z.object({
   email: z
     .email("Invalid email format")
     .trim()
-    .openapi({ format: "email", example: "jhon@example.co" }),
+    .openapi({ example: "jhon@example.co" }),
   password: passwordSchema,
 });
 
@@ -106,8 +106,7 @@ export const ForgotPasswordRequestSchema = z.object({
  * Schema to verify OTP submitted during the password reset workflow.
  */
 export const VerifyResetOtpRequestSchema = z.object({
-  sessionId: z.string().openapi({
-    format: "uuid",
+  sessionId: z.uuid().openapi({
     example: "550e8400-e29b-41d4-a716-446655440000",
   }),
   otp: z
@@ -121,8 +120,7 @@ export const VerifyResetOtpRequestSchema = z.object({
  */
 export const ResetPasswordRequestSchema = z
   .object({
-    passwordResetToken: z.string().openapi({
-      format: "uuid",
+    passwordResetToken: z.uuid().openapi({
       example: "550e8400-e29b-41d4-a716-446655440000",
     }),
     password: passwordSchema,

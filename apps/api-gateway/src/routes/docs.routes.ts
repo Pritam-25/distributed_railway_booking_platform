@@ -2,6 +2,7 @@ import { Router } from "express";
 import { apiReference } from "@scalar/express-api-reference";
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import { env } from "@config";
 
 const docsRouter: Router = Router();
@@ -55,14 +56,22 @@ docsRouter.get("/openapi.json", (_req, res) => {
 
 /**
  * GET /docs
- * Serve interactive Scalar UI documentation
+ * Serve interactive Scalar UI documentation with docs-specific CSP
  */
 docsRouter.use(
   "/docs",
   (_req, res, next) => {
-    // Disable restrictive CSP for Scalar UI assets
-    res.removeHeader("Content-Security-Policy");
-    res.removeHeader("Cross-Origin-Opener-Policy");
+    const nonce = crypto.randomBytes(16).toString("base64");
+    const docsCsp = [
+      "default-src 'self'",
+      `script-src 'self' 'unsafe-inline' 'nonce-${nonce}' https://cdn.jsdelivr.net`,
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' https://fonts.gstatic.com data:",
+      "img-src 'self' data: https: blob:",
+      "connect-src 'self' https:",
+    ].join("; ");
+
+    res.setHeader("Content-Security-Policy", docsCsp);
     next();
   },
   apiReference({

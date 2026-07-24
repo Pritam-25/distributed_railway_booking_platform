@@ -22,6 +22,12 @@
         "scheme": "bearer",
         "bearerFormat": "JWT",
         "description": "Enter JWT Access Token"
+      },
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "access_token",
+        "description": "Access token stored in HTTP-only cookie for browser clients"
       }
     },
     "schemas": {
@@ -225,6 +231,7 @@
         "properties": {
           "success": {
             "type": "boolean",
+            "enum": [false],
             "example": false
           },
           "error": {
@@ -255,6 +262,7 @@
         "properties": {
           "success": {
             "type": "boolean",
+            "enum": [false],
             "example": false
           },
           "error": {
@@ -285,6 +293,7 @@
         "properties": {
           "success": {
             "type": "boolean",
+            "enum": [false],
             "example": false
           },
           "error": {
@@ -315,6 +324,7 @@
         "properties": {
           "success": {
             "type": "boolean",
+            "enum": [false],
             "example": false
           },
           "error": {
@@ -405,6 +415,7 @@
                   "properties": {
                     "success": {
                       "type": "boolean",
+                      "enum": [true],
                       "example": true
                     },
                     "message": {
@@ -443,6 +454,7 @@
                   "properties": {
                     "success": {
                       "type": "boolean",
+                      "enum": [false],
                       "example": false
                     },
                     "error": {
@@ -525,6 +537,7 @@
                   "properties": {
                     "success": {
                       "type": "boolean",
+                      "enum": [true],
                       "example": true
                     },
                     "message": {
@@ -592,6 +605,7 @@
                   "properties": {
                     "success": {
                       "type": "boolean",
+                      "enum": [false],
                       "example": false
                     },
                     "error": {
@@ -681,6 +695,7 @@
                   "properties": {
                     "success": {
                       "type": "boolean",
+                      "enum": [true],
                       "example": true
                     },
                     "message": {
@@ -758,6 +773,7 @@
                   "properties": {
                     "success": {
                       "type": "boolean",
+                      "enum": [false],
                       "example": false
                     },
                     "error": {
@@ -823,6 +839,7 @@
                   "properties": {
                     "success": {
                       "type": "boolean",
+                      "enum": [true],
                       "example": true
                     },
                     "message": {
@@ -868,6 +885,7 @@
                   "properties": {
                     "success": {
                       "type": "boolean",
+                      "enum": [false],
                       "example": false
                     },
                     "error": {
@@ -926,6 +944,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
           }
         ],
         "responses": {
@@ -938,6 +959,7 @@
                   "properties": {
                     "success": {
                       "type": "boolean",
+                      "enum": [true],
                       "example": true
                     },
                     "message": {
@@ -1034,6 +1056,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
           }
         ],
         "parameters": [
@@ -1058,6 +1083,7 @@
                   "properties": {
                     "success": {
                       "type": "boolean",
+                      "enum": [true],
                       "example": true
                     },
                     "message": {
@@ -1106,6 +1132,7 @@
                   "properties": {
                     "success": {
                       "type": "boolean",
+                      "enum": [false],
                       "example": false
                     },
                     "error": {
@@ -1164,6 +1191,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
           }
         ],
         "responses": {
@@ -1176,6 +1206,7 @@
                   "properties": {
                     "success": {
                       "type": "boolean",
+                      "enum": [true],
                       "example": true
                     },
                     "message": {
@@ -1245,6 +1276,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
           }
         ],
         "responses": {
@@ -1257,6 +1291,7 @@
                   "properties": {
                     "success": {
                       "type": "boolean",
+                      "enum": [true],
                       "example": true
                     },
                     "message": {
@@ -1350,6 +1385,7 @@
                   "properties": {
                     "success": {
                       "type": "boolean",
+                      "enum": [true],
                       "example": true
                     },
                     "message": {
@@ -1388,6 +1424,7 @@
                   "properties": {
                     "success": {
                       "type": "boolean",
+                      "enum": [false],
                       "example": false
                     },
                     "error": {
@@ -1475,6 +1512,7 @@
                   "properties": {
                     "success": {
                       "type": "boolean",
+                      "enum": [true],
                       "example": true
                     },
                     "message": {
@@ -1511,6 +1549,7 @@
                   "properties": {
                     "success": {
                       "type": "boolean",
+                      "enum": [false],
                       "example": false
                     },
                     "error": {
@@ -1611,6 +1650,7 @@
                   "properties": {
                     "success": {
                       "type": "boolean",
+                      "enum": [true],
                       "example": true
                     },
                     "message": {
@@ -1670,6 +1710,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
           }
         ],
         "responses": {
@@ -1682,6 +1725,7 @@
                   "properties": {
                     "success": {
                       "type": "boolean",
+                      "enum": [true],
                       "example": true
                     },
                     "message": {
@@ -1769,6 +1813,7 @@
                   "properties": {
                     "success": {
                       "type": "boolean",
+                      "enum": [false],
                       "example": false
                     },
                     "error": {
@@ -1825,6 +1870,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
           }
         ],
         "requestBody": {
@@ -1858,6 +1906,7 @@
                   "properties": {
                     "success": {
                       "type": "boolean",
+                      "enum": [true],
                       "example": true
                     },
                     "message": {
