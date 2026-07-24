@@ -81,7 +81,7 @@ export const PaginatedResponseSchema = <T extends z.ZodTypeAny>(
  * Error envelope builder matching `@irctc/http` errorResponse payload format.
  */
 export const createErrorResponseSchema = (
-  code: ErrorCode | string,
+  code: ErrorCode | (string & {}),
   message: string,
   schemaName?: string,
 ) => {
