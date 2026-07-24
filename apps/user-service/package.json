@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "tsx watch --import @irctc/telemetry/instrumentation ./src/server.ts",
     "build": "tsc && tsc-alias",
+    "build:spec": "tsx src/openapi/generate-spec.ts",
     "check-types": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -22,12 +23,14 @@
     "tsx": "^4.23.0"
   },
   "dependencies": {
+    "@asteasolutions/zod-to-openapi": "^9.1.0",
     "@irctc/contracts": "workspace:*",
     "@irctc/errors": "workspace:*",
     "@irctc/http": "workspace:*",
     "@irctc/kafka": "workspace:*",
     "@irctc/logger": "workspace:*",
     "@irctc/middleware": "workspace:*",
+    "@irctc/openapi": "workspace:*",
     "@irctc/redis": "workspace:^",
     "@irctc/telemetry": "workspace:*",
     "@prisma/adapter-pg": "^7.8.0",

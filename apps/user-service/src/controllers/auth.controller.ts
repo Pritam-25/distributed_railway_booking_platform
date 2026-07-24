@@ -182,9 +182,7 @@ export class AuthController {
 
     return res
       .status(statusCode.success)
-      .json(
-        successResponse("Tokens refreshed successfully", authResponse.user),
-      );
+      .json(successResponse("Token refreshed successfully", authResponse.user));
   }
 
   /**

@@ -1,5 +1,6 @@
+import "@irctc/openapi";
+import type { UserResponseDto } from "./user.dto.js";
 import { z } from "zod";
-import type { UserResponseDto } from "@dto";
 
 /**
  * Password Schema for User Registration and Login
@@ -17,7 +18,11 @@ export const passwordSchema = z
   .regex(
     /[@$#!%*~?&/\\(){}[\]]/,
     "Password must contain at least one special character",
-  );
+  )
+  .openapi({
+    description: "User password",
+    example: "Password@123",
+  });
 
 /**
  * Register Schema for User Registration
@@ -28,18 +33,22 @@ export const passwordSchema = z
  * - Password must meet the passwordSchema requirements
  * - Confirm password must match the password
  */
-
 export const RegisterSchema = z
   .object({
     firstName: z
       .string()
       .trim()
-      .min(3, "First name must be at least 3 characters long"),
+      .min(3, "First name must be at least 3 characters long")
+      .openapi({ example: "Jhon" }),
     lastName: z
       .string()
       .trim()
-      .min(2, "Last name must be at least 2 characters long"),
-    email: z.email("Invalid email format").trim().toLowerCase(),
+      .min(2, "Last name must be at least 2 characters long")
+      .openapi({ example: "Doe" }),
+    email: z
+      .email("Invalid email format")
+      .trim()
+      .openapi({ example: "jhon@example.com" }),
     password: passwordSchema,
     confirmPassword: passwordSchema,
   })
@@ -55,7 +64,10 @@ export const RegisterSchema = z
  * - Password must meet the passwordSchema requirements
  */
 export const LoginSchema = z.object({
-  email: z.email("Invalid email format").trim().toLowerCase(),
+  email: z
+    .email("Invalid email format")
+    .trim()
+    .openapi({ format: "email", example: "jhon@example.co" }),
   password: passwordSchema,
 });
 
@@ -65,7 +77,10 @@ export const LoginSchema = z.object({
  * - OTP must be a 6-digit number
  */
 export const VerifyOtpRequestSchema = z.object({
-  otp: z.string().regex(/^\d{6}$/, "OTP must be a 6-digit number"),
+  otp: z
+    .string()
+    .regex(/^\d{6}$/, "OTP must be a 6-digit number")
+    .openapi({ example: "123456" }),
 });
 
 export type RegisterRequestDto = z.infer<typeof RegisterSchema>;
@@ -84,15 +99,21 @@ export interface AuthResponseDto {
  * Forgot Password Schema for requesting OTP
  */
 export const ForgotPasswordRequestSchema = z.object({
-  email: z.email("Invalid email format").trim().toLowerCase(),
+  email: z.email().trim().openapi({ example: "jhon@example.com" }),
 });
 
 /**
  * Schema to verify OTP submitted during the password reset workflow.
  */
 export const VerifyResetOtpRequestSchema = z.object({
-  sessionId: z.uuid("Invalid session identifier"),
-  otp: z.string().regex(/^\d{6}$/, "OTP must be a 6-digit number"),
+  sessionId: z.string().openapi({
+    format: "uuid",
+    example: "550e8400-e29b-41d4-a716-446655440000",
+  }),
+  otp: z
+    .string()
+    .regex(/^\d{6}$/, "OTP must be a 6-digit number")
+    .openapi({ example: "123456" }),
 });
 
 /**
@@ -100,7 +121,10 @@ export const VerifyResetOtpRequestSchema = z.object({
  */
 export const ResetPasswordRequestSchema = z
   .object({
-    passwordResetToken: z.uuid("Invalid password reset token"),
+    passwordResetToken: z.string().openapi({
+      format: "uuid",
+      example: "550e8400-e29b-41d4-a716-446655440000",
+    }),
     password: passwordSchema,
     confirmPassword: passwordSchema,
   })
