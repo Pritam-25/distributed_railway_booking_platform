@@ -1,7 +1,8 @@
-import { Geist, Geist_Mono, Inter } from "next/font/google"
-
+import { Geist_Mono, Inter } from "next/font/google"
+import { Toaster } from "@/components/ui/toast"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
+import { QueryProvider } from "@/providers/query-provider"
 import { cn } from "@/lib/utils"
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
@@ -28,7 +29,10 @@ export default function RootLayout({
       )}
     >
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        <QueryProvider>
+          <ThemeProvider>{children}</ThemeProvider>
+          <Toaster />
+        </QueryProvider>
       </body>
     </html>
   )
