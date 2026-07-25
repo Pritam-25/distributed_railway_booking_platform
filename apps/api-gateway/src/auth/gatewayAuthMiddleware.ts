@@ -5,7 +5,7 @@ import { statusCode } from "@irctc/http";
 import { env } from "@config";
 import { verifyAccessToken } from "./jwtVerifier.js";
 import { COOKIE_NAMES } from "./cookieNames.js";
-import { ERROR_MESSAGES } from "@utils";
+import { ERROR_MESSAGES, GATEWAY_ERROR_CODES } from "@utils";
 
 /**
  * Headers injected by the gateway from a verified JWT.
@@ -70,18 +70,22 @@ export const gatewayAuthMiddleware: RequestHandler = (
   if (!token) {
     throw new ApiError(
       statusCode.unauthorized,
-      ERROR_CODES.UNAUTHORIZED,
-      ERROR_MESSAGES.ACCESS_TOKEN_MISSING,
+      GATEWAY_ERROR_CODES.ACCESS_TOKEN_MISSING,
+      ERROR_MESSAGES[GATEWAY_ERROR_CODES.ACCESS_TOKEN_MISSING],
     );
   }
 
-  const user = verifyAccessToken(token);
+  const { user, error } = verifyAccessToken(token);
   if (!user) {
-    throw new ApiError(
-      statusCode.unauthorized,
-      ERROR_CODES.UNAUTHORIZED,
-      ERROR_MESSAGES.ACCESS_TOKEN_INVALID,
-    );
+    const code =
+      error === "expired"
+        ? GATEWAY_ERROR_CODES.ACCESS_TOKEN_EXPIRED
+        : GATEWAY_ERROR_CODES.ACCESS_TOKEN_INVALID;
+    const message =
+      error === "expired"
+        ? ERROR_MESSAGES[GATEWAY_ERROR_CODES.ACCESS_TOKEN_EXPIRED]
+        : ERROR_MESSAGES[GATEWAY_ERROR_CODES.ACCESS_TOKEN_INVALID];
+    throw new ApiError(statusCode.unauthorized, code, message);
   }
 
   // 4. Inject verified identity.
@@ -138,7 +142,7 @@ export const optionalGatewayAuthMiddleware: RequestHandler = (
   }
 
   if (token) {
-    const user = verifyAccessToken(token);
+    const { user } = verifyAccessToken(token);
     if (user) {
       req.user = user;
       req.headers["x-user-id"] = user.userId;

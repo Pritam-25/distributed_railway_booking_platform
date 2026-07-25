@@ -11,8 +11,6 @@ import { GATEWAY_ERROR_CODES, type GatewayErrorCode } from "./errorCodes.js";
  * the matching `*_ERROR_CODES.*` key in a comment instead.
  */
 export const ERROR_MESSAGES: Record<GatewayErrorCode, string> & {
-  readonly ACCESS_TOKEN_MISSING: string;
-  readonly ACCESS_TOKEN_INVALID: string;
   readonly ADMIN_ACCESS_TOKEN_MISSING: string;
   readonly ADMIN_ACCESS_TOKEN_INVALID: string;
 } = {
@@ -23,9 +21,10 @@ export const ERROR_MESSAGES: Record<GatewayErrorCode, string> & {
     "Upstream service is temporarily unavailable. Please try again later.",
   [GATEWAY_ERROR_CODES.METHOD_NOT_ALLOWED]:
     "HTTP method not allowed for this route.",
-  // Auth-specific messages — kept here because they are user-facing
-  ACCESS_TOKEN_MISSING: "Access token is missing",
-  ACCESS_TOKEN_INVALID: "Access token is invalid or expired",
+  [GATEWAY_ERROR_CODES.ACCESS_TOKEN_MISSING]: "Access token is missing",
+  [GATEWAY_ERROR_CODES.ACCESS_TOKEN_INVALID]: "Access token is invalid",
+  [GATEWAY_ERROR_CODES.ACCESS_TOKEN_EXPIRED]: "Access token has expired",
+  // Admin auth-specific
   ADMIN_ACCESS_TOKEN_MISSING: "Admin access token is missing",
   ADMIN_ACCESS_TOKEN_INVALID: "Invalid or expired admin access token",
 };
