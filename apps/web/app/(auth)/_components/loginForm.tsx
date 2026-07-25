@@ -18,7 +18,7 @@ import { LoginSchema } from "@/lib/schemas/user-service/auth.schema"
 import { PasswordInput } from "./passwordInput"
 import { Loader2 } from "lucide-react"
 import { login, type LoginRequest } from "@/generated"
-import { useMutation } from "@tanstack/react-query"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "@/components/ui/toast"
 import { useRouter } from "next/navigation"
 import { getErrorMessage } from "@/lib/utils/error"
@@ -28,6 +28,7 @@ export function LoginForm({
   ...props
 }: React.ComponentProps<"div">) {
   const router = useRouter()
+  const queryClient = useQueryClient()
 
   const { mutate: loginMutation, isPending } = useMutation({
     mutationFn: (payload: LoginRequest) => login(payload),
@@ -45,6 +46,7 @@ export function LoginForm({
           title: "Login Error",
           description: response.message || "Invalid credentials",
         })
+        queryClient.invalidateQueries({ queryKey: ["user-profile"] })
       }
     },
     onError: (error) => {
@@ -82,9 +84,9 @@ export function LoginForm({
                 <div className="flex flex-col gap-6">
                   {/* Header */}
                   <div className="flex flex-col items-center text-center">
-                    <h1 className="text-2xl font-bold">Welcome back</h1>
+                    <h1 className="text-xl font-bold">Welcome back</h1>
                     <p className="text-balance text-muted-foreground">
-                      Login with your Google account
+                      Login with your IRCTC account
                     </p>
                   </div>
 
@@ -140,7 +142,15 @@ export function LoginForm({
 
                   {/* Password */}
                   <Field>
-                    <FieldLabel htmlFor="password">Password</FieldLabel>
+                    <div className="flex items-center justify-between">
+                      <FieldLabel htmlFor="password">Password</FieldLabel>
+                      <Link
+                        href="/forgot-password"
+                        className="text-sm underline-offset-4 hover:underline"
+                      >
+                        Forgot your password?
+                      </Link>
+                    </div>
                     <PasswordInput
                       id="password"
                       placeholder="••••••••"

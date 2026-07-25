@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
 import { apiReference } from "@scalar/express-api-reference";
 import fs from "node:fs";
 import path from "node:path";
@@ -55,13 +55,94 @@ docsRouter.get("/openapi.json", (_req, res) => {
 });
 
 /**
+ * Loads and parses the OpenAPI specification JSON file.
+ * Returns an empty object on parser or filesystem failures.
+ */
+const loadOpenApiSpec = (specPath: string): Record<string, unknown> => {
+  if (!fs.existsSync(specPath)) {
+    return {};
+  }
+  try {
+    return JSON.parse(fs.readFileSync(specPath, "utf-8")) as Record<
+      string,
+      unknown
+    >;
+  } catch (err) {
+    console.error("Failed to parse OpenAPI spec for Scalar UI:", err);
+    return {};
+  }
+};
+
+/**
+ * Type guard / safe parser to extract the url string property from a spec server object.
+ */
+const getServerUrlStr = (server: unknown): string | null => {
+  if (server && typeof server === "object" && "url" in server) {
+    const urlVal = (server as Record<string, unknown>)["url"];
+    if (typeof urlVal === "string") {
+      return urlVal;
+    }
+  }
+  return null;
+};
+
+/**
+ * Dynamically resolves allowed connect-src origins based on request context,
+ * upstream server environments, and servers configured in the OpenAPI specification.
+ */
+const getConnectSrcOrigins = (
+  req: Request,
+  specContent: Record<string, unknown>,
+): string => {
+  const allowedOrigins = new Set<string>(["'self'"]);
+
+  // 1. Current gateway origin from request context
+  try {
+    allowedOrigins.add(`${req.protocol}://${req.get("host")}`);
+  } catch {
+    // Ignore parsing failures
+  }
+
+  // Helper to safely add an origin from a URL string
+  const addOrigin = (urlStr?: string) => {
+    if (urlStr) {
+      try {
+        allowedOrigins.add(new URL(urlStr).origin);
+      } catch {
+        // Ignore invalid URLs
+      }
+    }
+  };
+
+  // 2. Configured upstream origins from env
+  addOrigin(env.USER_UPSTREAM);
+  addOrigin(env.ADMIN_UPSTREAM);
+
+  // 3. Known server URLs defined in openapi.json for Scalar's "Try it" panel
+  const specServers = specContent["servers"];
+  if (Array.isArray(specServers)) {
+    for (const server of specServers) {
+      const urlStr = getServerUrlStr(server);
+      if (urlStr) {
+        addOrigin(urlStr);
+      }
+    }
+  }
+
+  return Array.from(allowedOrigins).join(" ");
+};
+
+/**
  * GET /docs
  * Serve interactive Scalar UI documentation with embedded spec and request-specific CSP nonce
  */
 docsRouter.use("/docs", (req, res, next) => {
   const nonce = crypto.randomBytes(16).toString("base64");
+  const specPath = getOpenApiSpecPath();
+  const specContent = loadOpenApiSpec(specPath);
+  const connectSrcList = getConnectSrcOrigins(req, specContent);
 
-  // Re-enable and configure secure CSP & COOP headers instead of removing them
+  // Set secure CSP & COOP headers with refined connect-src origins
   res.setHeader(
     "Content-Security-Policy",
     `default-src 'self'; ` +
@@ -69,25 +150,11 @@ docsRouter.use("/docs", (req, res, next) => {
       `style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; ` +
       `font-src 'self' https://cdn.jsdelivr.net; ` +
       `img-src 'self' data: https://cdn.jsdelivr.net; ` +
-      `connect-src 'self' https: http:; ` +
+      `connect-src ${connectSrcList}; ` +
       `frame-src 'self';`,
   );
 
   res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
-
-  // Get the spec content
-  const specPath = getOpenApiSpecPath();
-  let specContent: Record<string, unknown> = {};
-  if (fs.existsSync(specPath)) {
-    try {
-      specContent = JSON.parse(fs.readFileSync(specPath, "utf-8")) as Record<
-        string,
-        unknown
-      >;
-    } catch (err) {
-      console.error("Failed to parse OpenAPI spec for Scalar UI:", err);
-    }
-  }
 
   // Create the middleware instance dynamically with the request's unique nonce
   const scalarMiddleware = apiReference({

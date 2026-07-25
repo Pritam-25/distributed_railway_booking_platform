@@ -44,6 +44,13 @@ export default function Page() {
         })
         queryClient.invalidateQueries({ queryKey: ["user-profile"] })
         router.push("/login")
+      } else {
+        toast.add({
+          type: "error",
+          title: "Logout Error",
+          description:
+            response.message || "Failed to logout. Please try again.",
+        })
       }
     },
     onError: () => {

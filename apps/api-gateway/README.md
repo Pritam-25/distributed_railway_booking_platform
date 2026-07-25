@@ -81,7 +81,7 @@ Every request entering the gateway passes through standard security filters:
 
 The gateway matches incoming request paths and routes them to their respective destination microservice dynamically:
 
-- **Upstream and Path Mapping**: Route definitions in `src/config/routes.ts` map request prefixes (e.g. `/api/v1/users`) to target upstreams defined in `src/config/upstreams.ts` (which resolve to environment variables like `USER_SERVICE_URL`).
+- **Upstream and Path Mapping**: Route definitions in `src/config/routes.ts` map request prefixes (e.g. `/api/v1/users`) to target upstreams defined in `src/config/upstreams.ts` (which resolve to environment variables like `USER_UPSTREAM`).
 - **Routing Ingress**: Express mounts each prefix along with its middleware pipeline in `src/routing/mountRoutes.ts`:
   ```typescript
   app.use(route.prefix, authMw, rateLimitMw, proxyHandler);

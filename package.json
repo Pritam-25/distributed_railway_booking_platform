@@ -4,7 +4,7 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
-    "codegen": "turbo run generate:api",
+    "codegen": "turbo run generate:api && pnpm run format",
     "prepare": "husky",
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",

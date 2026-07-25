@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "http://localhost:4000/user-service",
+      "url": "http://localhost:4000",
       "description": "API Gateway Proxy URL"
     },
     {
@@ -1275,7 +1275,15 @@
                       "example": "Password reset OTP sent successfully"
                     },
                     "data": {
-                      "$ref": "#/components/schemas/EmptyResponse"
+                      "type": "object",
+                      "properties": {
+                        "sessionId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "example": "550e8400-e29b-41d4-a716-446655440000"
+                        }
+                      },
+                      "required": ["sessionId"]
                     },
                     "meta": {
                       "$ref": "#/components/schemas/ResponseMeta"

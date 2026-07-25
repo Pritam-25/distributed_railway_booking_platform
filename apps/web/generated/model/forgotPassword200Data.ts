@@ -21,15 +21,7 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { ForgotPassword200Data } from "./forgotPassword200Data"
-import type { ResponseMeta } from "./responseMeta"
 
-/**
- * Success Response Envelope
- */
-export type ForgotPassword200 = {
-  success: true
-  message: string
-  data: ForgotPassword200Data
-  meta: ResponseMeta
+export type ForgotPassword200Data = {
+  sessionId: string
 }

@@ -12,76 +12,82 @@ import {
 } from "@/components/ui/input-otp"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { VerifyOtpRequestSchema } from "@/lib/schemas/user-service/auth.schema"
-import { Loader2, Mail } from "lucide-react"
-import { verifyOtp, type VerifyOtpRequest } from "@/generated"
+import { VerifyResetOtpRequestSchema } from "@/lib/schemas/user-service/auth.schema"
+import { Loader2, ShieldCheck } from "lucide-react"
+import { verifyResetOtp, type VerifyResetOtpRequest } from "@/generated"
 import { useMutation } from "@tanstack/react-query"
 import { toast } from "@/components/ui/toast"
 import { useRouter } from "next/navigation"
 import { getErrorMessage } from "@/lib/utils/error"
 
-interface VerifyEmailFormProps {
+interface VerifyResetOtpFormProps {
   email?: string
+  sessionId?: string
   className?: string
 }
 
-export default function VerifyEmailForm({
+export function VerifyResetOtpForm({
   email = "",
+  sessionId = "",
   className,
   ...props
-}: VerifyEmailFormProps & React.ComponentProps<"div">) {
+}: VerifyResetOtpFormProps & React.ComponentProps<"div">) {
   const router = useRouter()
 
-  // Verify OTP Mutation
-  const { mutate: verifyOtpMutation, isPending: isVerifying } = useMutation({
-    mutationFn: (payload: VerifyOtpRequest) => verifyOtp(payload),
-    onSuccess: (response) => {
-      if (response.success) {
-        toast.add({
-          type: "success",
-          title: "Registration Complete",
-          description:
-            response.message || "Email verified successfully! Please log in.",
-        })
-        router.push("/login")
-      } else {
+  const { mutate: verifyResetOtpMutation, isPending: isVerifying } =
+    useMutation({
+      mutationFn: (payload: VerifyResetOtpRequest) => verifyResetOtp(payload),
+      onSuccess: (response) => {
+        if (response.success) {
+          toast.add({
+            type: "success",
+            title: "OTP Verified",
+            description:
+              response.message ||
+              "OTP verified successfully. You can now set your new password.",
+          })
+          const resetToken = response.data.passwordResetToken
+          router.push(
+            `/forgot-password/reset?token=${encodeURIComponent(resetToken)}`
+          )
+        } else {
+          toast.add({
+            type: "error",
+            title: "Verification Failed",
+            description: response.message || "Invalid or expired OTP",
+          })
+        }
+      },
+      onError: (error) => {
+        const message = getErrorMessage(error, "Invalid or expired OTP code.")
         toast.add({
           type: "error",
           title: "Verification Failed",
-          description: response.message || "Invalid or expired OTP",
+          description: message,
         })
-      }
-    },
-    onError: (error) => {
-      const message = getErrorMessage(error, "Invalid or expired OTP code.")
-      toast.add({
-        type: "error",
-        title: "Verification Failed",
-        description: message,
-      })
-    },
-  })
+      },
+    })
 
-  const form = useForm<VerifyOtpRequest>({
-    resolver: zodResolver(VerifyOtpRequestSchema),
+  const form = useForm<VerifyResetOtpRequest>({
+    resolver: zodResolver(VerifyResetOtpRequestSchema),
     defaultValues: {
+      sessionId,
       otp: "",
     },
   })
 
-  const onSubmit = (values: VerifyOtpRequest) => {
-    verifyOtpMutation(values)
+  const onSubmit = (values: VerifyResetOtpRequest) => {
+    verifyResetOtpMutation(values)
   }
 
   const handleResendOtp = () => {
     toast.add({
       type: "info",
-      title: "Resend Verification",
-      description:
-        "Please resubmit your registration details to receive a new OTP.",
+      title: "Resend Verification Code",
+      description: "Redirecting back to password reset request page.",
     })
     const queryString = email ? `?email=${encodeURIComponent(email)}` : ""
-    router.push(`/signup${queryString}`)
+    router.push(`/forgot-password${queryString}`)
   }
 
   return (
@@ -98,13 +104,13 @@ export default function VerifyEmailForm({
                   {/* Icon & Header */}
                   <div className="flex flex-col items-center text-center">
                     <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                      <Mail className="h-6 w-6 text-primary" />
+                      <ShieldCheck className="h-6 w-6 text-primary" />
                     </div>
-                    <h1 className="text-xl font-bold">Verify Your Email</h1>
+                    <h1 className="text-xl font-bold">Verify Reset Code</h1>
                     <p className="mt-1 text-sm text-balance text-muted-foreground">
                       {email
-                        ? `Please enter the 6-digit code sent to ${email}`
-                        : "Please enter the 6-digit code sent to your email"}
+                        ? `Enter the 6-digit verification code sent to ${email}`
+                        : "Enter the 6-digit verification code sent to your email"}
                     </p>
                   </div>
 
@@ -158,15 +164,15 @@ export default function VerifyEmailForm({
                       {form.formState.isSubmitting || isVerifying ? (
                         <span className="flex items-center justify-center gap-2">
                           <Loader2 className="h-4 w-4 animate-spin" />
-                          Verifying...
+                          Verifying code...
                         </span>
                       ) : (
-                        "Verify & Complete Registration"
+                        "Verify Reset Code"
                       )}
                     </Button>
                   </div>
 
-                  {/* Resend OTP & Back to Signup */}
+                  {/* Resend OTP & Back to Request Page */}
                   <div className="flex flex-col items-center gap-2 text-center text-sm">
                     <div className="flex items-center gap-1 text-muted-foreground">
                       <span>Didn&apos;t receive code?</span>
@@ -176,15 +182,15 @@ export default function VerifyEmailForm({
                         onClick={handleResendOtp}
                         className="h-auto p-0 text-sm font-normal underline-offset-4"
                       >
-                        Resend OTP
+                        Resend Code
                       </Button>
                     </div>
 
                     <Link
-                      href="/signup"
+                      href="/forgot-password"
                       className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
                     >
-                      Back to Registration
+                      Back to Reset Request
                     </Link>
                   </div>
                 </div>

@@ -286,7 +286,12 @@ registry.registerPath({
     200: createOpenApiResponse(
       "Password reset OTP sent to email",
       SuccessResponseSchema(
-        EmptySchema,
+        z.object({
+          sessionId: z.string().openapi({
+            format: "uuid",
+            example: "550e8400-e29b-41d4-a716-446655440000",
+          }),
+        }),
         "Password reset OTP sent successfully",
       ),
     ),

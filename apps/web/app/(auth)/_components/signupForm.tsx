@@ -90,9 +90,9 @@ export function SignUpForm({
                 <div className="flex flex-col gap-6">
                   {/* Header */}
                   <div className="flex flex-col items-center text-center">
-                    <h1 className="text-2xl font-bold">Create your account</h1>
+                    <h1 className="text-xl font-bold">Create your account</h1>
                     <p className="text-balance text-muted-foreground">
-                      Sign up with your Google account
+                      Sign up with your IRCTC account
                     </p>
                   </div>
 

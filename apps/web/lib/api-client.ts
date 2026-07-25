@@ -41,7 +41,8 @@ let isRedirecting = false
  * (e.g. `access_token` and `refresh_token`) to and from the backend.
  */
 export const AXIOS_INSTANCE = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000",
+  baseURL: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000",
+  timeout: 15000,
   withCredentials: true,
   headers: {
     "Content-Type": "application/json",

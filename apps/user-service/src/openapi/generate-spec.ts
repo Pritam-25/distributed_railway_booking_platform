@@ -32,7 +32,7 @@ Microservice handling authentication, identity management, OTP verification, and
     },
     servers: [
       {
-        url: "http://localhost:4000/user-service",
+        url: "http://localhost:4000",
         description: "API Gateway Proxy URL",
       },
       {
