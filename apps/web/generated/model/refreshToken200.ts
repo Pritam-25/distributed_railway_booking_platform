@@ -21,8 +21,8 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { RefreshToken200Data } from "./refreshToken200Data"
 import type { ResponseMeta } from "./responseMeta"
+import type { UserResponse } from "./userResponse"
 
 /**
  * Success Response Envelope
@@ -30,6 +30,6 @@ import type { ResponseMeta } from "./responseMeta"
 export type RefreshToken200 = {
   success: true
   message: string
-  data: RefreshToken200Data
+  data: UserResponse
   meta: ResponseMeta
 }

@@ -23,7 +23,7 @@ interface ResetPasswordFormProps {
 
 const ResetPasswordFormSchema = z
   .object({
-    passwordResetToken: z.string().uuid("Invalid reset token format"),
+    passwordResetToken: z.uuid("Invalid reset token format"),
     password: passwordSchema,
     confirmPassword: z.string(),
   })

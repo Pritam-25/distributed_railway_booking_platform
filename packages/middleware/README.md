@@ -75,7 +75,7 @@ const searchSchema = z.object({
 });
 
 const pathSchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
 });
 
 const bodySchema = z.object({

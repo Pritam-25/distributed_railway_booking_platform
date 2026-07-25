@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "tsx watch --import @irctc/telemetry/instrumentation ./src/server.ts",
     "build": "tsc && tsc-alias",
+    "start": "node --import @irctc/telemetry/instrumentation ./dist/server.js",
     "check-types": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -17,6 +18,8 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^22.19.21",
     "tsc-alias": "^1.9.0",
     "tsx": "^4.23.0"
   },
@@ -26,10 +29,8 @@
     "@irctc/logger": "workspace:*",
     "@irctc/redis": "workspace:^",
     "@irctc/telemetry": "workspace:*",
-    "@repo/typescript-config": "workspace:*",
     "@sendgrid/mail": "^8.1.6",
     "@t3-oss/env-core": "^0.13.11",
-    "@types/node": "^22.19.21",
     "dotenv": "^17.4.2",
     "zod": "^4.4.3"
   }

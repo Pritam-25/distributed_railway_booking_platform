@@ -8,6 +8,7 @@ import type {
   VerifyResetOtpRequestDto,
   ResetPasswordRequestDto,
 } from "@dto";
+import { logger } from "@irctc/logger";
 import { env } from "@config";
 import { COOKIE_MAX_AGE, COOKIE_NAMES } from "@utils/constants";
 import { statusCode, successResponse } from "@irctc/http";
@@ -209,7 +210,12 @@ export class AuthController {
 
     return res
       .status(statusCode.success)
-      .json(successResponse("Active sessions retrieved", sessionsWithCurrent));
+      .json(
+        successResponse(
+          "Active sessions retrieved sucessfully",
+          sessionsWithCurrent,
+        ),
+      );
   }
 
   /**
@@ -240,17 +246,25 @@ export class AuthController {
     const refreshToken = req.cookies[COOKIE_NAMES.REFRESH_TOKEN];
 
     if (refreshToken) {
+      let decoded: RefreshTokenPayload | undefined;
       try {
-        const decoded = jwt.verify(
+        decoded = jwt.verify(
           refreshToken,
           env.JWT_SECRET,
         ) as RefreshTokenPayload;
-        const { sub: userId, sessionId, type } = decoded;
-        if (type === "refresh" && userId && sessionId) {
-          await this.service.logout(sessionId, userId);
-        }
       } catch {
         // Expired or invalid refresh token on logout is handled silently
+      }
+
+      if (decoded?.type === "refresh" && decoded.sub && decoded.sessionId) {
+        try {
+          await this.service.logout(decoded.sessionId, decoded.sub);
+        } catch (err) {
+          logger.error(
+            { module: "auth", err },
+            "Session revocation failed during logout",
+          );
+        }
       }
     }
 
@@ -269,17 +283,25 @@ export class AuthController {
     const refreshToken = req.cookies[COOKIE_NAMES.REFRESH_TOKEN];
 
     if (refreshToken) {
+      let decoded: RefreshTokenPayload | undefined;
       try {
-        const decoded = jwt.verify(
+        decoded = jwt.verify(
           refreshToken,
           env.JWT_SECRET,
         ) as RefreshTokenPayload;
-        const { sub: userId, type } = decoded;
-        if (type === "refresh" && userId) {
-          await this.service.logoutAll(userId);
-        }
       } catch {
         // Expired or invalid refresh token on logout-all is handled silently
+      }
+
+      if (decoded?.type === "refresh" && decoded.sub) {
+        try {
+          await this.service.logoutAll(decoded.sub);
+        } catch (err) {
+          logger.error(
+            { module: "auth", err },
+            "Session revocation failed during logoutAll",
+          );
+        }
       }
     }
 

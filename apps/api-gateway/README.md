@@ -64,7 +64,7 @@ flowchart TD
 
   GW --> Pipeline
   P -- Proxy HTTP --> US[user-service]
-  L -- Token Invalidation / Bucket --> Redis[(Redis)]
+  L -- Rate-limit bucket --> Redis[(Redis)]
 ```
 
 ## Request Processing Pipeline

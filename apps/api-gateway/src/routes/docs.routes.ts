@@ -56,20 +56,22 @@ docsRouter.get("/openapi.json", (_req, res) => {
 
 /**
  * Loads and parses the OpenAPI specification JSON file.
- * Returns an empty object on parser or filesystem failures.
+ * Returns null on parser, empty spec, or filesystem failures.
  */
-const loadOpenApiSpec = (specPath: string): Record<string, unknown> => {
+const loadOpenApiSpec = (specPath: string): Record<string, unknown> | null => {
   if (!fs.existsSync(specPath)) {
-    return {};
+    return null;
   }
   try {
-    return JSON.parse(fs.readFileSync(specPath, "utf-8")) as Record<
-      string,
-      unknown
-    >;
+    const content = fs.readFileSync(specPath, "utf-8");
+    const parsed = JSON.parse(content) as Record<string, unknown>;
+    if (!parsed || Object.keys(parsed).length === 0) {
+      return null;
+    }
+    return parsed;
   } catch (err) {
     console.error("Failed to parse OpenAPI spec for Scalar UI:", err);
-    return {};
+    return null;
   }
 };
 
@@ -137,9 +139,17 @@ const getConnectSrcOrigins = (
  * Serve interactive Scalar UI documentation with embedded spec and request-specific CSP nonce
  */
 docsRouter.use("/docs", (req, res, next) => {
-  const nonce = crypto.randomBytes(16).toString("base64");
   const specPath = getOpenApiSpecPath();
   const specContent = loadOpenApiSpec(specPath);
+
+  if (!specContent) {
+    res.status(503).json({
+      error: "OpenAPI specification is unavailable. Run pnpm build:spec first.",
+    });
+    return;
+  }
+
+  const nonce = crypto.randomBytes(16).toString("base64");
   const connectSrcList = getConnectSrcOrigins(req, specContent);
 
   // Set secure CSP & COOP headers with refined connect-src origins

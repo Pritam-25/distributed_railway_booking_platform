@@ -732,14 +732,7 @@
                       "example": "Token refreshed successfully"
                     },
                     "data": {
-                      "type": "object",
-                      "properties": {
-                        "accessToken": {
-                          "type": "string",
-                          "example": "eyJhbGciOi..."
-                        }
-                      },
-                      "required": ["accessToken"]
+                      "$ref": "#/components/schemas/UserResponse"
                     },
                     "meta": {
                       "$ref": "#/components/schemas/ResponseMeta"
@@ -1080,14 +1073,6 @@
         "operationId": "logout",
         "tags": ["Authentication"],
         "summary": "Logout Current Session",
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "cookieAuth": []
-          }
-        ],
         "responses": {
           "200": {
             "description": "Logged out successfully",
@@ -1128,16 +1113,6 @@
               }
             }
           },
-          "401": {
-            "description": "Unauthorized - Authentication credentials missing or invalid",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorResponse"
-                }
-              }
-            }
-          },
           "429": {
             "description": "Too Many Requests - Rate limit exceeded",
             "content": {
@@ -1166,14 +1141,6 @@
         "operationId": "logoutAll",
         "tags": ["Authentication"],
         "summary": "Logout All Sessions",
-        "security": [
-          {
-            "bearerAuth": []
-          },
-          {
-            "cookieAuth": []
-          }
-        ],
         "responses": {
           "200": {
             "description": "Logged out from all sessions",
@@ -1189,7 +1156,7 @@
                     },
                     "message": {
                       "type": "string",
-                      "example": "Logged out from all sessions successfully"
+                      "example": "Logged out from all devices"
                     },
                     "data": {
                       "$ref": "#/components/schemas/EmptyResponse"
@@ -1210,16 +1177,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/BadRequestErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - Authentication credentials missing or invalid",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorResponse"
                 }
               }
             }
@@ -1276,7 +1233,7 @@
                     },
                     "message": {
                       "type": "string",
-                      "example": "Password reset OTP sent successfully"
+                      "example": "OTP sent successfully to your registered email"
                     },
                     "data": {
                       "type": "object",
@@ -1399,7 +1356,7 @@
                     },
                     "message": {
                       "type": "string",
-                      "example": "Reset OTP verified successfully"
+                      "example": "OTP verified successfully"
                     },
                     "data": {
                       "type": "object",
@@ -1512,7 +1469,7 @@
                     },
                     "message": {
                       "type": "string",
-                      "example": "Password reset successfully"
+                      "example": "Password reset successfully. Please login with your new credentials."
                     },
                     "data": {
                       "$ref": "#/components/schemas/EmptyResponse"
@@ -1588,7 +1545,7 @@
                     },
                     "message": {
                       "type": "string",
-                      "example": "User profile retrieved successfully"
+                      "example": "Profile retrieved successfully"
                     },
                     "data": {
                       "$ref": "#/components/schemas/UserResponse"
@@ -1719,7 +1676,7 @@
                     },
                     "message": {
                       "type": "string",
-                      "example": "User profile updated successfully"
+                      "example": "Profile updated successfully"
                     },
                     "data": {
                       "$ref": "#/components/schemas/UserResponse"

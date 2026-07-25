@@ -151,12 +151,7 @@ registry.registerPath({
   responses: {
     200: createOpenApiResponse(
       "Token refreshed successfully",
-      SuccessResponseSchema(
-        z.object({
-          accessToken: z.string().openapi({ example: "eyJhbGciOi..." }),
-        }),
-        "Token refreshed successfully",
-      ),
+      SuccessResponseSchema(UserResponseSchema, "Token refreshed successfully"),
     ),
     ...CommonErrorResponses,
     401: createOpenApiResponse(
@@ -238,14 +233,12 @@ registry.registerPath({
   operationId: "logout",
   tags: ["Authentication"],
   summary: "Logout Current Session",
-  security: GatewayAuthSecurity,
   responses: {
     200: createOpenApiResponse(
       "Logged out successfully",
       SuccessResponseSchema(EmptySchema, "Logged out successfully"),
     ),
     ...CommonErrorResponses,
-    401: ErrorResponses[401],
   },
 });
 
@@ -255,17 +248,12 @@ registry.registerPath({
   operationId: "logoutAll",
   tags: ["Authentication"],
   summary: "Logout All Sessions",
-  security: GatewayAuthSecurity,
   responses: {
     200: createOpenApiResponse(
       "Logged out from all sessions",
-      SuccessResponseSchema(
-        EmptySchema,
-        "Logged out from all sessions successfully",
-      ),
+      SuccessResponseSchema(EmptySchema, "Logged out from all devices"),
     ),
     ...CommonErrorResponses,
-    401: ErrorResponses[401],
   },
 });
 
@@ -293,7 +281,7 @@ registry.registerPath({
             example: "550e8400-e29b-41d4-a716-446655440000",
           }),
         }),
-        "Password reset OTP sent successfully",
+        "OTP sent successfully to your registered email",
       ),
     ),
     ...CommonErrorResponses,
@@ -331,7 +319,7 @@ registry.registerPath({
             example: "550e8400-e29b-41d4-a716-446655440000",
           }),
         }),
-        "Reset OTP verified successfully",
+        "OTP verified successfully",
       ),
     ),
     ...CommonErrorResponses,
@@ -363,7 +351,10 @@ registry.registerPath({
   responses: {
     200: createOpenApiResponse(
       "Password reset successfully",
-      SuccessResponseSchema(EmptySchema, "Password reset successfully"),
+      SuccessResponseSchema(
+        EmptySchema,
+        "Password reset successfully. Please login with your new credentials.",
+      ),
     ),
     ...CommonErrorResponses,
   },
@@ -384,7 +375,7 @@ registry.registerPath({
       "User profile retrieved successfully",
       SuccessResponseSchema(
         UserResponseSchema,
-        "User profile retrieved successfully",
+        "Profile retrieved successfully",
       ),
     ),
     ...CommonErrorResponses,
@@ -418,10 +409,7 @@ registry.registerPath({
   responses: {
     200: createOpenApiResponse(
       "Profile updated successfully",
-      SuccessResponseSchema(
-        UserResponseSchema,
-        "User profile updated successfully",
-      ),
+      SuccessResponseSchema(UserResponseSchema, "Profile updated successfully"),
     ),
     ...CommonErrorResponses,
     401: ErrorResponses[401],

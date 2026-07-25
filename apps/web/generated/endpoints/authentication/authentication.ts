@@ -1020,7 +1020,6 @@ export const getLogoutQueryOptions = <
   TData = Awaited<ReturnType<typeof logout>>,
   TError =
     | BadRequestErrorResponse
-    | UnauthorizedErrorResponse
     | RateLimitErrorResponse
     | InternalServerErrorResponse,
 >(options?: {
@@ -1046,16 +1045,12 @@ export const getLogoutQueryOptions = <
 
 export type LogoutQueryResult = NonNullable<Awaited<ReturnType<typeof logout>>>
 export type LogoutQueryError =
-  | BadRequestErrorResponse
-  | UnauthorizedErrorResponse
-  | RateLimitErrorResponse
-  | InternalServerErrorResponse
+  BadRequestErrorResponse | RateLimitErrorResponse | InternalServerErrorResponse
 
 export function useLogout<
   TData = Awaited<ReturnType<typeof logout>>,
   TError =
     | BadRequestErrorResponse
-    | UnauthorizedErrorResponse
     | RateLimitErrorResponse
     | InternalServerErrorResponse,
 >(
@@ -1081,7 +1076,6 @@ export function useLogout<
   TData = Awaited<ReturnType<typeof logout>>,
   TError =
     | BadRequestErrorResponse
-    | UnauthorizedErrorResponse
     | RateLimitErrorResponse
     | InternalServerErrorResponse,
 >(
@@ -1107,7 +1101,6 @@ export function useLogout<
   TData = Awaited<ReturnType<typeof logout>>,
   TError =
     | BadRequestErrorResponse
-    | UnauthorizedErrorResponse
     | RateLimitErrorResponse
     | InternalServerErrorResponse,
 >(
@@ -1129,7 +1122,6 @@ export function useLogout<
   TData = Awaited<ReturnType<typeof logout>>,
   TError =
     | BadRequestErrorResponse
-    | UnauthorizedErrorResponse
     | RateLimitErrorResponse
     | InternalServerErrorResponse,
 >(
@@ -1174,7 +1166,6 @@ export const getLogoutAllQueryOptions = <
   TData = Awaited<ReturnType<typeof logoutAll>>,
   TError =
     | BadRequestErrorResponse
-    | UnauthorizedErrorResponse
     | RateLimitErrorResponse
     | InternalServerErrorResponse,
 >(options?: {
@@ -1202,16 +1193,12 @@ export type LogoutAllQueryResult = NonNullable<
   Awaited<ReturnType<typeof logoutAll>>
 >
 export type LogoutAllQueryError =
-  | BadRequestErrorResponse
-  | UnauthorizedErrorResponse
-  | RateLimitErrorResponse
-  | InternalServerErrorResponse
+  BadRequestErrorResponse | RateLimitErrorResponse | InternalServerErrorResponse
 
 export function useLogoutAll<
   TData = Awaited<ReturnType<typeof logoutAll>>,
   TError =
     | BadRequestErrorResponse
-    | UnauthorizedErrorResponse
     | RateLimitErrorResponse
     | InternalServerErrorResponse,
 >(
@@ -1237,7 +1224,6 @@ export function useLogoutAll<
   TData = Awaited<ReturnType<typeof logoutAll>>,
   TError =
     | BadRequestErrorResponse
-    | UnauthorizedErrorResponse
     | RateLimitErrorResponse
     | InternalServerErrorResponse,
 >(
@@ -1263,7 +1249,6 @@ export function useLogoutAll<
   TData = Awaited<ReturnType<typeof logoutAll>>,
   TError =
     | BadRequestErrorResponse
-    | UnauthorizedErrorResponse
     | RateLimitErrorResponse
     | InternalServerErrorResponse,
 >(
@@ -1285,7 +1270,6 @@ export function useLogoutAll<
   TData = Awaited<ReturnType<typeof logoutAll>>,
   TError =
     | BadRequestErrorResponse
-    | UnauthorizedErrorResponse
     | RateLimitErrorResponse
     | InternalServerErrorResponse,
 >(

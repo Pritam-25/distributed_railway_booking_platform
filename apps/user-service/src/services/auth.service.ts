@@ -236,14 +236,23 @@ export class AuthService {
     );
     const refreshToken = this.generateRefreshToken(user.id, sessionId);
 
-    await this.createAuthSession(
-      user.id,
-      sessionId,
-      refreshToken,
-      fingerprint,
-      ipAddress,
-      userAgent,
-    );
+    try {
+      await this.createAuthSession(
+        user.id,
+        sessionId,
+        refreshToken,
+        fingerprint,
+        ipAddress,
+        userAgent,
+      );
+    } catch (err) {
+      logger.error(
+        { module: "auth", userId: user.id, err },
+        "Session creation failed after user creation; rolling back user record",
+      );
+      await this.repo.deleteUser(user.id).catch(() => {});
+      throw err;
+    }
 
     logger.info(
       { module: "auth", userId: user.id },
