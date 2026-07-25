@@ -22,4 +22,5 @@ export const REDIS_KEYS = {
   otpRate: (email: string) => `auth:otp_rate:${email}`,
   otpAttempts: (sessionId: string) => `auth:otp_attempts:${sessionId}`,
   userSessions: (userId: string) => `auth:user:${userId}:sessions`,
+  userProfile: (userId: string) => `user:profile:${userId}`,
 } as const;

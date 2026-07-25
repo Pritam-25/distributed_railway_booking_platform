@@ -137,12 +137,10 @@ AXIOS_INSTANCE.interceptors.response.use(
     const isRefreshRequest = originalRequest.url?.includes(
       "/api/v1/auth/refresh"
     )
-    const errorCode = error.response?.data?.error?.code
     const status = error.response?.status
 
     const shouldRefresh =
       status === 401 &&
-      errorCode === "ACCESS_TOKEN_EXPIRED" &&
       !originalRequest._retry &&
       !isRefreshRequest &&
       !isLoggingOut

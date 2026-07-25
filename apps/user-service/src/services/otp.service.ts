@@ -10,7 +10,7 @@ import bcrypt from "bcryptjs";
 /**
  * Pre-registration session data containing registration details.
  */
-interface RegistrationSessionData {
+export interface RegistrationSessionData {
   firstName: string;
   lastName: string;
   email: string;

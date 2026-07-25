@@ -23,8 +23,9 @@
  */
 
 export type GetSessions200DataItem = {
-  id: string
+  sessionId: string
   ipAddress: string
   userAgent: string
+  isCurrent?: boolean
   createdAt: string
 }

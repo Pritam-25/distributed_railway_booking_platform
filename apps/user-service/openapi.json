@@ -857,9 +857,10 @@
                       "items": {
                         "type": "object",
                         "properties": {
-                          "id": {
+                          "sessionId": {
                             "type": "string",
-                            "format": "uuid"
+                            "format": "uuid",
+                            "example": "550e8400-e29b-41d4-a716-446655440000"
                           },
                           "ipAddress": {
                             "type": "string",
@@ -869,13 +870,16 @@
                             "type": "string",
                             "example": "Mozilla/5.0..."
                           },
+                          "isCurrent": {
+                            "type": "boolean"
+                          },
                           "createdAt": {
                             "type": "string",
                             "example": "2026-07-24T00:00:00.000Z"
                           }
                         },
                         "required": [
-                          "id",
+                          "sessionId",
                           "ipAddress",
                           "userAgent",
                           "createdAt"

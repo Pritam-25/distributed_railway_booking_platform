@@ -182,9 +182,12 @@ registry.registerPath({
       SuccessResponseSchema(
         z.array(
           z.object({
-            id: z.string().openapi({ format: "uuid" }),
+            sessionId: z
+              .uuid()
+              .openapi({ example: "550e8400-e29b-41d4-a716-446655440000" }),
             ipAddress: z.string().openapi({ example: "192.168.1.1" }),
             userAgent: z.string().openapi({ example: "Mozilla/5.0..." }),
+            isCurrent: z.boolean().optional(),
             createdAt: z
               .string()
               .openapi({ example: "2026-07-24T00:00:00.000Z" }),
@@ -207,10 +210,9 @@ registry.registerPath({
   security: GatewayAuthSecurity,
   request: {
     params: z.object({
-      sessionId: z.string().openapi({
-        format: "uuid",
-        example: "550e8400-e29b-41d4-a716-446655440000",
-      }),
+      sessionId: z
+        .uuid()
+        .openapi({ example: "550e8400-e29b-41d4-a716-446655440000" }),
     }),
   },
   responses: {
@@ -287,8 +289,7 @@ registry.registerPath({
       "Password reset OTP sent to email",
       SuccessResponseSchema(
         z.object({
-          sessionId: z.string().openapi({
-            format: "uuid",
+          sessionId: z.uuid().openapi({
             example: "550e8400-e29b-41d4-a716-446655440000",
           }),
         }),
@@ -326,8 +327,7 @@ registry.registerPath({
       "OTP verified, returns password reset token",
       SuccessResponseSchema(
         z.object({
-          passwordResetToken: z.string().openapi({
-            format: "uuid",
+          passwordResetToken: z.uuid().openapi({
             example: "550e8400-e29b-41d4-a716-446655440000",
           }),
         }),

@@ -40,10 +40,9 @@ export default function VerifyEmailForm({
         toast.add({
           type: "success",
           title: "Registration Complete",
-          description:
-            response.message || "Email verified successfully! Please log in.",
+          description: response.message || "Email verified successfully!",
         })
-        router.push("/login")
+        router.push("/")
       } else {
         toast.add({
           type: "error",

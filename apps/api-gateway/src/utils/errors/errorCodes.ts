@@ -13,12 +13,6 @@ export const GATEWAY_ERROR_CODES = {
   GATEWAY_UPSTREAM_CIRCUIT_OPEN: "GATEWAY_UPSTREAM_CIRCUIT_OPEN",
   /** Request method not allowed on the matched route. */
   METHOD_NOT_ALLOWED: "METHOD_NOT_ALLOWED",
-  /** Access token is missing. */
-  ACCESS_TOKEN_MISSING: "ACCESS_TOKEN_MISSING",
-  /** Access token is invalid. */
-  ACCESS_TOKEN_INVALID: "ACCESS_TOKEN_INVALID",
-  /** Access token has expired. */
-  ACCESS_TOKEN_EXPIRED: "ACCESS_TOKEN_EXPIRED",
 } as const;
 
 export type GatewayErrorCode =

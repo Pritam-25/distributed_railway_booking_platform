@@ -84,8 +84,6 @@ router.delete(
  */
 router.post(
   "/logout",
-  trustGatewayHeaders,
-  sessionMiddleware,
   asyncHandler((req, res) => authController.logout(req, res)),
 );
 
@@ -95,8 +93,6 @@ router.post(
  */
 router.post(
   "/logout-all",
-  trustGatewayHeaders,
-  sessionMiddleware,
   asyncHandler((req, res) => authController.logoutAll(req, res)),
 );
 

@@ -2,8 +2,9 @@
   "name": "distributed_railway_booking_platform",
   "private": true,
   "scripts": {
-    "build": "turbo run build",
+    "build": "turbo run build && pnpm run build:spec",
     "dev": "turbo run dev",
+    "start": "turbo run start",
     "codegen": "turbo run generate:api && pnpm run format",
     "prepare": "husky",
     "lint": "turbo run lint",

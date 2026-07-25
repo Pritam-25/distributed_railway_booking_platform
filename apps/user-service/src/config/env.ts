@@ -20,7 +20,7 @@ export const env = createEnv({
     ),
     JWT_SECRET: z.string().min(1),
     JWT_ACCESS_EXPIRES_IN: z.enum(["15m", "30m", "1h", "1d"]).default("15m"),
-    JWT_REFRESH_EXPIRES_IN: z.enum(["7d", "30d"]).default("7d"),
+    JWT_REFRESH_EXPIRES_IN: z.enum(["7d", "15d", "30d"]).default("30d"),
     REGISTRATION_OTP_TTL: z.coerce.number().int().positive().default(300), // 5 minutes in seconds
     FORGOT_PASSWORD_OTP_TTL: z.coerce.number().int().positive().default(600), // 10 minutes in seconds
     SERVICE_NAME: z.string().default("user-service"),

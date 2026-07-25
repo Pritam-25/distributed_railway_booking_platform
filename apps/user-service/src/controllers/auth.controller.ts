@@ -94,9 +94,13 @@ export class AuthController {
     }
 
     const payload = req.body as VerifyOtpRequestDto;
+    const fingerprint = getDeviceFingerprint(req);
     const authResponse = await this.service.verifyAndRegister(
       sessionId,
       payload,
+      fingerprint,
+      req.ip,
+      req.headers["user-agent"],
     );
 
     this.setCookie(
@@ -132,7 +136,12 @@ export class AuthController {
     const payload = req.body as LoginRequestDto;
     const fingerprint = getDeviceFingerprint(req);
 
-    const authResponse = await this.service.login(payload, fingerprint);
+    const authResponse = await this.service.login(
+      payload,
+      fingerprint,
+      req.ip,
+      req.headers["user-agent"],
+    );
 
     this.setCookie(
       res,
@@ -190,11 +199,17 @@ export class AuthController {
    */
   async getSessions(req: Request, res: Response) {
     const userId = req.user!.userId;
+    const currentSessionId = req.user!.sessionId;
     const sessions = await this.service.getSessions(userId);
+
+    const sessionsWithCurrent = sessions.map((session) => ({
+      ...session,
+      isCurrent: session.sessionId === currentSessionId,
+    }));
 
     return res
       .status(statusCode.success)
-      .json(successResponse("Active sessions retrieved", sessions));
+      .json(successResponse("Active sessions retrieved", sessionsWithCurrent));
   }
 
   /**
@@ -224,34 +239,20 @@ export class AuthController {
   async logout(req: Request, res: Response) {
     const refreshToken = req.cookies[COOKIE_NAMES.REFRESH_TOKEN];
 
-    if (!refreshToken) {
-      throw new ApiError(
-        statusCode.unauthorized,
-        ERROR_CODES.REFRESH_TOKEN_MISSING,
-      );
+    if (refreshToken) {
+      try {
+        const decoded = jwt.verify(
+          refreshToken,
+          env.JWT_SECRET,
+        ) as RefreshTokenPayload;
+        const { sub: userId, sessionId, type } = decoded;
+        if (type === "refresh" && userId && sessionId) {
+          await this.service.logout(sessionId, userId);
+        }
+      } catch {
+        // Expired or invalid refresh token on logout is handled silently
+      }
     }
-
-    let decoded;
-    try {
-      decoded = jwt.verify(refreshToken, env.JWT_SECRET) as RefreshTokenPayload;
-    } catch (error) {
-      throw new ApiError(
-        statusCode.unauthorized,
-        ERROR_CODES.REFRESH_TOKEN_INVALID,
-        "Provided refresh token is invalid or has expired",
-        error,
-      );
-    }
-
-    const { sub: userId, sessionId, type } = decoded;
-    if (type !== "refresh" || !userId || !sessionId) {
-      throw new ApiError(
-        statusCode.unauthorized,
-        ERROR_CODES.REFRESH_TOKEN_INVALID,
-      );
-    }
-
-    await this.service.logout(sessionId, userId);
 
     res.clearCookie(COOKIE_NAMES.ACCESS_TOKEN, { path: "/" });
     res.clearCookie(COOKIE_NAMES.REFRESH_TOKEN, { path: "/" });
@@ -267,34 +268,20 @@ export class AuthController {
   async logoutAll(req: Request, res: Response) {
     const refreshToken = req.cookies[COOKIE_NAMES.REFRESH_TOKEN];
 
-    if (!refreshToken) {
-      throw new ApiError(
-        statusCode.unauthorized,
-        ERROR_CODES.REFRESH_TOKEN_INVALID,
-      );
+    if (refreshToken) {
+      try {
+        const decoded = jwt.verify(
+          refreshToken,
+          env.JWT_SECRET,
+        ) as RefreshTokenPayload;
+        const { sub: userId, type } = decoded;
+        if (type === "refresh" && userId) {
+          await this.service.logoutAll(userId);
+        }
+      } catch {
+        // Expired or invalid refresh token on logout-all is handled silently
+      }
     }
-
-    let decoded;
-    try {
-      decoded = jwt.verify(refreshToken, env.JWT_SECRET) as RefreshTokenPayload;
-    } catch (error) {
-      throw new ApiError(
-        statusCode.unauthorized,
-        ERROR_CODES.REFRESH_TOKEN_INVALID,
-        "Provided refresh token is invalid or has expired",
-        error,
-      );
-    }
-
-    const { sub: userId, type } = decoded;
-    if (type !== "refresh" || !userId) {
-      throw new ApiError(
-        statusCode.unauthorized,
-        ERROR_CODES.REFRESH_TOKEN_INVALID,
-      );
-    }
-
-    await this.service.logoutAll(userId);
 
     res.clearCookie(COOKIE_NAMES.ACCESS_TOKEN, { path: "/" });
     res.clearCookie(COOKIE_NAMES.REFRESH_TOKEN, { path: "/" });

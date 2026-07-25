@@ -15,7 +15,7 @@ import { createHash, randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { env, redis } from "@config";
-import { OtpService } from "./otp.service.js";
+import { OtpService, type RegistrationSessionData } from "./otp.service.js";
 import {
   OtpPurpose,
   type OTPRequestedV1Type,
@@ -70,6 +70,50 @@ export class AuthService {
         expiresIn: env.JWT_REFRESH_EXPIRES_IN,
       },
     );
+  }
+
+  /**
+   * Persists a new Redis session record and updates the user's sessions index atomically.
+   */
+  private async createAuthSession(
+    userId: string,
+    sessionId: string,
+    refreshToken: string,
+    fingerprint: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<void> {
+    const refreshTokenHash = createHash("sha256")
+      .update(refreshToken)
+      .digest("hex");
+
+    const sessionData = {
+      userId,
+      fingerprint,
+      refreshTokenHash,
+      ipAddress: ipAddress || "Unknown",
+      userAgent: userAgent || "Unknown",
+      createdAt: new Date().toISOString(),
+      lastUsedAt: new Date().toISOString(),
+      expiresAt: new Date(
+        Date.now() + AUTH_DURATIONS.SESSION_TTL_MS,
+      ).toISOString(),
+    };
+
+    await redis
+      .multi()
+      .set(
+        REDIS_KEYS.authSession(sessionId),
+        JSON.stringify(sessionData),
+        "EX",
+        AUTH_DURATIONS.SESSION_TTL_SECONDS,
+      )
+      .sadd(REDIS_KEYS.userSessions(userId), sessionId)
+      .expire(
+        REDIS_KEYS.userSessions(userId),
+        AUTH_DURATIONS.SESSION_TTL_SECONDS,
+      )
+      .exec();
   }
 
   /**
@@ -157,6 +201,124 @@ export class AuthService {
   }
 
   /**
+   * Creates a verified user account and issues initial JWT tokens.
+   *
+   * This method is only invoked after OTP verification has succeeded.
+   * Password hashing has already been completed during the registration
+   * initiation phase.
+   *
+   * @param data Verified registration data.
+   * @param sessionId Registration session identifier.
+   * @param fingerprint Device fingerprint.
+   * @param ipAddress User's IP address.
+   * @param userAgent User's browser User-Agent header.
+   * @returns Auth response containing issued tokens.
+   */
+  private async registerUser(
+    data: RegistrationSessionData,
+    sessionId: string,
+    fingerprint: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<AuthResponseDto> {
+    const user = await this.repo.createUser({
+      firstName: data.firstName,
+      lastName: data.lastName,
+      email: data.email,
+      password: data.hashedPassword,
+      emailVerified: true,
+    });
+
+    const accessToken = this.generateAccessToken(
+      user.id,
+      sessionId,
+      user.email,
+    );
+    const refreshToken = this.generateRefreshToken(user.id, sessionId);
+
+    await this.createAuthSession(
+      user.id,
+      sessionId,
+      refreshToken,
+      fingerprint,
+      ipAddress,
+      userAgent,
+    );
+
+    logger.info(
+      { module: "auth", userId: user.id },
+      "User registered successfully and session created",
+    );
+
+    return AuthMapper.toAuthResponseDto(user, accessToken, refreshToken);
+  }
+
+  /**
+   * Completes registration after successful OTP verification.
+   *
+   * Workflow:
+   * 1. Verify OTP.
+   * 2. Load pre-registration data from Redis.
+   * 3. Create the user in PostgreSQL.
+   * 4. Generate authentication tokens.
+   * 5. Remove temporary registration state.
+   *
+   * Registration cleanup is best effort and does not affect a
+   * successful registration response.
+   *
+   * @param sessionId Registration session identifier.
+   * @param data OTP verification request.
+   * @param fingerprint Device fingerprint.
+   * @param ipAddress User's IP address.
+   * @param userAgent User's browser User-Agent header.
+   * @returns Auth response containing issued tokens.
+   *
+   * @throws {ApiError}
+   * - REGISTRATION_SESSION_EXPIRED
+   */
+  async verifyAndRegister(
+    sessionId: string,
+    data: VerifyOtpRequestDto,
+    fingerprint: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<AuthResponseDto> {
+    // 1. Verify OTP
+    await OtpService.verifyOtp(sessionId, data.otp);
+
+    // 2. Retrieve registration data from Redis
+    const regData = await OtpService.getRegistrationSession(sessionId);
+    if (!regData) {
+      logger.warn(
+        { module: "auth" },
+        "Registration session expired or missing",
+      );
+      throw new ApiError(
+        statusCode.notFound,
+        ERROR_CODES.REGISTRATION_SESSION_EXPIRED,
+      );
+    }
+
+    // 3. Execute registration using stored data
+    const authResponse = await this.registerUser(
+      regData,
+      sessionId,
+      fingerprint,
+      ipAddress,
+      userAgent,
+    );
+
+    // 4. Clean up sessions (best-effort; do not fail completed registration)
+    try {
+      await OtpService.deleteRegistrationSession(sessionId);
+    } catch (error) {
+      logger.warn({ module: "auth", error }, "Session cleanup failed");
+    }
+
+    return authResponse;
+  }
+
+  /**
    * Authenticates a user and creates a new device session.
    *
    * Workflow:
@@ -171,6 +333,8 @@ export class AuthService {
    *
    * @param data Login credentials.
    * @param fingerprint Device fingerprint used for session binding.
+   * @param ipAddress User's IP address.
+   * @param userAgent User's browser User-Agent header.
    * @returns Auth response containing user details and JWT tokens.
    *
    * @throws {ApiError}
@@ -179,6 +343,8 @@ export class AuthService {
   async login(
     data: LoginRequestDto,
     fingerprint: string,
+    ipAddress?: string,
+    userAgent?: string,
   ): Promise<AuthResponseDto> {
     // 1. Find user by email
     const user = await this.repo.findUserByEmail(data.email);
@@ -209,38 +375,15 @@ export class AuthService {
     );
     const refreshToken = this.generateRefreshToken(user.id, sessionId);
 
-    // 4. Hash refresh token for secure storage
-    const refreshTokenHash = createHash("sha256")
-      .update(refreshToken)
-      .digest("hex");
-
-    // 5. Store session in Redis
-    const sessionData = {
-      userId: user.id,
+    // 4. Store session in Redis
+    await this.createAuthSession(
+      user.id,
+      sessionId,
+      refreshToken,
       fingerprint,
-      refreshTokenHash,
-      createdAt: new Date().toISOString(),
-      lastUsedAt: new Date().toISOString(),
-      expiresAt: new Date(
-        Date.now() + AUTH_DURATIONS.SESSION_TTL_MS,
-      ).toISOString(), // 30 days
-    };
-
-    // Store session record and track user sessions index atomically
-    await redis
-      .multi()
-      .set(
-        REDIS_KEYS.authSession(sessionId),
-        JSON.stringify(sessionData),
-        "EX",
-        AUTH_DURATIONS.SESSION_TTL_SECONDS,
-      )
-      .sadd(REDIS_KEYS.userSessions(user.id), sessionId)
-      .expire(
-        REDIS_KEYS.userSessions(user.id),
-        AUTH_DURATIONS.SESSION_TTL_SECONDS,
-      )
-      .exec();
+      ipAddress,
+      userAgent,
+    );
 
     logger.info(
       { module: "auth", userId: user.id },
@@ -274,102 +417,6 @@ export class AuthService {
     }
 
     return AuthMapper.toAuthResponseDto(user, accessToken, refreshToken);
-  }
-
-  /**
-   * Creates a verified user account and issues initial JWT tokens.
-   *
-   * This method is only invoked after OTP verification has succeeded.
-   * Password hashing has already been completed during the registration
-   * initiation phase.
-   *
-   * @param data Verified registration data.
-   * @param sessionId Registration session identifier.
-   * @returns Auth response containing issued tokens.
-   */
-  private async registerUser(
-    data: {
-      firstName: string;
-      lastName: string;
-      email: string;
-      hashedPassword: string;
-    },
-    sessionId: string,
-  ): Promise<AuthResponseDto> {
-    const user = await this.repo.createUser({
-      firstName: data.firstName,
-      lastName: data.lastName,
-      email: data.email,
-      password: data.hashedPassword,
-      emailVerified: true,
-    });
-
-    const accessToken = this.generateAccessToken(
-      user.id,
-      sessionId,
-      user.email,
-    );
-    const refreshToken = this.generateRefreshToken(user.id, sessionId);
-
-    logger.info(
-      { module: "auth", userId: user.id },
-      "User registered successfully",
-    );
-
-    return AuthMapper.toAuthResponseDto(user, accessToken, refreshToken);
-  }
-
-  /**
-   * Completes registration after successful OTP verification.
-   *
-   * Workflow:
-   * 1. Verify OTP.
-   * 2. Load pre-registration data from Redis.
-   * 3. Create the user in PostgreSQL.
-   * 4. Generate authentication tokens.
-   * 5. Remove temporary registration state.
-   *
-   * Registration cleanup is best effort and does not affect a
-   * successful registration response.
-   *
-   * @param sessionId Registration session identifier.
-   * @param data OTP verification request.
-   * @returns Auth response containing issued tokens.
-   *
-   * @throws {ApiError}
-   * - REGISTRATION_SESSION_EXPIRED
-   */
-  async verifyAndRegister(
-    sessionId: string,
-    data: VerifyOtpRequestDto,
-  ): Promise<AuthResponseDto> {
-    // 1. Verify OTP
-    await OtpService.verifyOtp(sessionId, data.otp);
-
-    // 2. Retrieve registration data from Redis
-    const regData = await OtpService.getRegistrationSession(sessionId);
-    if (!regData) {
-      logger.warn(
-        { module: "auth" },
-        "Registration session expired or missing",
-      );
-      throw new ApiError(
-        statusCode.notFound,
-        ERROR_CODES.REGISTRATION_SESSION_EXPIRED,
-      );
-    }
-
-    // 3. Execute registration using stored data
-    const authResponse = await this.registerUser(regData, sessionId);
-
-    // 4. Clean up sessions (best-effort; do not fail completed registration)
-    try {
-      await OtpService.deleteRegistrationSession(sessionId);
-    } catch (error) {
-      logger.warn({ module: "auth", error }, "Session cleanup failed");
-    }
-
-    return authResponse;
   }
 
   /**
@@ -472,7 +519,7 @@ export class AuthService {
         .update(newRefreshToken)
         .digest("hex");
 
-      // 5. Update session in Redis
+      // 5. Update session in Redis with new refresh token and expiry time
       session.refreshTokenHash = newRefreshTokenHash;
       session.lastUsedAt = new Date().toISOString();
 
@@ -510,7 +557,11 @@ export class AuthService {
     const sessions = await Promise.all(
       sessionIds.map(async (id) => {
         const data = await redis.get(REDIS_KEYS.authSession(id));
-        if (!data) return null;
+        if (!data) {
+          // Clean up stale session ID from Redis
+          redis.srem(sessionsKey, id).catch(() => {});
+          return null;
+        }
         const parsed = JSON.parse(data);
         // exclude sensitive data from response (refresh token hash)
         const { refreshTokenHash, ...safeSession } = parsed;

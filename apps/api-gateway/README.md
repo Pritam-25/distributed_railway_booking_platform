@@ -30,13 +30,13 @@ All public-facing API routes flow through the gateway. Responses follow the `@ir
 
 ### Routes Registry
 
-| Prefix                    | Upstream Target | Auth Level | Rate Limit Preset | Notes                                  |
-| :------------------------ | :-------------- | :--------- | :---------------- | :------------------------------------- |
-| `/api/v1/auth/sessions`   | `user-service`  | `required` | `default`         | Lists or revokes user sessions         |
-| `/api/v1/auth/logout-all` | `user-service`  | `required` | `default`         | Revokes all user sessions              |
-| `/api/v1/auth/logout`     | `user-service`  | `required` | `default`         | Revokes the current session            |
-| `/api/v1/auth`            | `user-service`  | `none`     | `auth`            | Registration, login, password recovery |
-| `/api/v1/users`           | `user-service`  | `required` | `default`         | Fetches or updates user info           |
+| Prefix                    | Upstream Target | Auth Level | Rate Limit Preset | Notes                                             |
+| :------------------------ | :-------------- | :--------- | :---------------- | :------------------------------------------------ |
+| `/api/v1/auth/sessions`   | `user-service`  | `required` | `default`         | Lists or revokes user sessions                    |
+| `/api/v1/auth/logout-all` | `user-service`  | `optional` | `default`         | Revokes all user sessions (idempotent, never 401) |
+| `/api/v1/auth/logout`     | `user-service`  | `optional` | `default`         | Revokes current session (idempotent, never 401)   |
+| `/api/v1/auth`            | `user-service`  | `none`     | `auth`            | Registration, login, password recovery            |
+| `/api/v1/users`           | `user-service`  | `required` | `default`         | Fetches or updates user info                      |
 
 ### Health Probes
 
