@@ -87,7 +87,7 @@ export default function ProfilePage() {
 
   return (
     <div className="flex min-h-screen justify-center bg-muted/30 px-4 py-10 md:px-8">
-      <div className="w-full max-w-3xl space-y-6">
+      <div className="w-full max-w-2xl space-y-6">
         {/* Top Navigation */}
         <div className="flex items-center gap-3">
           <Link href="/">

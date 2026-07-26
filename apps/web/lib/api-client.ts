@@ -80,7 +80,12 @@ AXIOS_INSTANCE.interceptors.request.use(
 const handleRedirectToLogin = (): void => {
   if (typeof window !== "undefined" && !isRedirecting) {
     isRedirecting = true
-    window.location.href = "/login"
+    const currentPath = window.location.pathname
+    const redirectParam =
+      currentPath && currentPath !== "/"
+        ? `?redirect=${encodeURIComponent(currentPath)}`
+        : ""
+    window.location.href = `/login${redirectParam}`
   }
 }
 
@@ -120,6 +125,12 @@ const handleTokenRefresh = async (
   }
 }
 
+declare module "axios" {
+  export interface AxiosRequestConfig {
+    skipAuthRefresh?: boolean
+  }
+}
+
 /**
  * Response Interceptor
  * Intercepts incoming responses and errors to orchestrate the silent refresh mechanism.
@@ -134,13 +145,18 @@ AXIOS_INSTANCE.interceptors.response.use(
       throw error
     }
 
+    const errorCode = error.response?.data?.error?.code
     const isRefreshRequest = originalRequest.url?.includes(
       "/api/v1/auth/refresh"
     )
     const status = error.response?.status
 
+    // Silent refresh triggers when status is 401 AND backend explicitly returns AUTH_REQUIRED
+    // AND request did not opt out via skipAuthRefresh
     const shouldRefresh =
       status === 401 &&
+      errorCode === "AUTH_REQUIRED" &&
+      !originalRequest.skipAuthRefresh &&
       !originalRequest._retry &&
       !isRefreshRequest &&
       !isLoggingOut

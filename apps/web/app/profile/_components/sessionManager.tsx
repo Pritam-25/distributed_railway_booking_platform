@@ -27,56 +27,18 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import {
-  Laptop,
-  Smartphone,
-  Tablet,
-  Monitor,
   Trash2,
   ShieldAlert,
   Loader2,
   RefreshCw,
   LogOut,
   Info,
-  Terminal,
 } from "lucide-react"
 import { toast } from "@/components/ui/toast"
 import { getErrorMessage } from "@/lib/utils/error"
+import { getDeviceIcon, getDeviceName } from "@/lib/utils/device"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { UAParser } from "ua-parser-js"
-
-function getDeviceIcon(userAgent?: string) {
-  if (!userAgent) return Monitor
-  const uaLower = userAgent.toLowerCase()
-  if (uaLower.includes("postmanruntime")) {
-    return Terminal
-  }
-
-  const parser = new UAParser(userAgent)
-  const deviceType = parser.getDevice().type
-
-  if (deviceType === "mobile") return Smartphone
-  if (deviceType === "tablet") return Tablet
-  return Laptop
-}
-
-function getDeviceName(userAgent?: string) {
-  if (!userAgent) return "Unknown Device"
-  const uaLower = userAgent.toLowerCase()
-  if (uaLower.includes("postmanruntime")) {
-    return "Postman API Client"
-  }
-
-  const parser = new UAParser(userAgent)
-  const browser = parser.getBrowser().name || "Unknown Browser"
-  const os = parser.getOS().name || "Unknown OS"
-
-  if (browser === "Unknown Browser" && os === "Unknown OS") {
-    return "Unknown Device"
-  }
-
-  return `${browser} on ${os}`
-}
 
 export function SessionManager() {
   const queryClient = useQueryClient()
@@ -101,30 +63,35 @@ export function SessionManager() {
   })
 
   // Revoke session mutation
-  const { mutate: revokeMutation, variables: revokingSessionId } = useMutation({
+  const {
+    mutate: revokeMutation,
+    variables: revokingSessionId,
+    isPending: isRevokePending,
+  } = useMutation({
     mutationFn: (sessionId: string) => revokeSession(sessionId),
     onSuccess: (response) => {
       if (response.success) {
         toast.add({
           type: "success",
-          title: "Session Terminated",
+          title: "Device Signed Out",
           description:
-            response.message || "The device session was successfully revoked.",
+            response.message ||
+            "The selected device was logged out successfully.",
         })
         queryClient.invalidateQueries({ queryKey: ["user-sessions"] })
       } else {
         toast.add({
           type: "error",
-          title: "Revocation Failed",
-          description: response.message || "Failed to revoke session.",
+          title: "Failed to Log Out Device",
+          description: response.message || "Failed to log out device.",
         })
       }
     },
     onError: (error) => {
-      const message = getErrorMessage(error, "Failed to revoke session.")
+      const message = getErrorMessage(error, "Failed to log out device.")
       toast.add({
         type: "error",
-        title: "Revocation Failed",
+        title: "Failed to Log Out Device",
         description: message,
       })
     },
@@ -138,8 +105,8 @@ export function SessionManager() {
         if (response.success) {
           toast.add({
             type: "success",
-            title: "All Sessions Logged Out",
-            description: "You have been logged out from all devices.",
+            title: "Signed Out of All Devices",
+            description: "You have been logged out from all active devices.",
           })
           queryClient.clear()
           router.push("/login")
@@ -148,14 +115,14 @@ export function SessionManager() {
             type: "error",
             title: "Action Failed",
             description:
-              response.message || "Failed to terminate all sessions.",
+              response.message || "Failed to log out from all devices.",
           })
         }
       },
       onError: (error) => {
         const message = getErrorMessage(
           error,
-          "Failed to terminate all sessions."
+          "Failed to log out from all devices."
         )
         toast.add({
           type: "error",
@@ -173,7 +140,7 @@ export function SessionManager() {
       return (
         <div className="flex flex-col items-center justify-center gap-3 p-12 text-muted-foreground">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-sm">Loading active sessions...</p>
+          <p className="text-sm">Loading active devices...</p>
         </div>
       )
     }
@@ -182,7 +149,7 @@ export function SessionManager() {
       return (
         <div className="flex flex-col items-center justify-center gap-2 p-12 text-center text-destructive">
           <ShieldAlert className="h-8 w-8" />
-          <p className="text-sm font-medium">Failed to retrieve sessions</p>
+          <p className="text-sm font-medium">Failed to retrieve devices</p>
           <Button variant="outline" size="sm" onClick={() => refetch()}>
             Retry
           </Button>
@@ -194,7 +161,7 @@ export function SessionManager() {
       return (
         <div className="flex flex-col items-center justify-center gap-2 p-12 text-center text-muted-foreground">
           <Info className="h-8 w-8 text-muted-foreground/60" />
-          <p className="text-sm">No active sessions found.</p>
+          <p className="text-sm">No active devices found.</p>
         </div>
       )
     }
@@ -204,7 +171,8 @@ export function SessionManager() {
         {sessions.map((session) => {
           const Icon = getDeviceIcon(session.userAgent)
           const isCurrent = session.isCurrent
-          const isRevoking = revokingSessionId === session.sessionId
+          const isRevoking =
+            isRevokePending && revokingSessionId === session.sessionId
 
           return (
             <div
@@ -227,7 +195,10 @@ export function SessionManager() {
                     ) : null}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    IP: {session.ipAddress} • Active:{" "}
+                    IP: {session.ipAddress} •{" "}
+                    {(session as { location?: string }).location ||
+                      "Unknown Location"}{" "}
+                    • Active:{" "}
                     {new Date(session.createdAt).toLocaleString(undefined, {
                       month: "short",
                       day: "numeric",
@@ -288,12 +259,13 @@ export function SessionManager() {
         </CardHeader>
 
         <CardContent className="p-0">{renderSessionsContent()}</CardContent>
-        <CardFooter className="flex flex-col gap-4 border-t border-border/40 bg-muted/20 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <CardFooter className="flex flex-col gap-4 border-t border-border/40 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div className="flex items-center gap-2.5 text-xs text-muted-foreground">
-            <ShieldAlert className="h-4 w-4 shrink-0 text-amber-500" />
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
+              <ShieldAlert className="h-3 w-3 shrink-0 text-amber-500" />
+            </div>
             <span>
-              Terminate all active device logins if you suspect unauthorized
-              access.
+              Log out all active devices if you suspect unauthorized access.
             </span>
           </div>
           <Button
@@ -322,10 +294,10 @@ export function SessionManager() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Revoke this session?</AlertDialogTitle>
+            <AlertDialogTitle>Log out of this device?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will immediately log this device out of your account. Any
-              unsaved changes on that device will be lost.
+              This device will be logged out of your account immediately. All
+              data on this device will be lost.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -339,7 +311,7 @@ export function SessionManager() {
                 }
               }}
             >
-              Revoke Session
+              Log Out Device
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -355,7 +327,7 @@ export function SessionManager() {
             <AlertDialogTitle>Log out of all devices?</AlertDialogTitle>
             <AlertDialogDescription>
               This action will immediately log you out of all devices, including
-              this current device. You will need to log in again.
+              this current device. All data on these devices will be lost.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

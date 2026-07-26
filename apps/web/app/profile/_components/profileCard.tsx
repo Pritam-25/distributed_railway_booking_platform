@@ -57,8 +57,8 @@ export function ProfileCard({ user }: ProfileCardProps) {
     <div className="space-y-6">
       <Card className="border-border/40 shadow-sm">
         <CardHeader className="border-b border-border/40 pb-4">
-          <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
               <Avatar
                 size="lg"
                 className="h-16 w-16 border-2 border-primary/20"
@@ -67,31 +67,34 @@ export function ProfileCard({ user }: ProfileCardProps) {
                   {initials}
                 </AvatarFallback>
               </Avatar>
-              <div className="text-center sm:text-left">
-                <CardTitle className="text-xl font-semibold">
-                  {user.firstName} {user.lastName}
-                </CardTitle>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <CardTitle className="text-xl font-semibold">
+                    {user.firstName} {user.lastName}
+                  </CardTitle>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => setIsEditDialogOpen(true)}
+                    className="h-7 w-7 cursor-pointer text-muted-foreground hover:bg-muted hover:text-foreground"
+                    title="Edit Profile"
+                  >
+                    <Edit className="h-3.5 w-3.5" />
+                    <span className="sr-only">Edit Profile</span>
+                  </Button>
+                </div>
                 <CardDescription className="text-sm">
                   {user.email}
                 </CardDescription>
               </div>
             </div>
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsEditDialogOpen(true)}
-                className="flex w-full cursor-pointer items-center justify-center gap-2 sm:w-auto"
-              >
-                <Edit className="h-4 w-4" />
-                Edit Profile
-              </Button>
+            <div className="flex items-center justify-center sm:justify-end">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => handleLogout()}
                 disabled={isLoggingOut}
-                className="flex w-full cursor-pointer items-center justify-center gap-2 text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-auto"
+                className="w-full cursor-pointer text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-auto"
               >
                 {isLoggingOut ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -104,30 +107,30 @@ export function ProfileCard({ user }: ProfileCardProps) {
           </div>
         </CardHeader>
 
-        <CardContent className="grid gap-6 p-6 sm:grid-cols-2">
+        <CardContent className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between sm:px-12">
           {/* Email Address */}
-          <div className="flex items-start gap-3">
-            <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-lg bg-green-500/10 text-green-500">
-              <Mail className="h-4 w-4" />
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-green-500/10 text-green-500">
+              <Mail className="h-4.5 w-4.5" />
             </div>
-            <div>
+            <div className="space-y-0.5">
               <p className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
                 Email Address
               </p>
-              <p className="mt-0.5 text-sm font-medium">{user.email}</p>
+              <p className="text-sm font-medium">{user.email}</p>
             </div>
           </div>
 
           {/* Member Since */}
-          <div className="flex items-start gap-3">
-            <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
-              <Calendar className="h-4 w-4" />
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
+              <Calendar className="h-4.5 w-4.5" />
             </div>
-            <div>
+            <div className="space-y-0.5">
               <p className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
                 Member Since
               </p>
-              <p className="mt-0.5 text-sm font-medium">
+              <p className="text-sm font-medium">
                 {new Date(user.createdAt).toLocaleDateString(undefined, {
                   year: "numeric",
                   month: "long",

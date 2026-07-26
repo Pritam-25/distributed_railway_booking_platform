@@ -114,6 +114,13 @@ export function VerifyResetOtpForm({
                     </p>
                   </div>
 
+                  {form.formState.errors.sessionId && (
+                    <p className="rounded-md bg-destructive/15 p-3 text-center text-sm font-medium text-destructive">
+                      {form.formState.errors.sessionId.message ||
+                        "Invalid or missing session link. Please request a new OTP."}
+                    </p>
+                  )}
+
                   {/* 6-Digit OTP Box Input */}
                   <Field className="flex flex-col items-center justify-center text-center">
                     <FieldLabel

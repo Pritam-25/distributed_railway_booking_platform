@@ -5,7 +5,7 @@ import { statusCode } from "@irctc/http";
 import { env } from "@config";
 import { verifyAccessToken } from "./jwtVerifier.js";
 import { COOKIE_NAMES } from "./cookieNames.js";
-import { ERROR_MESSAGES } from "@utils";
+import { ERROR_MESSAGES, GATEWAY_ERROR_CODES } from "@utils";
 
 /**
  * Headers injected by the gateway from a verified JWT.
@@ -70,7 +70,7 @@ export const gatewayAuthMiddleware: RequestHandler = (
   if (!token) {
     throw new ApiError(
       statusCode.unauthorized,
-      ERROR_CODES.UNAUTHORIZED,
+      GATEWAY_ERROR_CODES.AUTH_REQUIRED,
       ERROR_MESSAGES.ACCESS_TOKEN_MISSING,
     );
   }
@@ -79,7 +79,7 @@ export const gatewayAuthMiddleware: RequestHandler = (
   if (!user) {
     throw new ApiError(
       statusCode.unauthorized,
-      ERROR_CODES.UNAUTHORIZED,
+      GATEWAY_ERROR_CODES.AUTH_REQUIRED,
       ERROR_MESSAGES.ACCESS_TOKEN_MISSING,
     );
   }

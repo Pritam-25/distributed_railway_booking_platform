@@ -16,6 +16,7 @@ export const ERROR_MESSAGES: Record<GatewayErrorCode, string> & {
   // Shared / Auth
   ACCESS_TOKEN_MISSING: "Token is invalid or expired",
   // Gateway-specific
+  [GATEWAY_ERROR_CODES.AUTH_REQUIRED]: "Authentication required.",
   [GATEWAY_ERROR_CODES.GATEWAY_UPSTREAM_ERROR]:
     "Upstream service is unavailable. Please try again shortly.",
   [GATEWAY_ERROR_CODES.GATEWAY_UPSTREAM_CIRCUIT_OPEN]:

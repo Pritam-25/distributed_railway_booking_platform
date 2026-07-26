@@ -13,31 +13,22 @@ import { Input } from "@/components/ui/input"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { z } from "zod"
 import { Loader2 } from "lucide-react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { updateProfile } from "@/generated/endpoints/user-profile/user-profile"
 import { toast } from "@/components/ui/toast"
 import { getErrorMessage } from "@/lib/utils/error"
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 
-const UpdateProfileFormSchema = z.object({
-  firstName: z
-    .string()
-    .min(3, "First name must be at least 3 characters")
-    .max(50, "First name must not exceed 50 characters"),
-  lastName: z
-    .string()
-    .min(2, "Last name must be at least 2 characters")
-    .max(50, "Last name must not exceed 50 characters"),
-})
-
-type FormValues = z.infer<typeof UpdateProfileFormSchema>
+import {
+  UpdateProfileSchema,
+  type UpdateProfileFormValues,
+} from "@/lib/schemas/user-service/user.schema"
 
 interface EditProfileDialogProps {
   isOpen: boolean
   onOpenChange: (open: boolean) => void
-  defaultValues: FormValues
+  defaultValues: UpdateProfileFormValues
 }
 
 export function EditProfileDialog({
@@ -46,21 +37,23 @@ export function EditProfileDialog({
   defaultValues,
 }: EditProfileDialogProps) {
   const queryClient = useQueryClient()
+  const wasOpenRef = useRef(false)
 
-  const form = useForm<FormValues>({
-    resolver: zodResolver(UpdateProfileFormSchema),
+  const form = useForm<UpdateProfileFormValues>({
+    resolver: zodResolver(UpdateProfileSchema),
     defaultValues,
   })
 
-  // Reset form values when defaults change or when dialog opens
+  // Reset form values only when transitioning from closed to open
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !wasOpenRef.current) {
       form.reset(defaultValues)
     }
+    wasOpenRef.current = isOpen
   }, [isOpen, defaultValues, form])
 
   const { mutate: updateProfileMutation, isPending } = useMutation({
-    mutationFn: (payload: FormValues) => updateProfile(payload),
+    mutationFn: (payload: UpdateProfileFormValues) => updateProfile(payload),
     onSuccess: (response) => {
       if (response.success) {
         toast.add({
@@ -92,7 +85,7 @@ export function EditProfileDialog({
     },
   })
 
-  const onSubmit = (values: FormValues) => {
+  const onSubmit = (values: UpdateProfileFormValues) => {
     updateProfileMutation(values)
   }
 

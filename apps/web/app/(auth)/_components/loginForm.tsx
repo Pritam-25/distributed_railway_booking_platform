@@ -20,7 +20,7 @@ import { Loader2 } from "lucide-react"
 import { login, type LoginRequest } from "@/generated"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "@/components/ui/toast"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { getErrorMessage } from "@/lib/utils/error"
 
 export function LoginForm({
@@ -28,7 +28,9 @@ export function LoginForm({
   ...props
 }: React.ComponentProps<"div">) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const queryClient = useQueryClient()
+  const redirectTarget = searchParams.get("redirect") || "/profile"
 
   const { mutate: loginMutation, isPending } = useMutation({
     mutationFn: (payload: LoginRequest) => login(payload),
@@ -39,7 +41,7 @@ export function LoginForm({
           title: "Welcome back!",
           description: response.message || "Login successful.",
         })
-        router.push("/")
+        router.push(redirectTarget)
       } else {
         toast.add({
           type: "error",
@@ -146,7 +148,7 @@ export function LoginForm({
                       <FieldLabel htmlFor="password">Password</FieldLabel>
                       <Link
                         href="/forgot-password"
-                        className="text-sm underline-offset-4 hover:underline"
+                        className="text-xs underline-offset-4 hover:underline"
                       >
                         Forgot your password?
                       </Link>

@@ -13,13 +13,13 @@ import { env } from "@config";
 import { COOKIE_MAX_AGE, COOKIE_NAMES } from "@utils/constants";
 import { statusCode, successResponse } from "@irctc/http";
 import type { Response, Request } from "express";
-import { getDeviceFingerprint } from "@utils";
+import { getDeviceFingerprint, getIpLocation } from "@utils";
 import { ApiError } from "@irctc/errors";
 import { ERROR_CODES } from "@utils/errors";
 import jwt from "jsonwebtoken";
 
 /**
- * Controller handling authentication-related HTTP requests.
+ * Controller handling authentication, session management, and password recovery HTTP requests.
  */
 export class AuthController {
   /**
@@ -29,7 +29,7 @@ export class AuthController {
   constructor(private readonly service: AuthService) {}
 
   /**
-   * Sets a secure cookie on the HTTP response.
+   * Sets a secure HTTP-only cookie on the Express Response.
    *
    * @param res - The Express Response object.
    * @param name - The name of the cookie.
@@ -52,11 +52,12 @@ export class AuthController {
   }
 
   /**
-   * HTTP endpoint to request/send an OTP for registration.
-   * Sets a session cookie and sends a success response.
+   * HTTP endpoint to initiate user registration by sending an OTP.
+   * Generates an OTP session, stores registration state in Redis, sets a short-lived
+   * HTTP-only `otp_session` cookie, and sends an email via Kafka notification event.
    *
-   * @param req - The Express Request object containing the registration details.
-   * @param res - The Express Response object.
+   * @param req - The Express Request object containing user registration details in body.
+   * @param res - The Express Response object used to set the OTP session cookie and JSON data.
    * @returns A promise that resolves when the response is sent.
    */
   async sendOtp(req: Request, res: Response): Promise<void> {
@@ -76,14 +77,15 @@ export class AuthController {
   }
 
   /**
-   * HTTP endpoint to verify the registration OTP.
-   * If verification is successful, registers the user, sets accessToken/refreshToken cookies,
-   * clears the OTP session cookie, and returns the registered user's details.
+   * HTTP endpoint to verify registration OTP and complete account creation.
+   * Validates OTP against stored Redis session, creates user in PostgreSQL, creates active
+   * authentication session in Redis, sets `access_token` and `refresh_token` HTTP-only cookies,
+   * clears `otp_session` cookie, and publishes `UserRegisteredV1` Kafka event.
    *
-   * @param req - The Express Request object containing the OTP in the body and OTP session ID in cookies.
-   * @param res - The Express Response object.
+   * @param req - The Express Request object containing OTP body and `otp_session` cookie.
+   * @param res - The Express Response object used to set authentication cookies and return user data.
    * @returns A promise that resolves when the response is sent.
-   * @throws {ApiError} - If the OTP session ID is missing or invalid.
+   * @throws {ApiError} - If `otp_session` cookie is missing (400) or OTP verification fails (400/401).
    */
   async verifyOtp(req: Request, res: Response): Promise<void> {
     const sessionId = req.cookies[COOKIE_NAMES.OTP_SESSION];
@@ -126,12 +128,14 @@ export class AuthController {
   }
 
   /**
-   * HTTP endpoint to authenticate an existing user.
-   * Validates credentials, sets access and refresh token cookies, and returns the user's details.
+   * HTTP endpoint to authenticate an existing user with email and password.
+   * Validates credentials against bcrypt password hash in PostgreSQL, creates a new active session
+   * in Redis, sets HTTP-only `access_token` and `refresh_token` cookies, and publishes `UserLoggedInV1` event.
    *
-   * @param req - The Express Request object containing login credentials.
-   * @param res - The Express Response object.
+   * @param req - The Express Request object containing email and password in body.
+   * @param res - The Express Response object used to set authentication cookies and return user data.
    * @returns A promise that resolves when the response is sent.
+   * @throws {ApiError} - If user is not found or password validation fails (401 INVALID_CREDENTIALS).
    */
   async login(req: Request, res: Response): Promise<void> {
     const payload = req.body as LoginRequestDto;
@@ -161,67 +165,104 @@ export class AuthController {
       .status(statusCode.success)
       .json(successResponse("Login successful", authResponse.user));
   }
-  /*
-   * Refreshes the access token using the refresh token cookie.
+
+  /**
+   * HTTP endpoint to refresh access and refresh tokens via Refresh Token Rotation (RTR).
+   *
+   * Security & Recovery Workflow:
+   * 1. Reads the HTTP-only `refresh_token` cookie.
+   * 2. Validates the session, token, and device context from Redis.
+   * 3. Issues a new rotated access/refresh token pair on success.
+   * 4. Clears authentication cookies and returns `401` if refresh fails.
+   *
+   * @param req - Express request containing the refresh token cookie.
+   * @param res - Express response used to set or clear authentication cookies.
+   * @returns A promise that resolves when the response is sent.
+   * @throws {ApiError} If the refresh token is missing, invalid, expired, revoked, or reused.
    */
-  async refresh(req: Request, res: Response) {
+  async refresh(req: Request, res: Response): Promise<void> {
     const refreshToken = req.cookies[COOKIE_NAMES.REFRESH_TOKEN];
 
     if (!refreshToken) {
+      res.clearCookie(COOKIE_NAMES.ACCESS_TOKEN, { path: "/" });
+      res.clearCookie(COOKIE_NAMES.REFRESH_TOKEN, { path: "/" });
       throw new ApiError(
         statusCode.unauthorized,
         ERROR_CODES.REFRESH_TOKEN_MISSING,
       );
     }
 
-    const fingerprint = getDeviceFingerprint(req);
-    const authResponse = await this.service.refresh(refreshToken, fingerprint);
+    try {
+      const fingerprint = getDeviceFingerprint(req);
+      const authResponse = await this.service.refresh(
+        refreshToken,
+        fingerprint,
+      );
 
-    this.setCookie(
-      res,
-      COOKIE_NAMES.ACCESS_TOKEN,
-      authResponse.tokens.accessToken,
-      COOKIE_MAX_AGE.ACCESS_TOKEN,
-    );
-    this.setCookie(
-      res,
-      COOKIE_NAMES.REFRESH_TOKEN,
-      authResponse.tokens.refreshToken,
-      COOKIE_MAX_AGE.REFRESH_TOKEN,
-    );
+      this.setCookie(
+        res,
+        COOKIE_NAMES.ACCESS_TOKEN,
+        authResponse.tokens.accessToken,
+        COOKIE_MAX_AGE.ACCESS_TOKEN,
+      );
+      this.setCookie(
+        res,
+        COOKIE_NAMES.REFRESH_TOKEN,
+        authResponse.tokens.refreshToken,
+        COOKIE_MAX_AGE.REFRESH_TOKEN,
+      );
 
-    return res
-      .status(statusCode.success)
-      .json(successResponse("Token refreshed successfully", authResponse.user));
+      res
+        .status(statusCode.success)
+        .json(
+          successResponse("Token refreshed successfully", authResponse.user),
+        );
+    } catch (err) {
+      res.clearCookie(COOKIE_NAMES.ACCESS_TOKEN, { path: "/" });
+      res.clearCookie(COOKIE_NAMES.REFRESH_TOKEN, { path: "/" });
+      throw err;
+    }
   }
 
   /**
-   * Retrieves all active sessions for the authenticated user.
+   * HTTP endpoint to retrieve all active sessions for the currently authenticated user.
+   * Queries active session keys from Redis and marks `isCurrent: true` for the requesting device session.
+   *
+   * @param req - The Express Request object containing authenticated user claims attached by middleware.
+   * @param res - The Express Response object used to return active session objects.
+   * @returns A promise that resolves when the response is sent.
    */
-  async getSessions(req: Request, res: Response) {
+  async getSessions(req: Request, res: Response): Promise<void> {
     const userId = req.user!.userId;
     const currentSessionId = req.user!.sessionId;
     const sessions = await this.service.getSessions(userId);
 
-    const sessionsWithCurrent = sessions.map((session) => ({
+    const sessionsWithLocation = sessions.map((session) => ({
       ...session,
+      location: getIpLocation(session.ipAddress),
       isCurrent: session.sessionId === currentSessionId,
     }));
 
-    return res
+    res
       .status(statusCode.success)
       .json(
         successResponse(
           "Active sessions retrieved sucessfully",
-          sessionsWithCurrent,
+          sessionsWithLocation,
         ),
       );
   }
 
   /**
-   * Revokes a specific session by ID.
+   * HTTP endpoint to revoke a specific active device session by session ID.
+   * Validates session ownership, deletes the session key from Redis, and updates the user's session index.
+   *
+   * @param req - The Express Request object containing `sessionId` parameter and user claims.
+   * @param res - The Express Response object used to return success response.
+   * @returns A promise that resolves when the response is sent.
+   * @throws {ApiError} - If `sessionId` param is missing or session does not belong to requesting user.
    */
-  async revokeSession(req: Request, res: Response) {
+  async revokeSession(req: Request, res: Response): Promise<void> {
     const { sessionId } = req.params;
     const userId = req.user!.userId;
 
@@ -234,15 +275,21 @@ export class AuthController {
 
     await this.service.revokeSession(sessionId, userId);
 
-    return res
+    res
       .status(statusCode.success)
       .json(successResponse("Session revoked successfully", {}));
   }
 
   /**
-   * Logs out the current device.
+   * HTTP endpoint to log out the current device session.
+   * Decodes refresh token, deletes the corresponding session key from Redis, and explicitly sends
+   * `Set-Cookie` clearance headers (`Max-Age=0`) for both `access_token` and `refresh_token`.
+   *
+   * @param req - The Express Request object containing current `refresh_token` cookie.
+   * @param res - The Express Response object used to issue cookie clearance headers.
+   * @returns A promise that resolves when the response is sent.
    */
-  async logout(req: Request, res: Response) {
+  async logout(req: Request, res: Response): Promise<void> {
     const refreshToken = req.cookies[COOKIE_NAMES.REFRESH_TOKEN];
 
     if (refreshToken) {
@@ -271,15 +318,21 @@ export class AuthController {
     res.clearCookie(COOKIE_NAMES.ACCESS_TOKEN, { path: "/" });
     res.clearCookie(COOKIE_NAMES.REFRESH_TOKEN, { path: "/" });
 
-    return res
+    res
       .status(statusCode.success)
       .json(successResponse("Logged out successfully", {}));
   }
 
   /**
-   * Logs out all devices for the user.
+   * HTTP endpoint to log out all active device sessions for the authenticated user.
+   * Deletes all session keys associated with the user in Redis, clears the session index,
+   * and issues `Set-Cookie` clearance headers for all authentication cookies.
+   *
+   * @param req - The Express Request object containing `refresh_token` cookie.
+   * @param res - The Express Response object used to issue cookie clearance headers.
+   * @returns A promise that resolves when the response is sent.
    */
-  async logoutAll(req: Request, res: Response) {
+  async logoutAll(req: Request, res: Response): Promise<void> {
     const refreshToken = req.cookies[COOKIE_NAMES.REFRESH_TOKEN];
 
     if (refreshToken) {
@@ -308,19 +361,25 @@ export class AuthController {
     res.clearCookie(COOKIE_NAMES.ACCESS_TOKEN, { path: "/" });
     res.clearCookie(COOKIE_NAMES.REFRESH_TOKEN, { path: "/" });
 
-    return res
+    res
       .status(statusCode.success)
       .json(successResponse("Logged out from all devices", {}));
   }
 
   /**
-   * Initiates the password reset workflow.
+   * HTTP endpoint to initiate password recovery by sending a reset OTP.
+   * Generates a password reset session in Redis, dispatches reset OTP via Kafka notification event,
+   * and returns a `sessionId` for the subsequent verification step.
+   *
+   * @param req - The Express Request object containing registered email address in body.
+   * @param res - The Express Response object used to return reset `sessionId`.
+   * @returns A promise that resolves when the response is sent.
    */
-  async forgotPassword(req: Request, res: Response) {
+  async forgotPassword(req: Request, res: Response): Promise<void> {
     const data = req.body as ForgotPasswordRequestDto;
     const sessionId = await this.service.forgotPassword(data);
 
-    return res.status(statusCode.success).json(
+    res.status(statusCode.success).json(
       successResponse("OTP sent successfully to your registered email", {
         sessionId,
       }),
@@ -328,13 +387,20 @@ export class AuthController {
   }
 
   /**
-   * Verifies the OTP and issues a short-lived password reset token.
+   * HTTP endpoint to verify a password reset OTP.
+   * Validates OTP code against stored reset session in Redis, consumes OTP to prevent replay,
+   * and issues a short-lived, single-use `passwordResetToken`.
+   *
+   * @param req - The Express Request object containing reset `sessionId` and OTP in body.
+   * @param res - The Express Response object used to return `passwordResetToken`.
+   * @returns A promise that resolves when the response is sent.
+   * @throws {ApiError} - If OTP is invalid, expired, or locked due to too many failed attempts.
    */
-  async verifyResetOtp(req: Request, res: Response) {
+  async verifyResetOtp(req: Request, res: Response): Promise<void> {
     const data = req.body as VerifyResetOtpRequestDto;
     const passwordResetToken = await this.service.verifyResetOtp(data);
 
-    return res
+    res
       .status(statusCode.success)
       .json(
         successResponse("OTP verified successfully", { passwordResetToken }),
@@ -342,9 +408,16 @@ export class AuthController {
   }
 
   /**
-   * Resets the user's password using a verified password reset token.
+   * HTTP endpoint to reset user password using a verified password reset token.
+   * Validates token signature, updates bcrypt password hash in PostgreSQL, revokes all existing Redis sessions,
+   * and clears all active authentication cookies forcing a fresh login.
+   *
+   * @param req - The Express Request object containing `passwordResetToken` and new password in body.
+   * @param res - The Express Response object used to issue cookie clearance headers and return response.
+   * @returns A promise that resolves when the response is sent.
+   * @throws {ApiError} - If `passwordResetToken` is invalid or expired.
    */
-  async resetPassword(req: Request, res: Response) {
+  async resetPassword(req: Request, res: Response): Promise<void> {
     const data = req.body as ResetPasswordRequestDto;
     await this.service.resetPassword(data);
 
@@ -352,7 +425,7 @@ export class AuthController {
     res.clearCookie(COOKIE_NAMES.ACCESS_TOKEN, { path: "/" });
     res.clearCookie(COOKIE_NAMES.REFRESH_TOKEN, { path: "/" });
 
-    return res
+    res
       .status(statusCode.success)
       .json(
         successResponse(

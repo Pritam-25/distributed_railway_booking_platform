@@ -110,6 +110,13 @@ export function ResetPasswordForm({
                     </p>
                   </div>
 
+                  {form.formState.errors.passwordResetToken && (
+                    <p className="rounded-md bg-destructive/15 p-3 text-center text-sm font-medium text-destructive">
+                      {form.formState.errors.passwordResetToken.message ||
+                        "Invalid or missing password reset link. Please request a new link."}
+                    </p>
+                  )}
+
                   {/* New Password */}
                   <Field>
                     <FieldLabel htmlFor="password">New Password</FieldLabel>

@@ -40,11 +40,12 @@ export class UserService {
     const user = await this.repo.findById(id);
     if (!user) return null;
 
-    // 3. Populate Redis cache
+    // 3. Populate Redis cache (redacting sensitive fields like password hash)
+    const { password: _, ...sanitizedUser } = user;
     try {
       await redis.set(
         cacheKey,
-        JSON.stringify(user),
+        JSON.stringify(sanitizedUser),
         "EX",
         AUTH_DURATIONS.PROFILE_CACHE_TTL_SECONDS,
       );
@@ -74,12 +75,13 @@ export class UserService {
     }
     const updatedUser = await this.repo.update(id, updateData);
 
-    // Synchronize Redis profile cache
+    // Synchronize Redis profile cache (redacting password hash)
     if (updatedUser) {
+      const { password: _, ...sanitizedUser } = updatedUser;
       try {
         await redis.set(
           REDIS_KEYS.userProfile(id),
-          JSON.stringify(updatedUser),
+          JSON.stringify(sanitizedUser),
           "EX",
           AUTH_DURATIONS.PROFILE_CACHE_TTL_SECONDS,
         );
