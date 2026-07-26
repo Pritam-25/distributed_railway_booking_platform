@@ -6,76 +6,26 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Field, FieldGroup, FieldLabel, FieldSet } from "@/components/ui/field"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { passwordSchema } from "@/lib/schemas/user-service/auth.schema"
+import { ResetPasswordFormSchema } from "@/lib/schemas"
 import { PasswordInput } from "./passwordInput"
 import { Loader2 } from "lucide-react"
-import { resetPassword } from "@/generated"
-import { useMutation } from "@tanstack/react-query"
-import { toast } from "@/components/ui/toast"
-import { useRouter } from "next/navigation"
-import { getErrorMessage } from "@/lib/utils/error"
-import { z } from "zod"
+import { useResetPasswordMutation } from "../_hooks"
+import { ResetPasswordRequest } from "@/generated"
 
 interface ResetPasswordFormProps {
   token: string
   className?: string
 }
 
-const ResetPasswordFormSchema = z
-  .object({
-    passwordResetToken: z.uuid("Invalid reset token format"),
-    password: passwordSchema,
-    confirmPassword: z.string(),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords do not match",
-    path: ["confirmPassword"],
-  })
-
-type ResetFormValues = z.infer<typeof ResetPasswordFormSchema>
-
 export function ResetPasswordForm({
   token = "",
   className,
   ...props
 }: ResetPasswordFormProps & React.ComponentProps<"div">) {
-  const router = useRouter()
+  const { mutate: resetPasswordMutation, isPending } =
+    useResetPasswordMutation()
 
-  const { mutate: resetPasswordMutation, isPending } = useMutation({
-    mutationFn: (payload: { passwordResetToken: string; password: string }) =>
-      resetPassword(payload),
-    onSuccess: (response) => {
-      if (response.success) {
-        toast.add({
-          type: "success",
-          title: "Password Updated",
-          description:
-            response.message ||
-            "Your password has been reset successfully! Please log in.",
-        })
-        router.push("/login")
-      } else {
-        toast.add({
-          type: "error",
-          title: "Reset Failed",
-          description: response.message || "Failed to reset password.",
-        })
-      }
-    },
-    onError: (error) => {
-      const message = getErrorMessage(
-        error,
-        "Failed to reset password. Please try again."
-      )
-      toast.add({
-        type: "error",
-        title: "Reset Failed",
-        description: message,
-      })
-    },
-  })
-
-  const form = useForm<ResetFormValues>({
+  const form = useForm<ResetPasswordRequest>({
     resolver: zodResolver(ResetPasswordFormSchema),
     defaultValues: {
       passwordResetToken: token,
@@ -84,11 +34,8 @@ export function ResetPasswordForm({
     },
   })
 
-  const onSubmit = (values: ResetFormValues) => {
-    resetPasswordMutation({
-      passwordResetToken: values.passwordResetToken,
-      password: values.password,
-    })
+  const onSubmit = (values: ResetPasswordRequest) => {
+    resetPasswordMutation(values)
   }
 
   return (

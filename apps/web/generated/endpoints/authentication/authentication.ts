@@ -63,9 +63,9 @@ import type {
   VerifyOtp200,
   VerifyOtp400,
   VerifyOtpRequest,
-  VerifyResetOtp200,
-  VerifyResetOtp400,
-  VerifyResetOtpRequest,
+  VerifyPasswordResetOtp200,
+  VerifyPasswordResetOtp400,
+  VerifyPasswordResetOtpRequest,
 } from "../../model"
 
 import { customInstance } from "../../../lib/api-client"
@@ -1476,42 +1476,48 @@ export function useForgotPassword<
 /**
  * @summary Verify Password Reset OTP
  */
-export const verifyResetOtp = (
-  verifyResetOtpRequest?: VerifyResetOtpRequest,
+export const verifyPasswordResetOtp = (
+  verifyPasswordResetOtpRequest?: VerifyPasswordResetOtpRequest,
   options?: SecondParameter<typeof customInstance>,
   signal?: AbortSignal
 ) => {
-  return customInstance<VerifyResetOtp200>(
+  return customInstance<VerifyPasswordResetOtp200>(
     {
       url: `/api/v1/auth/verify-reset-otp`,
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      data: verifyResetOtpRequest,
+      data: verifyPasswordResetOtpRequest,
       signal,
     },
     options
   )
 }
 
-export const getVerifyResetOtpQueryKey = (
-  verifyResetOtpRequest?: VerifyResetOtpRequest
+export const getVerifyPasswordResetOtpQueryKey = (
+  verifyPasswordResetOtpRequest?: VerifyPasswordResetOtpRequest
 ) => {
   return [
     "POST",
     `/api/v1/auth/verify-reset-otp`,
-    verifyResetOtpRequest,
+    verifyPasswordResetOtpRequest,
   ] as const
 }
 
-export const getVerifyResetOtpQueryOptions = <
-  TData = Awaited<ReturnType<typeof verifyResetOtp>>,
+export const getVerifyPasswordResetOtpQueryOptions = <
+  TData = Awaited<ReturnType<typeof verifyPasswordResetOtp>>,
   TError =
-    VerifyResetOtp400 | RateLimitErrorResponse | InternalServerErrorResponse,
+    | VerifyPasswordResetOtp400
+    | RateLimitErrorResponse
+    | InternalServerErrorResponse,
 >(
-  verifyResetOtpRequest?: VerifyResetOtpRequest,
+  verifyPasswordResetOtpRequest?: VerifyPasswordResetOtpRequest,
   options?: {
     query?: Partial<
-      UseQueryOptions<Awaited<ReturnType<typeof verifyResetOtp>>, TError, TData>
+      UseQueryOptions<
+        Awaited<ReturnType<typeof verifyPasswordResetOtp>>,
+        TError,
+        TData
+      >
     >
     request?: SecondParameter<typeof customInstance>
   }
@@ -1519,40 +1525,54 @@ export const getVerifyResetOtpQueryOptions = <
   const { query: queryOptions, request: requestOptions } = options ?? {}
 
   const queryKey =
-    queryOptions?.queryKey ?? getVerifyResetOtpQueryKey(verifyResetOtpRequest)
+    queryOptions?.queryKey ??
+    getVerifyPasswordResetOtpQueryKey(verifyPasswordResetOtpRequest)
 
-  const queryFn: QueryFunction<Awaited<ReturnType<typeof verifyResetOtp>>> = ({
-    signal,
-  }) => verifyResetOtp(verifyResetOtpRequest, requestOptions, signal)
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof verifyPasswordResetOtp>>
+  > = ({ signal }) =>
+    verifyPasswordResetOtp(
+      verifyPasswordResetOtpRequest,
+      requestOptions,
+      signal
+    )
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
-    Awaited<ReturnType<typeof verifyResetOtp>>,
+    Awaited<ReturnType<typeof verifyPasswordResetOtp>>,
     TError,
     TData
   > & { queryKey: DataTag<QueryKey, TData, TError> }
 }
 
-export type VerifyResetOtpQueryResult = NonNullable<
-  Awaited<ReturnType<typeof verifyResetOtp>>
+export type VerifyPasswordResetOtpQueryResult = NonNullable<
+  Awaited<ReturnType<typeof verifyPasswordResetOtp>>
 >
-export type VerifyResetOtpQueryError =
-  VerifyResetOtp400 | RateLimitErrorResponse | InternalServerErrorResponse
+export type VerifyPasswordResetOtpQueryError =
+  | VerifyPasswordResetOtp400
+  | RateLimitErrorResponse
+  | InternalServerErrorResponse
 
-export function useVerifyResetOtp<
-  TData = Awaited<ReturnType<typeof verifyResetOtp>>,
+export function useVerifyPasswordResetOtp<
+  TData = Awaited<ReturnType<typeof verifyPasswordResetOtp>>,
   TError =
-    VerifyResetOtp400 | RateLimitErrorResponse | InternalServerErrorResponse,
+    | VerifyPasswordResetOtp400
+    | RateLimitErrorResponse
+    | InternalServerErrorResponse,
 >(
-  verifyResetOtpRequest: undefined | VerifyResetOtpRequest,
+  verifyPasswordResetOtpRequest: undefined | VerifyPasswordResetOtpRequest,
   options: {
     query: Partial<
-      UseQueryOptions<Awaited<ReturnType<typeof verifyResetOtp>>, TError, TData>
+      UseQueryOptions<
+        Awaited<ReturnType<typeof verifyPasswordResetOtp>>,
+        TError,
+        TData
+      >
     > &
       Pick<
         DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof verifyResetOtp>>,
+          Awaited<ReturnType<typeof verifyPasswordResetOtp>>,
           TError,
-          Awaited<ReturnType<typeof verifyResetOtp>>
+          Awaited<ReturnType<typeof verifyPasswordResetOtp>>
         >,
         "initialData"
       >
@@ -1562,21 +1582,27 @@ export function useVerifyResetOtp<
 ): DefinedUseQueryResult<TData, TError> & {
   queryKey: DataTag<QueryKey, TData, TError>
 }
-export function useVerifyResetOtp<
-  TData = Awaited<ReturnType<typeof verifyResetOtp>>,
+export function useVerifyPasswordResetOtp<
+  TData = Awaited<ReturnType<typeof verifyPasswordResetOtp>>,
   TError =
-    VerifyResetOtp400 | RateLimitErrorResponse | InternalServerErrorResponse,
+    | VerifyPasswordResetOtp400
+    | RateLimitErrorResponse
+    | InternalServerErrorResponse,
 >(
-  verifyResetOtpRequest?: VerifyResetOtpRequest,
+  verifyPasswordResetOtpRequest?: VerifyPasswordResetOtpRequest,
   options?: {
     query?: Partial<
-      UseQueryOptions<Awaited<ReturnType<typeof verifyResetOtp>>, TError, TData>
+      UseQueryOptions<
+        Awaited<ReturnType<typeof verifyPasswordResetOtp>>,
+        TError,
+        TData
+      >
     > &
       Pick<
         UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof verifyResetOtp>>,
+          Awaited<ReturnType<typeof verifyPasswordResetOtp>>,
           TError,
-          Awaited<ReturnType<typeof verifyResetOtp>>
+          Awaited<ReturnType<typeof verifyPasswordResetOtp>>
         >,
         "initialData"
       >
@@ -1586,15 +1612,21 @@ export function useVerifyResetOtp<
 ): UseQueryResult<TData, TError> & {
   queryKey: DataTag<QueryKey, TData, TError>
 }
-export function useVerifyResetOtp<
-  TData = Awaited<ReturnType<typeof verifyResetOtp>>,
+export function useVerifyPasswordResetOtp<
+  TData = Awaited<ReturnType<typeof verifyPasswordResetOtp>>,
   TError =
-    VerifyResetOtp400 | RateLimitErrorResponse | InternalServerErrorResponse,
+    | VerifyPasswordResetOtp400
+    | RateLimitErrorResponse
+    | InternalServerErrorResponse,
 >(
-  verifyResetOtpRequest?: VerifyResetOtpRequest,
+  verifyPasswordResetOtpRequest?: VerifyPasswordResetOtpRequest,
   options?: {
     query?: Partial<
-      UseQueryOptions<Awaited<ReturnType<typeof verifyResetOtp>>, TError, TData>
+      UseQueryOptions<
+        Awaited<ReturnType<typeof verifyPasswordResetOtp>>,
+        TError,
+        TData
+      >
     >
     request?: SecondParameter<typeof customInstance>
   },
@@ -1606,15 +1638,21 @@ export function useVerifyResetOtp<
  * @summary Verify Password Reset OTP
  */
 
-export function useVerifyResetOtp<
-  TData = Awaited<ReturnType<typeof verifyResetOtp>>,
+export function useVerifyPasswordResetOtp<
+  TData = Awaited<ReturnType<typeof verifyPasswordResetOtp>>,
   TError =
-    VerifyResetOtp400 | RateLimitErrorResponse | InternalServerErrorResponse,
+    | VerifyPasswordResetOtp400
+    | RateLimitErrorResponse
+    | InternalServerErrorResponse,
 >(
-  verifyResetOtpRequest?: VerifyResetOtpRequest,
+  verifyPasswordResetOtpRequest?: VerifyPasswordResetOtpRequest,
   options?: {
     query?: Partial<
-      UseQueryOptions<Awaited<ReturnType<typeof verifyResetOtp>>, TError, TData>
+      UseQueryOptions<
+        Awaited<ReturnType<typeof verifyPasswordResetOtp>>,
+        TError,
+        TData
+      >
     >
     request?: SecondParameter<typeof customInstance>
   },
@@ -1622,8 +1660,8 @@ export function useVerifyResetOtp<
 ): UseQueryResult<TData, TError> & {
   queryKey: DataTag<QueryKey, TData, TError>
 } {
-  const queryOptions = getVerifyResetOtpQueryOptions(
-    verifyResetOtpRequest,
+  const queryOptions = getVerifyPasswordResetOtpQueryOptions(
+    verifyPasswordResetOtpRequest,
     options
   )
 

@@ -4,7 +4,7 @@ import {
   RegisterSchema,
   VerifyOtpRequestSchema,
   ForgotPasswordRequestSchema,
-  VerifyResetOtpRequestSchema,
+  VerifyPasswordResetOtpRequestSchema,
   ResetPasswordRequestSchema,
 } from "@dto";
 import { validateSchema, asyncHandler } from "@irctc/middleware";
@@ -112,8 +112,8 @@ router.post(
  */
 router.post(
   "/verify-reset-otp",
-  validateSchema(VerifyResetOtpRequestSchema),
-  asyncHandler((req, res) => authController.verifyResetOtp(req, res)),
+  validateSchema(VerifyPasswordResetOtpRequestSchema),
+  asyncHandler((req, res) => authController.VerifyPasswordResetOtp(req, res)),
 );
 
 /**

@@ -12,72 +12,39 @@ import {
 } from "@/components/ui/input-otp"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { VerifyResetOtpRequestSchema } from "@/lib/schemas/user-service/auth.schema"
+import { VerifyPasswordResetOtpFormSchema } from "@/lib/schemas"
 import { Loader2, ShieldCheck } from "lucide-react"
-import { verifyResetOtp, type VerifyResetOtpRequest } from "@/generated"
-import { useMutation } from "@tanstack/react-query"
+import { type VerifyPasswordResetOtpRequest } from "@/generated"
 import { toast } from "@/components/ui/toast"
 import { useRouter } from "next/navigation"
-import { getErrorMessage } from "@/lib/utils/error"
+import { useVerifyPasswordResetOtpMutation } from "../_hooks"
 
-interface VerifyResetOtpFormProps {
+interface VerifyPasswordResetOtpFormProps {
   email?: string
   sessionId?: string
   className?: string
 }
 
-export function VerifyResetOtpForm({
+export function VerifyPasswordResetOtpForm({
   email = "",
   sessionId = "",
   className,
   ...props
-}: VerifyResetOtpFormProps & React.ComponentProps<"div">) {
+}: VerifyPasswordResetOtpFormProps & React.ComponentProps<"div">) {
   const router = useRouter()
+  const { mutate: VerifyPasswordResetOtpMutation, isPending: isVerifying } =
+    useVerifyPasswordResetOtpMutation()
 
-  const { mutate: verifyResetOtpMutation, isPending: isVerifying } =
-    useMutation({
-      mutationFn: (payload: VerifyResetOtpRequest) => verifyResetOtp(payload),
-      onSuccess: (response) => {
-        if (response.success) {
-          toast.add({
-            type: "success",
-            title: "OTP Verified",
-            description:
-              response.message ||
-              "OTP verified successfully. You can now set your new password.",
-          })
-          const resetToken = response.data.passwordResetToken
-          router.push(
-            `/forgot-password/reset?token=${encodeURIComponent(resetToken)}`
-          )
-        } else {
-          toast.add({
-            type: "error",
-            title: "Verification Failed",
-            description: response.message || "Invalid or expired OTP",
-          })
-        }
-      },
-      onError: (error) => {
-        const message = getErrorMessage(error, "Invalid or expired OTP code.")
-        toast.add({
-          type: "error",
-          title: "Verification Failed",
-          description: message,
-        })
-      },
-    })
-
-  const form = useForm<VerifyResetOtpRequest>({
-    resolver: zodResolver(VerifyResetOtpRequestSchema),
+  const form = useForm<VerifyPasswordResetOtpRequest>({
+    resolver: zodResolver(VerifyPasswordResetOtpFormSchema),
     defaultValues: {
       sessionId,
       otp: "",
     },
   })
 
-  const onSubmit = (values: VerifyResetOtpRequest) => {
-    verifyResetOtpMutation(values)
+  const onSubmit = (values: VerifyPasswordResetOtpRequest) => {
+    VerifyPasswordResetOtpMutation(values)
   }
 
   const handleResendOtp = () => {

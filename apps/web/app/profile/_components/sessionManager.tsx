@@ -1,12 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import {
-  getSessions,
-  revokeSession,
-  logoutAll,
-} from "@/generated/endpoints/authentication/authentication"
+import { useQuery } from "@tanstack/react-query"
+import { getSessions } from "@/generated/endpoints/authentication/authentication"
 import { Button, buttonVariants } from "@/components/ui/button"
 import {
   Card,
@@ -34,16 +30,22 @@ import {
   LogOut,
   Info,
 } from "lucide-react"
-import { toast } from "@/components/ui/toast"
-import { getErrorMessage } from "@/lib/utils/error"
 import { getDeviceIcon, getDeviceName } from "@/lib/utils/device"
-import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
+import {
+  sessionKeys,
+  useRevokeSessionMutation,
+  useLogoutAllMutation,
+} from "../_hooks"
+import type { ActiveSession } from "@/generated"
 
-export function SessionManager() {
-  const queryClient = useQueryClient()
-  const router = useRouter()
+interface SessionManagerProps {
+  sessions?: ActiveSession[]
+}
 
+export function SessionManager({
+  sessions: initialSessions,
+}: SessionManagerProps) {
   const [confirmRevokeSessionId, setConfirmRevokeSessionId] = useState<
     string | null
   >(null)
@@ -57,83 +59,25 @@ export function SessionManager() {
     refetch,
     isRefetching,
   } = useQuery({
-    queryKey: ["user-sessions"],
+    queryKey: sessionKeys.all,
     queryFn: () => getSessions(),
     retry: false,
   })
+
+  const activeSessions = initialSessions || sessionsResponse?.data || []
 
   // Revoke session mutation
   const {
     mutate: revokeMutation,
     variables: revokingSessionId,
     isPending: isRevokePending,
-  } = useMutation({
-    mutationFn: (sessionId: string) => revokeSession(sessionId),
-    onSuccess: (response) => {
-      if (response.success) {
-        toast.add({
-          type: "success",
-          title: "Device Signed Out",
-          description:
-            response.message ||
-            "The selected device was logged out successfully.",
-        })
-        queryClient.invalidateQueries({ queryKey: ["user-sessions"] })
-      } else {
-        toast.add({
-          type: "error",
-          title: "Failed to Log Out Device",
-          description: response.message || "Failed to log out device.",
-        })
-      }
-    },
-    onError: (error) => {
-      const message = getErrorMessage(error, "Failed to log out device.")
-      toast.add({
-        type: "error",
-        title: "Failed to Log Out Device",
-        description: message,
-      })
-    },
-  })
+  } = useRevokeSessionMutation()
 
   // Logout all sessions mutation
-  const { mutate: logoutAllMutation, isPending: isLoggingOutAll } = useMutation(
-    {
-      mutationFn: () => logoutAll(),
-      onSuccess: (response) => {
-        if (response.success) {
-          toast.add({
-            type: "success",
-            title: "Signed Out of All Devices",
-            description: "You have been logged out from all active devices.",
-          })
-          queryClient.clear()
-          router.push("/login")
-        } else {
-          toast.add({
-            type: "error",
-            title: "Action Failed",
-            description:
-              response.message || "Failed to log out from all devices.",
-          })
-        }
-      },
-      onError: (error) => {
-        const message = getErrorMessage(
-          error,
-          "Failed to log out from all devices."
-        )
-        toast.add({
-          type: "error",
-          title: "Action Failed",
-          description: message,
-        })
-      },
-    }
-  )
+  const { mutate: logoutAllMutation, isPending: isLoggingOutAll } =
+    useLogoutAllMutation()
 
-  const sessions = sessionsResponse?.data || []
+  const sessions = activeSessions
 
   const renderSessionsContent = () => {
     if (isLoading) {

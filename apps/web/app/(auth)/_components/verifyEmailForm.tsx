@@ -12,13 +12,12 @@ import {
 } from "@/components/ui/input-otp"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { VerifyOtpRequestSchema } from "@/lib/schemas/user-service/auth.schema"
+import { VerifyOtpFormSchema } from "@/lib/schemas"
 import { Loader2, Mail } from "lucide-react"
-import { verifyOtp, type VerifyOtpRequest } from "@/generated"
-import { useMutation } from "@tanstack/react-query"
+import { type VerifyOtpRequest } from "@/generated"
 import { toast } from "@/components/ui/toast"
 import { useRouter } from "next/navigation"
-import { getErrorMessage } from "@/lib/utils/error"
+import { useVerifyOtpMutation } from "../_hooks"
 
 interface VerifyEmailFormProps {
   email?: string
@@ -31,38 +30,11 @@ export default function VerifyEmailForm({
   ...props
 }: VerifyEmailFormProps & React.ComponentProps<"div">) {
   const router = useRouter()
-
-  // Verify OTP Mutation
-  const { mutate: verifyOtpMutation, isPending: isVerifying } = useMutation({
-    mutationFn: (payload: VerifyOtpRequest) => verifyOtp(payload),
-    onSuccess: (response) => {
-      if (response.success) {
-        toast.add({
-          type: "success",
-          title: "Registration Complete",
-          description: response.message || "Email verified successfully!",
-        })
-        router.push("/")
-      } else {
-        toast.add({
-          type: "error",
-          title: "Verification Failed",
-          description: response.message || "Invalid or expired OTP",
-        })
-      }
-    },
-    onError: (error) => {
-      const message = getErrorMessage(error, "Invalid or expired OTP code.")
-      toast.add({
-        type: "error",
-        title: "Verification Failed",
-        description: message,
-      })
-    },
-  })
+  const { mutate: verifyOtpMutation, isPending: isVerifying } =
+    useVerifyOtpMutation()
 
   const form = useForm<VerifyOtpRequest>({
-    resolver: zodResolver(VerifyOtpRequestSchema),
+    resolver: zodResolver(VerifyOtpFormSchema),
     defaultValues: {
       otp: "",
     },

@@ -22,14 +22,14 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { ResponseMeta } from "./responseMeta"
-import type { VerifyResetOtp400Error } from "./verifyResetOtp400Error"
+import type { VerifyPasswordResetOtp400Error } from "./verifyPasswordResetOtp400Error"
 
 /**
  * Error Response Envelope (INVALID_INPUT)
  */
-export type VerifyResetOtp400 = {
+export type VerifyPasswordResetOtp400 = {
   success: false
   /** Error Detail Payload */
-  error: VerifyResetOtp400Error
+  error: VerifyPasswordResetOtp400Error
   meta: ResponseMeta
 }

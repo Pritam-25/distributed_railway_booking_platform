@@ -18,10 +18,12 @@ import {
   LoginSchema,
   VerifyOtpRequestSchema,
   ForgotPasswordRequestSchema,
-  VerifyResetOtpRequestSchema,
+  VerifyPasswordResetOtpRequestSchema,
   ResetPasswordRequestSchema,
   UserResponseSchema,
-  UserUpdateSchema,
+  UpdateProfileSchema,
+  SessionSummarySchema,
+  ActiveSessionSchema,
 } from "@dto";
 import { ERROR_MESSAGES, ERROR_CODES as USER_ERROR } from "@utils/errors";
 
@@ -34,10 +36,15 @@ registry.register("RegisterRequest", RegisterSchema);
 registry.register("LoginRequest", LoginSchema);
 registry.register("VerifyOtpRequest", VerifyOtpRequestSchema);
 registry.register("ForgotPasswordRequest", ForgotPasswordRequestSchema);
-registry.register("VerifyResetOtpRequest", VerifyResetOtpRequestSchema);
+registry.register(
+  "VerifyPasswordResetOtpRequest",
+  VerifyPasswordResetOtpRequestSchema,
+);
 registry.register("ResetPasswordRequest", ResetPasswordRequestSchema);
 registry.register("UserResponse", UserResponseSchema);
-registry.register("UserUpdateRequest", UserUpdateSchema);
+registry.register("UpdateProfileRequest", UpdateProfileSchema);
+registry.register("SessionSummary", SessionSummarySchema);
+registry.register("ActiveSession", ActiveSessionSchema);
 registry.register("ErrorDetail", ErrorDetailSchema);
 registry.register("ErrorResponse", ErrorResponseSchema);
 
@@ -175,19 +182,7 @@ registry.registerPath({
     200: createOpenApiResponse(
       "List of active sessions",
       SuccessResponseSchema(
-        z.array(
-          z.object({
-            sessionId: z
-              .uuid()
-              .openapi({ example: "550e8400-e29b-41d4-a716-446655440000" }),
-            ipAddress: z.string().openapi({ example: "192.168.1.1" }),
-            userAgent: z.string().openapi({ example: "Mozilla/5.0..." }),
-            isCurrent: z.boolean().optional(),
-            createdAt: z
-              .string()
-              .openapi({ example: "2026-07-24T00:00:00.000Z" }),
-          }),
-        ),
+        z.array(ActiveSessionSchema),
         "Active sessions retrieved successfully",
       ),
     ),
@@ -298,14 +293,14 @@ registry.registerPath({
 registry.registerPath({
   method: "post",
   path: "/api/v1/auth/verify-reset-otp",
-  operationId: "verifyResetOtp",
+  operationId: "VerifyPasswordResetOtp",
   tags: ["Authentication"],
   summary: "Verify Password Reset OTP",
   request: {
     body: {
       content: {
         "application/json": {
-          schema: VerifyResetOtpRequestSchema,
+          schema: VerifyPasswordResetOtpRequestSchema,
         },
       },
     },
@@ -401,7 +396,7 @@ registry.registerPath({
     body: {
       content: {
         "application/json": {
-          schema: UserUpdateSchema,
+          schema: UpdateProfileSchema,
         },
       },
     },

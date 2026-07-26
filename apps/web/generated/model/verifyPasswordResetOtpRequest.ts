@@ -22,6 +22,12 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type VerifyResetOtp200Data = {
-  passwordResetToken: string
+export interface VerifyPasswordResetOtpRequest {
+  sessionId: string
+  /**
+   * @minLength 6
+   * @maxLength 6
+   * @pattern ^\d{6}$
+   */
+  otp: string
 }

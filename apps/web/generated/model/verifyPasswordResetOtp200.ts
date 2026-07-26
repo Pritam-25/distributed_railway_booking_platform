@@ -22,14 +22,14 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { ResponseMeta } from "./responseMeta"
-import type { VerifyResetOtp200Data } from "./verifyResetOtp200Data"
+import type { VerifyPasswordResetOtp200Data } from "./verifyPasswordResetOtp200Data"
 
 /**
  * Success Response Envelope
  */
-export type VerifyResetOtp200 = {
+export type VerifyPasswordResetOtp200 = {
   success: true
   message: string
-  data: VerifyResetOtp200Data
+  data: VerifyPasswordResetOtp200Data
   meta: ResponseMeta
 }

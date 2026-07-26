@@ -45,7 +45,7 @@ import type {
   RateLimitErrorResponse,
   UnauthorizedErrorResponse,
   UpdateProfile200,
-  UserUpdateRequest,
+  UpdateProfileRequest,
 } from "../../model"
 
 import { customInstance } from "../../../lib/api-client"
@@ -169,7 +169,7 @@ export const useGetProfile = <
  * @summary Update Current User Profile
  */
 export const updateProfile = (
-  userUpdateRequest?: UserUpdateRequest,
+  updateProfileRequest?: UpdateProfileRequest,
   options?: SecondParameter<typeof customInstance>,
   signal?: AbortSignal
 ) => {
@@ -178,7 +178,7 @@ export const updateProfile = (
       url: `/api/v1/users/me`,
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      data: userUpdateRequest,
+      data: updateProfileRequest,
       signal,
     },
     options
@@ -186,9 +186,9 @@ export const updateProfile = (
 }
 
 export const getUpdateProfileQueryKey = (
-  userUpdateRequest?: UserUpdateRequest
+  updateProfileRequest?: UpdateProfileRequest
 ) => {
-  return ["PUT", `/api/v1/users/me`, userUpdateRequest] as const
+  return ["PUT", `/api/v1/users/me`, updateProfileRequest] as const
 }
 
 export const getUpdateProfileQueryOptions = <
@@ -199,7 +199,7 @@ export const getUpdateProfileQueryOptions = <
     | RateLimitErrorResponse
     | InternalServerErrorResponse,
 >(
-  userUpdateRequest?: UserUpdateRequest,
+  updateProfileRequest?: UpdateProfileRequest,
   options?: {
     query?: Partial<
       UseQueryOptions<Awaited<ReturnType<typeof updateProfile>>, TError, TData>
@@ -210,11 +210,11 @@ export const getUpdateProfileQueryOptions = <
   const { query: queryOptions, request: requestOptions } = options ?? {}
 
   const queryKey =
-    queryOptions?.queryKey ?? getUpdateProfileQueryKey(userUpdateRequest)
+    queryOptions?.queryKey ?? getUpdateProfileQueryKey(updateProfileRequest)
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof updateProfile>>> = ({
     signal,
-  }) => updateProfile(userUpdateRequest, requestOptions, signal)
+  }) => updateProfile(updateProfileRequest, requestOptions, signal)
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof updateProfile>>,
@@ -240,7 +240,7 @@ export function useUpdateProfile<
     | RateLimitErrorResponse
     | InternalServerErrorResponse,
 >(
-  userUpdateRequest: undefined | UserUpdateRequest,
+  updateProfileRequest: undefined | UpdateProfileRequest,
   options: {
     query: Partial<
       UseQueryOptions<Awaited<ReturnType<typeof updateProfile>>, TError, TData>
@@ -267,7 +267,7 @@ export function useUpdateProfile<
     | RateLimitErrorResponse
     | InternalServerErrorResponse,
 >(
-  userUpdateRequest?: UserUpdateRequest,
+  updateProfileRequest?: UpdateProfileRequest,
   options?: {
     query?: Partial<
       UseQueryOptions<Awaited<ReturnType<typeof updateProfile>>, TError, TData>
@@ -294,7 +294,7 @@ export function useUpdateProfile<
     | RateLimitErrorResponse
     | InternalServerErrorResponse,
 >(
-  userUpdateRequest?: UserUpdateRequest,
+  updateProfileRequest?: UpdateProfileRequest,
   options?: {
     query?: Partial<
       UseQueryOptions<Awaited<ReturnType<typeof updateProfile>>, TError, TData>
@@ -317,7 +317,7 @@ export function useUpdateProfile<
     | RateLimitErrorResponse
     | InternalServerErrorResponse,
 >(
-  userUpdateRequest?: UserUpdateRequest,
+  updateProfileRequest?: UpdateProfileRequest,
   options?: {
     query?: Partial<
       UseQueryOptions<Awaited<ReturnType<typeof updateProfile>>, TError, TData>
@@ -328,7 +328,10 @@ export function useUpdateProfile<
 ): UseQueryResult<TData, TError> & {
   queryKey: DataTag<QueryKey, TData, TError>
 } {
-  const queryOptions = getUpdateProfileQueryOptions(userUpdateRequest, options)
+  const queryOptions = getUpdateProfileQueryOptions(
+    updateProfileRequest,
+    options
+  )
 
   const query = useQuery(queryOptions, queryClient) as UseQueryResult<
     TData,

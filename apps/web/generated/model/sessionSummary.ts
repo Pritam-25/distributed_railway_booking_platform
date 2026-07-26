@@ -22,15 +22,14 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export interface UserUpdateRequest {
-  /**
-   * @minLength 3
-   * @maxLength 50
-   */
-  firstName?: string
-  /**
-   * @minLength 2
-   * @maxLength 50
-   */
-  lastName?: string
+export interface SessionSummary {
+  sessionId: string
+  userId: string
+  fingerprint: string
+  ipAddress: string
+  userAgent: string
+  location: string
+  createdAt: string
+  lastUsedAt: string
+  expiresAt: string
 }

@@ -5,15 +5,17 @@ import type {
   RegisterRequestDto,
   VerifyOtpRequestDto,
   ForgotPasswordRequestDto,
-  VerifyResetOtpRequestDto,
+  VerifyPasswordResetOtpRequestDto,
   ResetPasswordRequestDto,
+  SessionSummaryDto,
+  ActiveSessionDto,
 } from "@dto";
 import { logger } from "@irctc/logger";
 import { env } from "@config";
 import { COOKIE_MAX_AGE, COOKIE_NAMES } from "@utils/constants";
 import { statusCode, successResponse } from "@irctc/http";
 import type { Response, Request } from "express";
-import { getDeviceFingerprint, getIpLocation } from "@utils";
+import { getDeviceFingerprint } from "@utils";
 import { ApiError } from "@irctc/errors";
 import { ERROR_CODES } from "@utils/errors";
 import jwt from "jsonwebtoken";
@@ -235,11 +237,11 @@ export class AuthController {
   async getSessions(req: Request, res: Response): Promise<void> {
     const userId = req.user!.userId;
     const currentSessionId = req.user!.sessionId;
-    const sessions = await this.service.getSessions(userId);
+    const sessions: SessionSummaryDto[] =
+      await this.service.getSessions(userId);
 
-    const sessionsWithLocation = sessions.map((session) => ({
+    const sessionsWithCurrent: ActiveSessionDto[] = sessions.map((session) => ({
       ...session,
-      location: getIpLocation(session.ipAddress),
       isCurrent: session.sessionId === currentSessionId,
     }));
 
@@ -247,8 +249,8 @@ export class AuthController {
       .status(statusCode.success)
       .json(
         successResponse(
-          "Active sessions retrieved sucessfully",
-          sessionsWithLocation,
+          "Active sessions retrieved successfully",
+          sessionsWithCurrent,
         ),
       );
   }
@@ -396,9 +398,9 @@ export class AuthController {
    * @returns A promise that resolves when the response is sent.
    * @throws {ApiError} - If OTP is invalid, expired, or locked due to too many failed attempts.
    */
-  async verifyResetOtp(req: Request, res: Response): Promise<void> {
-    const data = req.body as VerifyResetOtpRequestDto;
-    const passwordResetToken = await this.service.verifyResetOtp(data);
+  async VerifyPasswordResetOtp(req: Request, res: Response): Promise<void> {
+    const data = req.body as VerifyPasswordResetOtpRequestDto;
+    const passwordResetToken = await this.service.VerifyPasswordResetOtp(data);
 
     res
       .status(statusCode.success)

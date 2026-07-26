@@ -51,7 +51,7 @@ Microservice handling authentication, identity management, OTP verification, and
   console.log(
     `✅ user-service openapi.json generated successfully at ${outputPath}`,
   );
-} catch (err: any) {
+} catch (err: unknown) {
   console.error("❌ Spec Generation Error details:");
   console.dir(err, { depth: 10 });
   process.exit(1);

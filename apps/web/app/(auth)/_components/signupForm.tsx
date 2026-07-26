@@ -14,57 +14,21 @@ import {
 } from "@/components/ui/field"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { RegisterSchema } from "@/lib/schemas/user-service/auth.schema"
+import { RegisterFormSchema } from "@/lib/schemas"
 import { PasswordInput } from "./passwordInput"
 import { Loader2 } from "lucide-react"
-import { sendOtp, type RegisterRequest } from "@/generated"
-import { useMutation } from "@tanstack/react-query"
+import { type RegisterRequest } from "@/generated"
 import { toast } from "@/components/ui/toast"
-import { useRouter } from "next/navigation"
-import { getErrorMessage } from "@/lib/utils/error"
+import { useSignupMutation } from "../_hooks"
 
 export function SignUpForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
-  const router = useRouter()
-
-  const { mutate: sendOtpMutation, isPending } = useMutation({
-    mutationFn: (payload: RegisterRequest) => sendOtp(payload),
-    onSuccess: (response, variables) => {
-      if (response.success) {
-        toast.add({
-          type: "success",
-          title: "OTP Sent",
-          description:
-            response.message || "Verification code sent to your email.",
-        })
-        router.push(
-          `/verify-email?email=${encodeURIComponent(variables.email)}`
-        )
-      } else {
-        toast.add({
-          type: "error",
-          title: "Registration Error",
-          description: response.message || "Failed to send OTP",
-        })
-      }
-    },
-    onError: (error) => {
-      const message = getErrorMessage(
-        error,
-        "Failed to send OTP. Please try again."
-      )
-      toast.add({
-        type: "error",
-        title: "Registration Error",
-        description: message,
-      })
-    },
-  })
+  const { mutate: sendOtpMutation, isPending } = useSignupMutation()
 
   const form = useForm<RegisterRequest>({
-    resolver: zodResolver(RegisterSchema),
+    resolver: zodResolver(RegisterFormSchema),
     defaultValues: {
       firstName: "",
       lastName: "",

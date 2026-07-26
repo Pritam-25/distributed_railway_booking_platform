@@ -14,55 +14,27 @@ import {
 } from "@/components/ui/field"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { LoginSchema } from "@/lib/schemas/user-service/auth.schema"
+import { LoginFormSchema } from "@/lib/schemas"
 import { PasswordInput } from "./passwordInput"
 import { Loader2 } from "lucide-react"
-import { login, type LoginRequest } from "@/generated"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { type LoginRequest } from "@/generated"
 import { toast } from "@/components/ui/toast"
-import { useRouter, useSearchParams } from "next/navigation"
-import { getErrorMessage } from "@/lib/utils/error"
+import { useSearchParams } from "next/navigation"
+import { useLoginMutation } from "../_hooks"
 
 export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
-  const router = useRouter()
   const searchParams = useSearchParams()
-  const queryClient = useQueryClient()
   const redirectTarget = searchParams.get("redirect") || "/profile"
 
-  const { mutate: loginMutation, isPending } = useMutation({
-    mutationFn: (payload: LoginRequest) => login(payload),
-    onSuccess: (response) => {
-      if (response.success) {
-        toast.add({
-          type: "success",
-          title: "Welcome back!",
-          description: response.message || "Login successful.",
-        })
-        router.push(redirectTarget)
-      } else {
-        toast.add({
-          type: "error",
-          title: "Login Error",
-          description: response.message || "Invalid credentials",
-        })
-        queryClient.invalidateQueries({ queryKey: ["user-profile"] })
-      }
-    },
-    onError: (error) => {
-      const message = getErrorMessage(error, "Invalid email or password.")
-      toast.add({
-        type: "error",
-        title: "Login Error",
-        description: message,
-      })
-    },
+  const { mutate: loginMutation, isPending } = useLoginMutation({
+    redirectTarget,
   })
 
   const form = useForm<LoginRequest>({
-    resolver: zodResolver(LoginSchema),
+    resolver: zodResolver(LoginFormSchema),
     defaultValues: {
       email: "",
       password: "",

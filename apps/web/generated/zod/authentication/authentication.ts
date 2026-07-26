@@ -272,21 +272,21 @@ export const ForgotPasswordResponse = zod
 /**
  * @summary Verify Password Reset OTP
  */
-export const verifyResetOtpBodyOtpMin = 6
-export const verifyResetOtpBodyOtpMax = 6
+export const VerifyPasswordResetOtpBodyOtpMin = 6
+export const VerifyPasswordResetOtpBodyOtpMax = 6
 
-export const verifyResetOtpBodyOtpRegExp = new RegExp("^\\d{6}$")
+export const VerifyPasswordResetOtpBodyOtpRegExp = new RegExp("^\\d{6}$")
 
-export const VerifyResetOtpBody = zod.object({
+export const VerifyPasswordResetOtpBody = zod.object({
   email: zod.email(),
   otp: zod
     .string()
-    .min(verifyResetOtpBodyOtpMin)
-    .max(verifyResetOtpBodyOtpMax)
-    .regex(verifyResetOtpBodyOtpRegExp),
+    .min(VerifyPasswordResetOtpBodyOtpMin)
+    .max(VerifyPasswordResetOtpBodyOtpMax)
+    .regex(VerifyPasswordResetOtpBodyOtpRegExp),
 })
 
-export const VerifyResetOtpResponse = zod
+export const VerifyPasswordResetOtpResponse = zod
   .object({
     success: zod.literal(true),
     message: zod.string(),

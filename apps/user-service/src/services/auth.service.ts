@@ -4,8 +4,9 @@ import type {
   RegisterRequestDto,
   VerifyOtpRequestDto,
   ForgotPasswordRequestDto,
-  VerifyResetOtpRequestDto,
+  VerifyPasswordResetOtpRequestDto,
   ResetPasswordRequestDto,
+  SessionSummaryDto,
 } from "@dto";
 import type { UserRepository } from "@repository";
 import { logger } from "@irctc/logger";
@@ -21,7 +22,7 @@ import {
   type OTPRequestedV1Type,
   type UserLoggedInV1Type,
 } from "@irctc/contracts";
-import { generateOtp } from "@utils";
+import { generateOtp, getIpLocation } from "@utils";
 import type {
   OtpEventPublisher,
   UserLoggedInEventPublisher,
@@ -30,6 +31,10 @@ import { ERROR_CODES as COMMON_ERROR_CODES, ApiError } from "@irctc/errors";
 import { AUTH_DURATIONS, REDIS_KEYS } from "@utils/constants";
 import { AuthMapper } from "../mappers/auth.mapper.js";
 import type { RefreshTokenPayload } from "@irctc/middleware";
+
+type AuthSessionRecord = Omit<SessionSummaryDto, "sessionId"> & {
+  refreshTokenHash: string;
+};
 
 /**
  * Service handling authentication-related business logic, including registration flows,
@@ -93,6 +98,7 @@ export class AuthService {
       refreshTokenHash,
       ipAddress: ipAddress || "Unknown",
       userAgent: userAgent || "Unknown",
+      location: getIpLocation(ipAddress),
       createdAt: new Date().toISOString(),
       lastUsedAt: new Date().toISOString(),
       expiresAt: new Date(
@@ -559,26 +565,40 @@ export class AuthService {
    * @param userId User identifier.
    * @returns Active session metadata.
    */
-  async getSessions(userId: string): Promise<any[]> {
+  async getSessions(userId: string): Promise<SessionSummaryDto[]> {
     const sessionsKey = REDIS_KEYS.userSessions(userId);
     const sessionIds = await redis.smembers(sessionsKey);
 
     const sessions = await Promise.all(
-      sessionIds.map(async (id) => {
-        const data = await redis.get(REDIS_KEYS.authSession(id));
+      sessionIds.map(async (id): Promise<SessionSummaryDto | null> => {
+        const authSessionKey = REDIS_KEYS.authSession(id);
+        const data = await redis.get(authSessionKey);
         if (!data) {
           // Clean up stale session ID from Redis
-          redis.srem(sessionsKey, id).catch(() => {});
+          redis.srem(sessionsKey, id).catch((err) => {
+            logger.error(
+              { module: "auth", userId, sessionId: id },
+              "Failed to remove stale session ID",
+              err,
+            );
+          });
           return null;
         }
-        const parsed = JSON.parse(data);
-        // exclude sensitive data from response (refresh token hash)
-        const { refreshTokenHash, ...safeSession } = parsed;
-        return { sessionId: id, ...safeSession };
+        const parsed = JSON.parse(data) as AuthSessionRecord;
+        const safeSession = { ...parsed, refreshTokenHash: undefined };
+
+        return {
+          sessionId: id,
+          ...safeSession,
+          location:
+            safeSession.location || getIpLocation(safeSession.ipAddress),
+        };
       }),
     );
 
-    return sessions.filter(Boolean);
+    return sessions.filter(
+      (session): session is SessionSummaryDto => session !== null,
+    );
   }
 
   /**
@@ -750,7 +770,9 @@ export class AuthService {
    * - OTP_SESSION_NOT_FOUND
    * - OTP_INVALID or OTP_LOCKED
    */
-  async verifyResetOtp(data: VerifyResetOtpRequestDto): Promise<string> {
+  async VerifyPasswordResetOtp(
+    data: VerifyPasswordResetOtpRequestDto,
+  ): Promise<string> {
     const email = await redis.get(
       REDIS_KEYS.forgotPasswordSession(data.sessionId),
     );

@@ -1,10 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { logout } from "@/generated/endpoints/authentication/authentication"
-import { useRouter } from "next/navigation"
-import { toast } from "@/components/ui/toast"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -16,6 +12,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { EditProfileDialog } from "./editProfileDialog"
 import { Mail, Calendar, Edit, LogOut, Loader2 } from "lucide-react"
+import { useLogoutMutation } from "../_hooks"
 
 interface ProfileCardProps {
   user: {
@@ -29,26 +26,7 @@ interface ProfileCardProps {
 
 export function ProfileCard({ user }: ProfileCardProps) {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const router = useRouter()
-  const queryClient = useQueryClient()
-
-  const { mutate: handleLogout, isPending: isLoggingOut } = useMutation({
-    mutationFn: () => logout(),
-    onSuccess: (response) => {
-      toast.add({
-        type: "success",
-        title: "Logged out",
-        description:
-          response.message || "You have been logged out successfully.",
-      })
-      queryClient.clear()
-      router.push("/login")
-    },
-    onError: () => {
-      queryClient.clear()
-      router.push("/login")
-    },
-  })
+  const { mutate: handleLogout, isPending: isLoggingOut } = useLogoutMutation()
 
   const initials =
     `${user.firstName?.charAt(0) || ""}${user.lastName?.charAt(0) || ""}`.toUpperCase()

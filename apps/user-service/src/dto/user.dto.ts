@@ -27,7 +27,7 @@ export type UserResponseDto = z.infer<typeof UserResponseSchema>;
 /**
  * Schema for validating user profile update requests.
  */
-export const UserUpdateSchema = z
+export const UpdateProfileSchema = z
   .object({
     firstName: z
       .string()
@@ -44,6 +44,6 @@ export const UserUpdateSchema = z
       .optional()
       .openapi({ example: "Doe" }),
   })
-  .openapi("UserUpdateRequest");
+  .openapi("UpdateProfileRequest");
 
-export type UserUpdateDto = z.infer<typeof UserUpdateSchema>;
+export type UpdateProfileDto = z.infer<typeof UpdateProfileSchema>;

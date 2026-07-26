@@ -14,16 +14,12 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Loader2 } from "lucide-react"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { updateProfile } from "@/generated/endpoints/user-profile/user-profile"
-import { toast } from "@/components/ui/toast"
-import { getErrorMessage } from "@/lib/utils/error"
 import { useEffect, useRef } from "react"
-
 import {
   UpdateProfileSchema,
   type UpdateProfileFormValues,
-} from "@/lib/schemas/user-service/user.schema"
+} from "@/lib/schemas"
+import { useUpdateProfileMutation } from "../_hooks"
 
 interface EditProfileDialogProps {
   isOpen: boolean
@@ -36,7 +32,6 @@ export function EditProfileDialog({
   onOpenChange,
   defaultValues,
 }: EditProfileDialogProps) {
-  const queryClient = useQueryClient()
   const wasOpenRef = useRef(false)
 
   const form = useForm<UpdateProfileFormValues>({
@@ -52,38 +47,9 @@ export function EditProfileDialog({
     wasOpenRef.current = isOpen
   }, [isOpen, defaultValues, form])
 
-  const { mutate: updateProfileMutation, isPending } = useMutation({
-    mutationFn: (payload: UpdateProfileFormValues) => updateProfile(payload),
-    onSuccess: (response) => {
-      if (response.success) {
-        toast.add({
-          type: "success",
-          title: "Profile Updated",
-          description:
-            response.message || "Your profile has been updated successfully.",
-        })
-        queryClient.invalidateQueries({ queryKey: ["user-profile"] })
-        onOpenChange(false)
-      } else {
-        toast.add({
-          type: "error",
-          title: "Update Failed",
-          description: response.message || "Failed to update profile.",
-        })
-      }
-    },
-    onError: (error) => {
-      const message = getErrorMessage(
-        error,
-        "Failed to update profile. Please try again."
-      )
-      toast.add({
-        type: "error",
-        title: "Update Failed",
-        description: message,
-      })
-    },
-  })
+  const { mutate: updateProfileMutation, isPending } = useUpdateProfileMutation(
+    () => onOpenChange(false)
+  )
 
   const onSubmit = (values: UpdateProfileFormValues) => {
     updateProfileMutation(values)

@@ -16,7 +16,7 @@ export const passwordSchema = z
   .regex(/\d/, "Password must contain at least one number")
   .regex(/[^a-zA-Z0-9]/, "Password must contain at least one special character")
   .openapi({
-    pattern: "^(?=.*[A-Z])(?=.*\\d)(?=.*[^a-zA-Z0-9]).{6,}$",
+    pattern: String.raw`^(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z0-9]).{6,}$`,
     example: "Password@123",
     description:
       "### Password Requirements\n\n- Minimum **6** characters\n- At least **1 uppercase** letter\n- At least **1 number**\n- At least **1 special character**",
@@ -86,6 +86,38 @@ export interface AuthResponseDto {
 }
 
 /**
+ * Session summary returned by the active sessions endpoint.
+ */
+export const SessionSummarySchema = z
+  .object({
+    sessionId: z.uuid().openapi({
+      example: "550e8400-e29b-41d4-a716-446655440000",
+    }),
+    userId: z.uuid().openapi({
+      example: "550e8400-e29b-41d4-a716-446655440000",
+    }),
+    fingerprint: z.string().openapi({ example: "device-fingerprint" }),
+    ipAddress: z.string().openapi({ example: "client-ip-address" }),
+    userAgent: z.string().openapi({ example: "Mozilla/5.0..." }),
+    location: z.string().openapi({ example: "New Delhi, IN" }),
+    createdAt: z.string().openapi({ example: "2026-07-24T00:00:00.000Z" }),
+    lastUsedAt: z.string().openapi({ example: "2026-07-24T12:00:00.000Z" }),
+    expiresAt: z.string().openapi({ example: "2026-08-23T12:00:00.000Z" }),
+  })
+  .openapi("SessionSummary");
+
+export type SessionSummaryDto = z.infer<typeof SessionSummarySchema>;
+
+/**
+ * Active session payload returned to clients.
+ */
+export const ActiveSessionSchema = SessionSummarySchema.extend({
+  isCurrent: z.boolean(),
+}).openapi("ActiveSession");
+
+export type ActiveSessionDto = z.infer<typeof ActiveSessionSchema>;
+
+/**
  * Forgot Password Request DTO Schema
  */
 export const ForgotPasswordRequestSchema = z
@@ -104,7 +136,7 @@ export type ForgotPasswordRequestDto = z.infer<
 /**
  * Verify Reset OTP DTO Schema
  */
-export const VerifyResetOtpRequestSchema = z
+export const VerifyPasswordResetOtpRequestSchema = z
   .object({
     sessionId: z.uuid("Invalid session ID format").openapi({
       example: "550e8400-e29b-41d4-a716-446655440000",
@@ -115,10 +147,10 @@ export const VerifyResetOtpRequestSchema = z
       .regex(/^\d{6}$/, "OTP must contain only numbers")
       .openapi({ example: "123456" }),
   })
-  .openapi("VerifyResetOtpRequest");
+  .openapi("VerifyPasswordResetOtpRequest");
 
-export type VerifyResetOtpRequestDto = z.infer<
-  typeof VerifyResetOtpRequestSchema
+export type VerifyPasswordResetOtpRequestDto = z.infer<
+  typeof VerifyPasswordResetOtpRequestSchema
 >;
 
 /**
@@ -130,6 +162,11 @@ export const ResetPasswordRequestSchema = z
       example: "550e8400-e29b-41d4-a716-446655440000",
     }),
     password: passwordSchema,
+    confirmPassword: passwordSchema,
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
   })
   .openapi("ResetPasswordRequest");
 

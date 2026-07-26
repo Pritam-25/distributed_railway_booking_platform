@@ -21,15 +21,12 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { ActiveSession } from "./activeSession"
-import type { ResponseMeta } from "./responseMeta"
 
 /**
- * Success Response Envelope
+ * Error Detail Payload
  */
-export type GetSessions200 = {
-  success: true
+export type VerifyPasswordResetOtp400Error = {
+  code: string
   message: string
-  data: ActiveSession[]
-  meta: ResponseMeta
+  details?: unknown
 }

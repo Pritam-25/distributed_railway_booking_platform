@@ -21,12 +21,8 @@
  *
  * OpenAPI spec version: 1.0.0
  */
+import type { SessionSummary } from "./sessionSummary"
 
-/**
- * Error Detail Payload
- */
-export type VerifyResetOtp400Error = {
-  code: string
-  message: string
-  details?: unknown
+export type ActiveSession = SessionSummary & {
+  isCurrent: boolean
 }

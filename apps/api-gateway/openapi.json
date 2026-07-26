@@ -103,7 +103,7 @@
         },
         "required": ["email"]
       },
-      "VerifyResetOtpRequest": {
+      "VerifyPasswordResetOtpRequest": {
         "type": "object",
         "properties": {
           "sessionId": {
@@ -135,9 +135,16 @@
             "pattern": "^(?=.*[A-Z])(?=.*\\d)(?=.*[^a-zA-Z0-9]).{6,}$",
             "example": "Password@123",
             "description": "### Password Requirements\n\n- Minimum **6** characters\n- At least **1 uppercase** letter\n- At least **1 number**\n- At least **1 special character**"
+          },
+          "confirmPassword": {
+            "type": "string",
+            "minLength": 6,
+            "pattern": "^(?=.*[A-Z])(?=.*\\d)(?=.*[^a-zA-Z0-9]).{6,}$",
+            "example": "Password@123",
+            "description": "### Password Requirements\n\n- Minimum **6** characters\n- At least **1 uppercase** letter\n- At least **1 number**\n- At least **1 special character**"
           }
         },
-        "required": ["passwordResetToken", "password"]
+        "required": ["passwordResetToken", "password", "confirmPassword"]
       },
       "UserResponse": {
         "type": "object",
@@ -175,7 +182,7 @@
         },
         "required": ["id", "firstName", "lastName", "email", "createdAt"]
       },
-      "UserUpdateRequest": {
+      "UpdateProfileRequest": {
         "type": "object",
         "properties": {
           "firstName": {
@@ -191,6 +198,76 @@
             "example": "Doe"
           }
         }
+      },
+      "SessionSummary": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "fingerprint": {
+            "type": "string",
+            "example": "device-fingerprint"
+          },
+          "ipAddress": {
+            "type": "string",
+            "example": "client-ip-address"
+          },
+          "userAgent": {
+            "type": "string",
+            "example": "Mozilla/5.0..."
+          },
+          "location": {
+            "type": "string",
+            "example": "New Delhi, IN"
+          },
+          "createdAt": {
+            "type": "string",
+            "example": "2026-07-24T00:00:00.000Z"
+          },
+          "lastUsedAt": {
+            "type": "string",
+            "example": "2026-07-24T12:00:00.000Z"
+          },
+          "expiresAt": {
+            "type": "string",
+            "example": "2026-08-23T12:00:00.000Z"
+          }
+        },
+        "required": [
+          "sessionId",
+          "userId",
+          "fingerprint",
+          "ipAddress",
+          "userAgent",
+          "location",
+          "createdAt",
+          "lastUsedAt",
+          "expiresAt"
+        ]
+      },
+      "ActiveSession": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SessionSummary"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "isCurrent": {
+                "type": "boolean"
+              }
+            },
+            "required": ["isCurrent"]
+          }
+        ]
       },
       "ErrorDetail": {
         "type": "object",
@@ -848,35 +925,7 @@
                     "data": {
                       "type": "array",
                       "items": {
-                        "type": "object",
-                        "properties": {
-                          "sessionId": {
-                            "type": "string",
-                            "format": "uuid",
-                            "example": "550e8400-e29b-41d4-a716-446655440000"
-                          },
-                          "ipAddress": {
-                            "type": "string",
-                            "example": "192.168.1.1"
-                          },
-                          "userAgent": {
-                            "type": "string",
-                            "example": "Mozilla/5.0..."
-                          },
-                          "isCurrent": {
-                            "type": "boolean"
-                          },
-                          "createdAt": {
-                            "type": "string",
-                            "example": "2026-07-24T00:00:00.000Z"
-                          }
-                        },
-                        "required": [
-                          "sessionId",
-                          "ipAddress",
-                          "userAgent",
-                          "createdAt"
-                        ]
+                        "$ref": "#/components/schemas/ActiveSession"
                       }
                     },
                     "meta": {
@@ -1329,14 +1378,14 @@
     },
     "/api/v1/auth/verify-reset-otp": {
       "post": {
-        "operationId": "verifyResetOtp",
+        "operationId": "VerifyPasswordResetOtp",
         "tags": ["Authentication"],
         "summary": "Verify Password Reset OTP",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/VerifyResetOtpRequest"
+                "$ref": "#/components/schemas/VerifyPasswordResetOtpRequest"
               }
             }
           }
@@ -1656,7 +1705,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UserUpdateRequest"
+                "$ref": "#/components/schemas/UpdateProfileRequest"
               }
             }
           }

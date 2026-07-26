@@ -1,5 +1,5 @@
 import type { UserRepository } from "@repository";
-import type { UserUpdateDto } from "@dto";
+import type { UpdateProfileDto } from "@dto";
 import { redis } from "@config";
 import { logger } from "@irctc/logger";
 import { AUTH_DURATIONS, REDIS_KEYS } from "@utils/constants";
@@ -41,7 +41,7 @@ export class UserService {
     if (!user) return null;
 
     // 3. Populate Redis cache (redacting sensitive fields like password hash)
-    const { password: _, ...sanitizedUser } = user;
+    const sanitizedUser = { ...user, password: undefined };
     try {
       await redis.set(
         cacheKey,
@@ -65,7 +65,7 @@ export class UserService {
    * @param update - The data to update the user with.
    * @returns The updated user object.
    */
-  async updateProfile(id: string, update: UserUpdateDto) {
+  async updateProfile(id: string, update: UpdateProfileDto) {
     const updateData: { firstName?: string; lastName?: string } = {};
     if (update.firstName !== undefined) {
       updateData.firstName = update.firstName;
@@ -77,7 +77,7 @@ export class UserService {
 
     // Synchronize Redis profile cache (redacting password hash)
     if (updatedUser) {
-      const { password: _, ...sanitizedUser } = updatedUser;
+      const sanitizedUser = { ...updatedUser, password: undefined };
       try {
         await redis.set(
           REDIS_KEYS.userProfile(id),

@@ -8,60 +8,20 @@ import Link from "next/link"
 import { Field, FieldGroup, FieldLabel, FieldSet } from "@/components/ui/field"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { ForgotPasswordRequestSchema } from "@/lib/schemas/user-service/auth.schema"
+import { ForgotPasswordFormSchema } from "@/lib/schemas"
 import { Loader2 } from "lucide-react"
-import { forgotPassword, type ForgotPasswordRequest } from "@/generated"
-import { useMutation } from "@tanstack/react-query"
-import { toast } from "@/components/ui/toast"
-import { useRouter } from "next/navigation"
-import { getErrorMessage } from "@/lib/utils/error"
+import { type ForgotPasswordRequest } from "@/generated"
+import { useForgotPasswordMutation } from "../_hooks"
 
 export function ForgotPasswordForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
-  const router = useRouter()
-
-  const { mutate: forgotPasswordMutation, isPending } = useMutation({
-    mutationFn: (payload: ForgotPasswordRequest) => forgotPassword(payload),
-    onSuccess: (response, variables) => {
-      if (response.success) {
-        toast.add({
-          type: "success",
-          title: "OTP Sent",
-          description:
-            response.message || "Verification code sent to your email.",
-        })
-        const sessionId = response.data.sessionId
-        router.push(
-          `/forgot-password/verify?email=${encodeURIComponent(
-            variables.email
-          )}&sessionId=${encodeURIComponent(sessionId)}`
-        )
-      } else {
-        toast.add({
-          type: "error",
-          title: "Request Failed",
-          description:
-            response.message || "Failed to request password reset OTP.",
-        })
-      }
-    },
-    onError: (error) => {
-      const message = getErrorMessage(
-        error,
-        "Failed to send reset code. Please try again."
-      )
-      toast.add({
-        type: "error",
-        title: "Request Error",
-        description: message,
-      })
-    },
-  })
+  const { mutate: forgotPasswordMutation, isPending } =
+    useForgotPasswordMutation()
 
   const form = useForm<ForgotPasswordRequest>({
-    resolver: zodResolver(ForgotPasswordRequestSchema),
+    resolver: zodResolver(ForgotPasswordFormSchema),
     defaultValues: {
       email: "",
     },

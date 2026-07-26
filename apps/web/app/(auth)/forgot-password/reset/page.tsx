@@ -1,14 +1,21 @@
 import { redirect } from "next/navigation"
 import { ResetPasswordForm } from "@/app/(auth)/_components/resetPasswordForm"
 
+/**
+ * `string[]` is there to catch repeated query params like `?token=a&token=b`.
+ * That lets you reject malformed input instead of treating it as a valid single token.
+ */
 interface PageProps {
-  searchParams: Promise<{ token?: string }>
+  readonly searchParams: Promise<{ token?: string | string[] }>
 }
 
 export default async function ResetPasswordPage({ searchParams }: PageProps) {
   const { token } = await searchParams
 
-  if (!token) {
+  /**
+   *  Validates the reset token before rendering the form.
+   */
+  if (!token || Array.isArray(token)) {
     redirect("/forgot-password")
   }
 
