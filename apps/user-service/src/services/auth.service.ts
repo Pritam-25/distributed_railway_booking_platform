@@ -7,6 +7,8 @@ import type {
   VerifyPasswordResetOtpRequestDto,
   ResetPasswordRequestDto,
   SessionSummaryDto,
+  VerifyPasswordResetOtpResponseDto,
+  ForgotPasswordResponseDto,
 } from "@dto";
 import type { UserRepository } from "@repository";
 import { logger } from "@irctc/logger";
@@ -106,7 +108,7 @@ export class AuthService {
       ).toISOString(),
     };
 
-    await redis
+    const results = await redis
       .multi()
       .set(
         REDIS_KEYS.authSession(sessionId),
@@ -120,6 +122,20 @@ export class AuthService {
         AUTH_DURATIONS.SESSION_TTL_SECONDS,
       )
       .exec();
+
+    if (!results) {
+      throw new Error("Failed to persist authentication session");
+    }
+
+    const hasRedisError = results.some(([error]) => error !== null);
+    if (hasRedisError) {
+      await Promise.allSettled([
+        redis.del(REDIS_KEYS.authSession(sessionId)),
+        redis.srem(REDIS_KEYS.userSessions(userId), sessionId),
+      ]);
+
+      throw new Error("Failed to persist authentication session");
+    }
   }
 
   /**
@@ -579,6 +595,11 @@ export class AuthService {
         AUTH_DURATIONS.SESSION_TTL_SECONDS,
       );
 
+      await redis.expire(
+        REDIS_KEYS.userSessions(userId),
+        AUTH_DURATIONS.SESSION_TTL_SECONDS,
+      );
+
       logger.info({ module: "auth", userId }, "Token refreshed successfully");
       return AuthMapper.toAuthResponseDto(user, accessToken, newRefreshToken);
     } catch (error) {
@@ -733,7 +754,9 @@ export class AuthService {
    * - USER_NOT_FOUND
    * - KAFKA_PUBLISH_FAILED
    */
-  async forgotPassword(data: ForgotPasswordRequestDto): Promise<string> {
+  async forgotPassword(
+    data: ForgotPasswordRequestDto,
+  ): Promise<ForgotPasswordResponseDto> {
     const user = await this.repo.findUserByEmail(data.email);
     if (!user) {
       logger.warn(
@@ -820,7 +843,7 @@ export class AuthService {
       );
     }
 
-    return sessionId;
+    return { sessionId };
   }
 
   /**
@@ -840,7 +863,7 @@ export class AuthService {
    */
   async VerifyPasswordResetOtp(
     data: VerifyPasswordResetOtpRequestDto,
-  ): Promise<string> {
+  ): Promise<VerifyPasswordResetOtpResponseDto> {
     const email = await redis.get(
       REDIS_KEYS.forgotPasswordSession(data.sessionId),
     );
@@ -880,7 +903,7 @@ export class AuthService {
       { module: "auth", sessionId: data.sessionId },
       "OTP verified, reset token issued",
     );
-    return token;
+    return { passwordResetToken: token };
   }
 
   /**

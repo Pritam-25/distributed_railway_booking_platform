@@ -29,12 +29,13 @@ export default function ResetPasswordPage() {
   useEffect(() => {
     const stored = sessionStorage.getItem(PASSWORD_RESET_TOKEN_KEY)
     if (!stored) {
-      setToken(null)
       router.replace("/forgot-password")
       return
     }
     sessionStorage.removeItem(PASSWORD_RESET_TOKEN_KEY)
-    setToken(stored)
+    queueMicrotask(() => {
+      setToken(stored)
+    })
   }, [router])
 
   // Display loading spinner while checking token or performing redirect

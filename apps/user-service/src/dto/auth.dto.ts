@@ -201,6 +201,10 @@ export const ForgotPasswordResponseSchema = z
   })
   .openapi("ForgotPasswordResponse");
 
+export type ForgotPasswordResponseDto = z.infer<
+  typeof ForgotPasswordResponseSchema
+>;
+
 /**
  * Verify Password Reset OTP Response Schema
  */
@@ -209,3 +213,7 @@ export const VerifyPasswordResetOtpResponseSchema = z
     passwordResetToken: uuidSchema,
   })
   .openapi("VerifyPasswordResetOtpResponse");
+
+export type VerifyPasswordResetOtpResponseDto = z.infer<
+  typeof VerifyPasswordResetOtpResponseSchema
+>;

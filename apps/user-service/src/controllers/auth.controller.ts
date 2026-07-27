@@ -379,7 +379,7 @@ export class AuthController {
    */
   async forgotPassword(req: Request, res: Response): Promise<void> {
     const data = req.body as ForgotPasswordRequestDto;
-    const sessionId = await this.service.forgotPassword(data);
+    const { sessionId } = await this.service.forgotPassword(data);
 
     res.status(statusCode.success).json(
       successResponse("OTP sent successfully to your registered email", {
@@ -400,7 +400,8 @@ export class AuthController {
    */
   async VerifyPasswordResetOtp(req: Request, res: Response): Promise<void> {
     const data = req.body as VerifyPasswordResetOtpRequestDto;
-    const passwordResetToken = await this.service.VerifyPasswordResetOtp(data);
+    const { passwordResetToken } =
+      await this.service.VerifyPasswordResetOtp(data);
 
     res
       .status(statusCode.success)

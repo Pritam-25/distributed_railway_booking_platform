@@ -1,4 +1,46 @@
-type OpenAPIObject = Record<string, any>
+type HttpMethod =
+  "get" | "post" | "put" | "patch" | "delete" | "options" | "head"
+
+type OpenApiSchema = {
+  properties?: Record<string, OpenApiSchema>
+  example?: unknown
+  enum?: readonly unknown[]
+  type?: string
+  $ref?: string
+  allOf?: OpenApiSchema[]
+  [key: string]: unknown
+}
+
+type JsonObject = Record<string, unknown>
+
+type MediaTypeObject = {
+  schema?: OpenApiSchema
+  example?: unknown
+  [key: string]: unknown
+}
+
+type ResponseObject = {
+  content?: {
+    "application/json"?: MediaTypeObject
+    [key: string]: MediaTypeObject | undefined
+  }
+  [key: string]: unknown
+}
+
+type OperationObject = {
+  responses?: Record<string, ResponseObject>
+  [key: string]: unknown
+}
+
+type PathItemObject = Partial<Record<HttpMethod, OperationObject>> &
+  Record<string, unknown>
+
+type OpenAPIObject = {
+  components?: {
+    schemas?: Record<string, OpenApiSchema>
+  }
+  paths?: Record<string, PathItemObject>
+}
 
 /**
  * Orval Input Transformer — Error Schema Deduplication
@@ -16,7 +58,7 @@ type OpenAPIObject = Record<string, any>
 
 const ERROR_RESPONSE_REF = "#/components/schemas/ErrorResponse"
 const RESPONSE_META_REF = "#/components/schemas/ResponseMeta"
-const HTTP_METHODS = [
+const HTTP_METHODS: readonly HttpMethod[] = [
   "get",
   "post",
   "put",
@@ -33,14 +75,14 @@ const HTTP_METHODS = [
  * Walks `properties` and collects each field's `example` value.
  */
 function extractExampleFromSchema(
-  schema: Record<string, any>
-): Record<string, any> | undefined {
+  schema: OpenApiSchema
+): JsonObject | undefined {
   if (!schema.properties) return undefined
 
-  const example: Record<string, any> = {}
+  const example: JsonObject = {}
   let hasAny = false
 
-  for (const [key, prop] of Object.entries<any>(schema.properties)) {
+  for (const [key, prop] of Object.entries(schema.properties)) {
     if (prop.example !== undefined) {
       example[key] = prop.example
       hasAny = true
@@ -71,7 +113,7 @@ function extractExampleFromSchema(
  * Matches if `x-sdk-ref === "ErrorResponse"` OR matches structural pattern:
  * `{ properties: { success (false), error, meta } }`.
  */
-function isErrorEnvelopeSchema(schema: Record<string, any>): boolean {
+function isErrorEnvelopeSchema(schema: OpenApiSchema): boolean {
   if (!schema || typeof schema !== "object" || !schema.properties) return false
 
   if (schema["x-sdk-ref"] === "ErrorResponse") return true
@@ -91,14 +133,14 @@ function isErrorEnvelopeSchema(schema: Record<string, any>): boolean {
 /**
  * Phase 1: Collect error response component schemas to be deduplicated.
  */
-function collectErrorComponents(schemas: Record<string, any>): {
+function collectErrorComponents(schemas: Record<string, OpenApiSchema>): {
   taggedComponentNames: Set<string>
-  componentExamples: Map<string, Record<string, any>>
+  componentExamples: Map<string, JsonObject>
 } {
   const taggedComponentNames = new Set<string>()
-  const componentExamples = new Map<string, Record<string, any>>()
+  const componentExamples = new Map<string, JsonObject>()
 
-  for (const [name, schema] of Object.entries<any>(schemas)) {
+  for (const [name, schema] of Object.entries(schemas)) {
     if (name === "ErrorResponse" || name === "ErrorDetail") continue
 
     if (isErrorEnvelopeSchema(schema)) {
@@ -117,9 +159,9 @@ function collectErrorComponents(schemas: Record<string, any>): {
  * Process a single response media type object to rewrite error schemas.
  */
 function processResponseMediaType(
-  mediaType: Record<string, any>,
+  mediaType: MediaTypeObject,
   taggedComponentNames: Set<string>,
-  componentExamples: Map<string, Record<string, any>>
+  componentExamples: Map<string, JsonObject>
 ): void {
   const schema = mediaType?.schema
   if (!schema) return
@@ -151,16 +193,16 @@ function processResponseMediaType(
  * Phase 2: Rewrite all path response schemas in the OpenAPI specification.
  */
 function rewritePathResponses(
-  paths: Record<string, any>,
+  paths: Record<string, PathItemObject>,
   taggedComponentNames: Set<string>,
-  componentExamples: Map<string, Record<string, any>>
+  componentExamples: Map<string, JsonObject>
 ): void {
-  for (const pathItem of Object.values<any>(paths)) {
+  for (const pathItem of Object.values(paths)) {
     for (const method of HTTP_METHODS) {
       const operation = pathItem[method]
       if (!operation?.responses) continue
 
-      for (const response of Object.values<any>(operation.responses)) {
+      for (const response of Object.values(operation.responses)) {
         const mediaType = response?.content?.["application/json"]
         if (mediaType) {
           processResponseMediaType(
@@ -178,7 +220,7 @@ function rewritePathResponses(
  * Phase 3: Delete component schemas that were deduplicated into ErrorResponse.
  */
 function removeDeduplicatedComponents(
-  schemas: Record<string, any>,
+  schemas: Record<string, OpenApiSchema>,
   componentNames: Set<string>
 ): void {
   for (const name of componentNames) {
@@ -195,7 +237,7 @@ export default function transformOpenApiSpec(
   inputSpec: OpenAPIObject
 ): OpenAPIObject {
   const spec = structuredClone(inputSpec)
-  const schemas = spec.components?.schemas as Record<string, any> | undefined
+  const schemas = spec.components?.schemas
 
   if (!schemas) return spec
 

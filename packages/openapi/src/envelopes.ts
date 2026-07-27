@@ -103,7 +103,7 @@ export const createErrorResponseSchema = (
   message: string,
   schemaName?: string,
 ) => {
-  const metadata: any = {
+  const metadata: Record<string, unknown> = {
     description: `Error Response Envelope (${code})`,
     "x-sdk-ref": "ErrorResponse",
   };
