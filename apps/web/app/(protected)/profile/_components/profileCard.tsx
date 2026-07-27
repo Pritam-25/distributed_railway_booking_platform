@@ -12,19 +12,14 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { EditProfileDialog } from "./editProfileDialog"
 import { Mail, Calendar, Edit, LogOut, Loader2 } from "lucide-react"
-import { useLogoutMutation } from "../_hooks"
+import { useLogoutMutation } from "@/app/(protected)/profile/_hooks"
+import type { UserResponse } from "@/generated"
 
 interface ProfileCardProps {
-  user: {
-    id: string
-    email: string
-    firstName: string
-    lastName: string
-    createdAt: string
-  }
+  user: UserResponse
 }
 
-export function ProfileCard({ user }: ProfileCardProps) {
+export function ProfileCard({ user }: Readonly<ProfileCardProps>) {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const { mutate: handleLogout, isPending: isLoggingOut } = useLogoutMutation()
 
@@ -33,6 +28,13 @@ export function ProfileCard({ user }: ProfileCardProps) {
 
   return (
     <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Account Settings</h1>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          Manage your personal details and active login sessions.
+        </p>
+      </div>
+
       <Card className="border-border/40 shadow-sm">
         <CardHeader className="border-b border-border/40 pb-4">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

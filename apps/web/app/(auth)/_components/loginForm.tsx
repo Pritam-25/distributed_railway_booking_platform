@@ -20,14 +20,18 @@ import { Loader2 } from "lucide-react"
 import { type LoginRequest } from "@/generated"
 import { toast } from "@/components/ui/toast"
 import { useSearchParams } from "next/navigation"
-import { useLoginMutation } from "../_hooks"
+import { getSafeRedirectTarget } from "@/lib/utils/redirect"
+import { useLoginMutation } from "@/app/(auth)/_hooks"
 
 export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
   const searchParams = useSearchParams()
-  const redirectTarget = searchParams.get("redirect") || "/profile"
+  const redirectTarget = getSafeRedirectTarget(
+    searchParams.get("redirect"),
+    "/profile"
+  )
 
   const { mutate: loginMutation, isPending } = useLoginMutation({
     redirectTarget,

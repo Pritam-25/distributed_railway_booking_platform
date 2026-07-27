@@ -7,6 +7,7 @@
  * - `auth:registration:{sessionId}` — Stores pre-registration data
  * - `auth:otp_rate:{email}` — Rate-limits OTP requests per email
  * - `auth:otp_attempts:{sessionId}` — Tracks OTP verification attempts
+ * - `auth:otp_session:{email}` — Maps email to active OTP sessionId for idempotent resend
  * - `auth:forgot-password:{sessionId}` — Stores forgot password email session data
  * - `auth:password-reset-token:{token}` — Stores email for a verified reset token
  * - `auth:user:{userId}:sessions` — Indexes active sessions per user
@@ -21,6 +22,7 @@ export const REDIS_KEYS = {
   passwordResetToken: (token: string) => `auth:password-reset-token:${token}`,
   otpRate: (email: string) => `auth:otp_rate:${email}`,
   otpAttempts: (sessionId: string) => `auth:otp_attempts:${sessionId}`,
+  otpSession: (email: string) => `auth:otp_session:${email}`,
   userSessions: (userId: string) => `auth:user:${userId}:sessions`,
   userProfile: (userId: string) => `user:profile:${userId}`,
 } as const;

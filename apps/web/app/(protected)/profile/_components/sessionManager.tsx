@@ -1,8 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { useQuery } from "@tanstack/react-query"
-import { getSessions } from "@/generated/endpoints/authentication/authentication"
 import { Button, buttonVariants } from "@/components/ui/button"
 import {
   Card,
@@ -33,38 +31,26 @@ import {
 import { getDeviceIcon, getDeviceName } from "@/lib/utils/device"
 import { cn } from "@/lib/utils"
 import {
-  sessionKeys,
   useRevokeSessionMutation,
   useLogoutAllMutation,
-} from "../_hooks"
+} from "@/app/(protected)/profile/_hooks"
 import type { ActiveSession } from "@/generated"
 
 interface SessionManagerProps {
-  sessions?: ActiveSession[]
+  sessions: ActiveSession[]
+  refetch: () => void
+  isRefetching: boolean
 }
 
 export function SessionManager({
-  sessions: initialSessions,
-}: SessionManagerProps) {
+  sessions,
+  refetch,
+  isRefetching,
+}: Readonly<SessionManagerProps>) {
   const [confirmRevokeSessionId, setConfirmRevokeSessionId] = useState<
     string | null
   >(null)
   const [isLogoutAllConfirmOpen, setIsLogoutAllConfirmOpen] = useState(false)
-
-  // Fetch active sessions
-  const {
-    data: sessionsResponse,
-    isLoading,
-    isError,
-    refetch,
-    isRefetching,
-  } = useQuery({
-    queryKey: sessionKeys.all,
-    queryFn: () => getSessions(),
-    retry: false,
-  })
-
-  const activeSessions = initialSessions || sessionsResponse?.data || []
 
   // Revoke session mutation
   const {
@@ -77,30 +63,7 @@ export function SessionManager({
   const { mutate: logoutAllMutation, isPending: isLoggingOutAll } =
     useLogoutAllMutation()
 
-  const sessions = activeSessions
-
   const renderSessionsContent = () => {
-    if (isLoading) {
-      return (
-        <div className="flex flex-col items-center justify-center gap-3 p-12 text-muted-foreground">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-sm">Loading active devices...</p>
-        </div>
-      )
-    }
-
-    if (isError) {
-      return (
-        <div className="flex flex-col items-center justify-center gap-2 p-12 text-center text-destructive">
-          <ShieldAlert className="h-8 w-8" />
-          <p className="text-sm font-medium">Failed to retrieve devices</p>
-          <Button variant="outline" size="sm" onClick={() => refetch()}>
-            Retry
-          </Button>
-        </div>
-      )
-    }
-
     if (sessions.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center gap-2 p-12 text-center text-muted-foreground">
@@ -193,7 +156,7 @@ export function SessionManager({
             variant="ghost"
             size="icon-sm"
             onClick={() => refetch()}
-            disabled={isLoading || isRefetching}
+            disabled={isRefetching}
             className="cursor-pointer"
           >
             <RefreshCw

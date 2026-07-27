@@ -49,7 +49,7 @@ export class UserRepository {
    * @param data - The fields to update.
    * @returns The updated User record.
    */
-  async update(id: string, data: Prisma.UpdateProfileInput): Promise<User> {
+  async update(id: string, data: Prisma.UserUpdateInput): Promise<User> {
     return this.prisma.user.update({
       where: { id },
       data,

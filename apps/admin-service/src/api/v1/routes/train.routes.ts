@@ -56,9 +56,7 @@ router.get(
 router.get(
   "/",
   validateQuery(listTrainsQuerySchema),
-  asyncHandler(async (req, res) => {
-    return trainController.getAllTrains(req, res);
-  }),
+  asyncHandler((req, res) => trainController.getAllTrains(req, res)),
 );
 
 /**
@@ -89,9 +87,7 @@ router.patch(
 router.post(
   "/:trainId/routes",
   validateParams(trainIdParamSchema),
-  asyncHandler(async (req, res) => {
-    return routeController.createRoute(req, res);
-  }),
+  asyncHandler((req, res) => routeController.createRoute(req, res)),
 );
 
 /**
@@ -101,9 +97,7 @@ router.post(
 router.get(
   "/:trainId/coaches",
   validateParams(trainIdParamSchema),
-  asyncHandler(async (req, res) => {
-    return coachController.getAllCoaches(req, res);
-  }),
+  asyncHandler((req, res) => coachController.getAllCoaches(req, res)),
 );
 
 /**
@@ -114,9 +108,7 @@ router.post(
   "/:trainId/coaches",
   validateParams(trainIdParamSchema),
   validateSchema(createCoachSchema),
-  asyncHandler(async (req, res) => {
-    return coachController.createCoach(req, res);
-  }),
+  asyncHandler((req, res) => coachController.createCoach(req, res)),
 );
 
 /**

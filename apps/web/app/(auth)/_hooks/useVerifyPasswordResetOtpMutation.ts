@@ -6,6 +6,7 @@ import {
 } from "@/generated"
 import { toast } from "@/components/ui/toast"
 import { getErrorMessage } from "@/lib/utils/error"
+import { PASSWORD_RESET_TOKEN_KEY } from "."
 
 /**
  * Mutation hook for verifying the password reset OTP (forgot-password step 2).
@@ -29,9 +30,8 @@ export function useVerifyPasswordResetOtpMutation() {
             "OTP verified successfully. You can now set your new password.",
         })
         const resetToken = response.data.passwordResetToken
-        router.push(
-          `/forgot-password/reset?token=${encodeURIComponent(resetToken)}`
-        )
+        sessionStorage.setItem(PASSWORD_RESET_TOKEN_KEY, resetToken)
+        router.push("/forgot-password/reset")
       } else {
         toast.add({
           type: "error",

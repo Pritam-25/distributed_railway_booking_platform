@@ -10,7 +10,6 @@
 export { profileKeys, sessionKeys } from "./keys"
 
 // Queries
-export { useProfile } from "./useProfile"
 export { useSessions } from "./useSessions"
 
 // Mutations

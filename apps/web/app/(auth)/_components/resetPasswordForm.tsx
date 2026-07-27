@@ -9,7 +9,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { ResetPasswordFormSchema } from "@/lib/schemas"
 import { PasswordInput } from "./passwordInput"
 import { Loader2 } from "lucide-react"
-import { useResetPasswordMutation } from "../_hooks"
+import { useResetPasswordMutation } from "@/app/(auth)/_hooks"
 import { ResetPasswordRequest } from "@/generated"
 
 interface ResetPasswordFormProps {

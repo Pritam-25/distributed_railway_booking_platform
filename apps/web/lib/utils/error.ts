@@ -14,3 +14,14 @@ export function getErrorMessage(
     axiosError.response?.data?.error?.message || axiosError.message || fallback
   )
 }
+
+/**
+ * Checks whether an error represents an HTTP 401 Unauthorized response.
+ *
+ * Useful for distinguishing authentication failures from transient
+ * network / 5xx errors so the UI can render the right fallback.
+ */
+export function isUnauthorizedError(error: unknown): boolean {
+  const axiosError = error as AxiosError | undefined
+  return axiosError?.response?.status === 401
+}

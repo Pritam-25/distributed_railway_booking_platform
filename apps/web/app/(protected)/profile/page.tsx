@@ -1,17 +1,23 @@
 "use client"
 
-import { Suspense } from "react"
 import {
-  ProfileSection,
+  ProfileCard,
   SessionsSection,
-  ProfileSkeleton,
-  SessionSkeleton,
-} from "@/app/profile/_components"
+} from "@/app/(protected)/profile/_components"
+import { useAuth } from "@/providers/authProvider"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 
+/**
+ * ProfilePage
+ *
+ * Rendered within the (protected) route group layout.
+ * Accesses authenticated user identity instantly via useAuth() context.
+ */
 export default function ProfilePage() {
+  const { user } = useAuth()
+
   return (
     <div className="flex min-h-screen justify-center bg-muted/30 px-4 py-10 md:px-8">
       <div className="w-full max-w-2xl space-y-6">
@@ -27,15 +33,11 @@ export default function ProfilePage() {
           </span>
         </div>
 
-        {/* Independent Suspense Boundary 1: Profile Details */}
-        <Suspense fallback={<ProfileSkeleton />}>
-          <ProfileSection />
-        </Suspense>
+        {/* Primary Profile Identity */}
+        <ProfileCard user={user} />
 
-        {/* Independent Suspense Boundary 2: Active Device Sessions */}
-        <Suspense fallback={<SessionSkeleton />}>
-          <SessionsSection />
-        </Suspense>
+        {/* Independent Feature Data: Active Device Sessions */}
+        <SessionsSection />
       </div>
     </div>
   )

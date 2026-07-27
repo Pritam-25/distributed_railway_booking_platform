@@ -17,7 +17,7 @@ import { Loader2, ShieldCheck } from "lucide-react"
 import { type VerifyPasswordResetOtpRequest } from "@/generated"
 import { toast } from "@/components/ui/toast"
 import { useRouter } from "next/navigation"
-import { useVerifyPasswordResetOtpMutation } from "../_hooks"
+import { useVerifyPasswordResetOtpMutation } from "@/app/(auth)/_hooks"
 
 interface VerifyPasswordResetOtpFormProps {
   email?: string

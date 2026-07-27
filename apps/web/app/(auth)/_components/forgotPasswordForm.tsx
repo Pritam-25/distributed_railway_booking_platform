@@ -11,7 +11,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { ForgotPasswordFormSchema } from "@/lib/schemas"
 import { Loader2 } from "lucide-react"
 import { type ForgotPasswordRequest } from "@/generated"
-import { useForgotPasswordMutation } from "../_hooks"
+import { useForgotPasswordMutation } from "@/app/(auth)/_hooks"
 
 export function ForgotPasswordForm({
   className,

@@ -19,7 +19,7 @@ import { PasswordInput } from "./passwordInput"
 import { Loader2 } from "lucide-react"
 import { type RegisterRequest } from "@/generated"
 import { toast } from "@/components/ui/toast"
-import { useSignupMutation } from "../_hooks"
+import { useSignupMutation } from "@/app/(auth)/_hooks"
 
 export function SignUpForm({
   className,

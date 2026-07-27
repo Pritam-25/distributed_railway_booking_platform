@@ -158,24 +158,53 @@ export class AuthService {
       throw new ApiError(statusCode.conflict, ERROR_CODES.USER_ALREADY_EXISTS);
     }
 
-    // 2. Generate and store OTP
-    const otp = generateOtp();
-    const sessionId = await OtpService.storeOtp(
+    // 2. Check for an existing active OTP session for this email
+    const existingSessionId = await OtpService.findExistingOtpSession(
       data.email,
-      otp,
-      env.REGISTRATION_OTP_TTL,
     );
-
-    // 3. Hash password and store registration session in Redis
+    const otp = generateOtp();
     const hashedPassword = await bcrypt.hash(data.password, 10);
-    await OtpService.storeRegistrationSession(sessionId, {
-      firstName: data.firstName,
-      lastName: data.lastName,
-      email: data.email,
-      hashedPassword,
-    });
+    let sessionId: string;
 
-    // 4. Publish OTPRequestedV1. Roll back on failure so the user can
+    if (existingSessionId) {
+      // Reuse existing session: generate new OTP, overwrite hash
+      sessionId = existingSessionId;
+      await OtpService.replaceOtp(
+        sessionId,
+        data.email,
+        otp,
+        env.REGISTRATION_OTP_TTL,
+      );
+
+      // Update registration data in case user corrected a field
+      await OtpService.storeRegistrationSession(sessionId, {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        hashedPassword,
+      });
+
+      logger.info(
+        { module: "auth", sessionId },
+        "Reusing existing OTP session with new OTP",
+      );
+    } else {
+      // New session: generate everything fresh
+      sessionId = await OtpService.storeOtp(
+        data.email,
+        otp,
+        env.REGISTRATION_OTP_TTL,
+      );
+
+      await OtpService.storeRegistrationSession(sessionId, {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        hashedPassword,
+      });
+    }
+
+    // 3. Publish OTPRequestedV1. Roll back on failure so the user can
     // safely retry without leaving a stale registration session.
     const event: OTPRequestedV1Type = {
       eventId: randomUUID(),
@@ -194,7 +223,11 @@ export class AuthService {
         { module: "auth", err, eventId: event.eventId, purpose: event.purpose },
         "OTP publish failed; rolling back Redis state",
       );
-      await OtpService.deleteRegistrationSession(sessionId);
+      // Only roll back fully if this was a new session
+      if (!existingSessionId) {
+        await OtpService.deleteRegistrationSession(sessionId);
+        await OtpService.deleteOtpSession(data.email);
+      }
       throw new ApiError(
         statusCode.badGateway,
         COMMON_ERROR_CODES.KAFKA_PUBLISH_FAILED,
@@ -326,6 +359,7 @@ export class AuthService {
     // 4. Clean up sessions (best-effort; do not fail completed registration)
     try {
       await OtpService.deleteRegistrationSession(sessionId);
+      await OtpService.deleteOtpSession(regData.email);
     } catch (error) {
       logger.warn({ module: "auth", error }, "Session cleanup failed");
     }
@@ -709,20 +743,50 @@ export class AuthService {
       throw new ApiError(statusCode.notFound, ERROR_CODES.USER_NOT_FOUND);
     }
 
+    // Check for an existing active OTP session for this email
+    const existingSessionId = await OtpService.findExistingOtpSession(
+      data.email,
+    );
     const otp = generateOtp();
-    const sessionId = await OtpService.storeOtp(
-      data.email,
-      otp,
-      env.FORGOT_PASSWORD_OTP_TTL,
-    );
+    let sessionId: string;
 
-    // Save the email associated with the session in Redis
-    await redis.set(
-      REDIS_KEYS.forgotPasswordSession(sessionId),
-      data.email,
-      "EX",
-      env.FORGOT_PASSWORD_OTP_TTL,
-    );
+    if (existingSessionId) {
+      // Reuse existing session: generate new OTP, overwrite hash
+      sessionId = existingSessionId;
+      await OtpService.replaceOtp(
+        sessionId,
+        data.email,
+        otp,
+        env.FORGOT_PASSWORD_OTP_TTL,
+      );
+
+      // Refresh the forgot password session TTL
+      await redis.set(
+        REDIS_KEYS.forgotPasswordSession(sessionId),
+        data.email,
+        "EX",
+        env.FORGOT_PASSWORD_OTP_TTL,
+      );
+
+      logger.info(
+        { module: "auth", sessionId },
+        "Reusing existing OTP session for forgot password with new OTP",
+      );
+    } else {
+      // New session
+      sessionId = await OtpService.storeOtp(
+        data.email,
+        otp,
+        env.FORGOT_PASSWORD_OTP_TTL,
+      );
+
+      await redis.set(
+        REDIS_KEYS.forgotPasswordSession(sessionId),
+        data.email,
+        "EX",
+        env.FORGOT_PASSWORD_OTP_TTL,
+      );
+    }
 
     const event: OTPRequestedV1Type = {
       eventId: randomUUID(),
@@ -740,10 +804,14 @@ export class AuthService {
         { module: "auth", err, eventId: event.eventId },
         "Forgot password OTP publish failed; rolling back Redis state",
       );
-      await redis.del(
-        REDIS_KEYS.otp(sessionId),
-        REDIS_KEYS.forgotPasswordSession(sessionId),
-      );
+      // Only roll back fully if this was a new session
+      if (!existingSessionId) {
+        await redis.del(
+          REDIS_KEYS.otp(sessionId),
+          REDIS_KEYS.forgotPasswordSession(sessionId),
+        );
+        await OtpService.deleteOtpSession(data.email);
+      }
       throw new ApiError(
         statusCode.badGateway,
         COMMON_ERROR_CODES.KAFKA_PUBLISH_FAILED,
@@ -804,7 +872,9 @@ export class AuthService {
     await redis.del(
       REDIS_KEYS.otp(data.sessionId),
       REDIS_KEYS.forgotPasswordSession(data.sessionId),
+      REDIS_KEYS.otpAttempts(data.sessionId),
     );
+    await OtpService.deleteOtpSession(email);
 
     logger.info(
       { module: "auth", sessionId: data.sessionId },

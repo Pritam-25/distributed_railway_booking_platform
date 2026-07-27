@@ -3,7 +3,9 @@ import { useRouter } from "next/navigation"
 import { login, type LoginRequest } from "@/generated"
 import { toast } from "@/components/ui/toast"
 import { getErrorMessage } from "@/lib/utils/error"
-import { profileKeys } from "@/app/profile/_hooks"
+import { profileKeys, sessionKeys } from "@/app/(protected)/profile/_hooks"
+
+import { getSafeRedirectTarget } from "@/lib/utils/redirect"
 
 interface UseLoginMutationOptions {
   /** The path to redirect to after a successful login. Defaults to `/profile`. */
@@ -24,6 +26,7 @@ export function useLoginMutation({
 }: UseLoginMutationOptions = {}) {
   const router = useRouter()
   const queryClient = useQueryClient()
+  const safeRedirectTarget = getSafeRedirectTarget(redirectTarget, "/profile")
 
   return useMutation({
     mutationFn: (payload: LoginRequest) => login(payload),
@@ -35,7 +38,8 @@ export function useLoginMutation({
           description: response.message || "Login successful.",
         })
         queryClient.invalidateQueries({ queryKey: profileKeys.all })
-        router.push(redirectTarget)
+        queryClient.invalidateQueries({ queryKey: sessionKeys.all })
+        router.push(safeRedirectTarget)
       } else {
         toast.add({
           type: "error",

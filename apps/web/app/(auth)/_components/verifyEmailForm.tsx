@@ -17,7 +17,7 @@ import { Loader2, Mail } from "lucide-react"
 import { type VerifyOtpRequest } from "@/generated"
 import { toast } from "@/components/ui/toast"
 import { useRouter } from "next/navigation"
-import { useVerifyOtpMutation } from "../_hooks"
+import { useVerifyOtpMutation } from "@/app/(auth)/_hooks"
 
 interface VerifyEmailFormProps {
   email?: string

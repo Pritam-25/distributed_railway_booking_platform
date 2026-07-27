@@ -19,7 +19,7 @@ import {
   UpdateProfileSchema,
   type UpdateProfileFormValues,
 } from "@/lib/schemas"
-import { useUpdateProfileMutation } from "../_hooks"
+import { useUpdateProfileMutation } from "@/app/(protected)/profile/_hooks"
 
 interface EditProfileDialogProps {
   isOpen: boolean
@@ -31,7 +31,7 @@ export function EditProfileDialog({
   isOpen,
   onOpenChange,
   defaultValues,
-}: EditProfileDialogProps) {
+}: Readonly<EditProfileDialogProps>) {
   const wasOpenRef = useRef(false)
 
   const form = useForm<UpdateProfileFormValues>({

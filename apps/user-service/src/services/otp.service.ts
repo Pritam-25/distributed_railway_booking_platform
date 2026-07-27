@@ -36,6 +36,16 @@ export class OtpService {
   private static readonly OTP_ATTEMPT_LIMIT = 5;
 
   /**
+   * Checks whether an active OTP session already exists for the given email.
+   *
+   * @param email - The user's email address.
+   * @returns The existing session ID, or null if no active session exists.
+   */
+  static async findExistingOtpSession(email: string): Promise<string | null> {
+    return redis.get(REDIS_KEYS.otpSession(email));
+  }
+
+  /**
    * Stores a hashed OTP in Redis and handles rate limiting.
    *
    * @param email - User's email address.
@@ -77,6 +87,9 @@ export class OtpService {
     // EX means expire, and ttlSeconds is the time-to-live for the OTP in seconds.
     await redis.set(REDIS_KEYS.otp(sessionId), hashedOtp, "EX", ttlSeconds);
 
+    // Store email → sessionId mapping for idempotent resend
+    await redis.set(REDIS_KEYS.otpSession(email), sessionId, "EX", ttlSeconds);
+
     return sessionId;
   }
 
@@ -113,7 +126,7 @@ export class OtpService {
   }
 
   /**
-   * Cleans up both OTP and registration sessions from Redis.
+   * Cleans up OTP and registration sessions and otpAttempts from Redis.
    *
    * @param sessionId - The session identifier to clean up.
    */
@@ -121,7 +134,74 @@ export class OtpService {
     await redis.del(
       REDIS_KEYS.otp(sessionId),
       REDIS_KEYS.registrationSession(sessionId),
+      REDIS_KEYS.otpAttempts(sessionId),
     );
+  }
+
+  /**
+   * Overwrites the OTP for an existing session with a fresh one.
+   *
+   * Used when an active OTP session already exists for the email (e.g. retry
+   * after gateway timeout or user pressing "Send OTP" again). The existing
+   * sessionId is reused, a new bcrypt hash replaces the old one, and the
+   * attempt counter is cleared.
+   *
+   * Rate limiting is still enforced per email.
+   *
+   * @param sessionId - The existing OTP session identifier to reuse.
+   * @param email - User's email address (for rate limiting and otpSession TTL reset).
+   * @param otp - The new raw OTP string.
+   * @param ttlSeconds - Time-to-live for the OTP in seconds.
+   * @throws {ApiError} If the OTP request rate limit is exceeded.
+   */
+  static async replaceOtp(
+    sessionId: string,
+    email: string,
+    otp: string,
+    ttlSeconds: number,
+  ): Promise<void> {
+    // 1. Rate limit check (same rules as storeOtp)
+    const rateKey = REDIS_KEYS.otpRate(email);
+    const nextCount = await redis.incr(rateKey);
+
+    const ttl = await redis.ttl(rateKey);
+    if (ttl === -1) {
+      await redis.expire(rateKey, this.OTP_RATE_LIMIT_WINDOW);
+    }
+
+    if (nextCount > this.OTP_RATE_LIMIT_MAX) {
+      logger.warn(
+        { module: "otp", count: nextCount },
+        "OTP request rate limit exceeded",
+      );
+      throw new ApiError(
+        statusCode.tooManyRequests,
+        COMMON_ERROR_CODES.RATE_LIMIT_EXCEEDED,
+        "OTP request rate limit exceeded, please try again later",
+      );
+    }
+
+    // 2. Overwrite OTP hash with new value
+    const hashedOtp = await bcrypt.hash(otp, 10);
+    await redis.set(REDIS_KEYS.otp(sessionId), hashedOtp, "EX", ttlSeconds);
+
+    // 3. Reset otpSession TTL
+    await redis.set(REDIS_KEYS.otpSession(email), sessionId, "EX", ttlSeconds);
+
+    // 4. Clear previous attempt counter (old OTP's attempts are irrelevant)
+    await redis.del(REDIS_KEYS.otpAttempts(sessionId));
+  }
+
+  /**
+   * Removes the email → sessionId OTP session mapping.
+   *
+   * Called when registration or password reset completes, or when
+   * rolling back a failed session creation.
+   *
+   * @param email - The email whose OTP session mapping should be removed.
+   */
+  static async deleteOtpSession(email: string): Promise<void> {
+    await redis.del(REDIS_KEYS.otpSession(email));
   }
 
   /**
