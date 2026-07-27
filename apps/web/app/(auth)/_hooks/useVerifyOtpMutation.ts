@@ -15,20 +15,12 @@ export function useVerifyOtpMutation() {
   return useMutation({
     mutationFn: (payload: VerifyOtpRequest) => verifyOtp(payload),
     onSuccess: (response) => {
-      if (response.success) {
-        toast.add({
-          type: "success",
-          title: "Registration Complete",
-          description: response.message || "Email verified successfully!",
-        })
-        router.push("/")
-      } else {
-        toast.add({
-          type: "error",
-          title: "Verification Failed",
-          description: response.message || "Invalid or expired OTP",
-        })
-      }
+      toast.add({
+        type: "success",
+        title: "Registration Complete",
+        description: response.message || "Email verified successfully!",
+      })
+      router.push("/")
     },
     onError: (error) => {
       const message = getErrorMessage(error, "Invalid or expired OTP code.")

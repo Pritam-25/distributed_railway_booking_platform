@@ -16,25 +16,16 @@ export function useForgotPasswordMutation() {
   return useMutation({
     mutationFn: (payload: ForgotPasswordRequest) => forgotPassword(payload),
     onSuccess: (response, variables) => {
-      if (response.success) {
-        toast.add({
-          type: "success",
-          title: "OTP Sent",
-          description:
-            response.message || "Verification code sent to your email.",
-        })
-        const sessionId = response.data.sessionId
-        router.push(
-          `/forgot-password/verify?email=${encodeURIComponent(variables.email)}&sessionId=${encodeURIComponent(sessionId)}`
-        )
-      } else {
-        toast.add({
-          type: "error",
-          title: "Request Failed",
-          description:
-            response.message || "Failed to request password reset OTP.",
-        })
-      }
+      toast.add({
+        type: "success",
+        title: "OTP Sent",
+        description:
+          response.message || "Verification code sent to your email.",
+      })
+      const sessionId = response.data.sessionId
+      router.push(
+        `/forgot-password/verify?email=${encodeURIComponent(variables.email)}&sessionId=${encodeURIComponent(sessionId)}`
+      )
     },
     onError: (error) => {
       const message = getErrorMessage(

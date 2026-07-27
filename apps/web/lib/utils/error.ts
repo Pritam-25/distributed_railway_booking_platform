@@ -22,6 +22,6 @@ export function getErrorMessage(
  * network / 5xx errors so the UI can render the right fallback.
  */
 export function isUnauthorizedError(error: unknown): boolean {
-  const axiosError = error as AxiosError | undefined
+  const axiosError = error as AxiosError<ErrorResponse> | undefined
   return axiosError?.response?.status === 401
 }

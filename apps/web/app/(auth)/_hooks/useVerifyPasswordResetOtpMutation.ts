@@ -21,24 +21,16 @@ export function useVerifyPasswordResetOtpMutation() {
     mutationFn: (payload: VerifyPasswordResetOtpRequest) =>
       verifyPasswordResetOtp(payload),
     onSuccess: (response) => {
-      if (response.success) {
-        toast.add({
-          type: "success",
-          title: "OTP Verified",
-          description:
-            response.message ||
-            "OTP verified successfully. You can now set your new password.",
-        })
-        const resetToken = response.data.passwordResetToken
-        sessionStorage.setItem(PASSWORD_RESET_TOKEN_KEY, resetToken)
-        router.push("/forgot-password/reset")
-      } else {
-        toast.add({
-          type: "error",
-          title: "Verification Failed",
-          description: response.message || "Invalid or expired OTP",
-        })
-      }
+      toast.add({
+        type: "success",
+        title: "OTP Verified",
+        description:
+          response.message ||
+          "OTP verified successfully. You can now set your new password.",
+      })
+      const resetToken = response.data.passwordResetToken
+      sessionStorage.setItem(PASSWORD_RESET_TOKEN_KEY, resetToken)
+      router.push("/forgot-password/reset")
     },
     onError: (error) => {
       const message = getErrorMessage(error, "Invalid or expired OTP code.")

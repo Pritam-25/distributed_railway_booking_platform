@@ -21,15 +21,7 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { InternalServerErrorResponseError } from "./internalServerErrorResponseError"
-import type { ResponseMeta } from "./responseMeta"
 
-/**
- * Error Response Envelope (INTERNAL_ERROR)
- */
-export interface InternalServerErrorResponse {
-  success: false
-  /** Error Detail Payload */
-  error: InternalServerErrorResponseError
-  meta: ResponseMeta
+export interface VerifyPasswordResetOtpResponse {
+  passwordResetToken: string
 }

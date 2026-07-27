@@ -16,22 +16,14 @@ export function useResetPasswordMutation() {
   return useMutation({
     mutationFn: (payload: ResetPasswordRequest) => resetPassword(payload),
     onSuccess: (response) => {
-      if (response.success) {
-        toast.add({
-          type: "success",
-          title: "Password Updated",
-          description:
-            response.message ||
-            "Your password has been reset successfully! Please log in.",
-        })
-        router.push("/login")
-      } else {
-        toast.add({
-          type: "error",
-          title: "Reset Failed",
-          description: response.message || "Failed to reset password.",
-        })
-      }
+      toast.add({
+        type: "success",
+        title: "Password Updated",
+        description:
+          response.message ||
+          "Your password has been reset successfully! Please log in.",
+      })
+      router.push("/login")
     },
     onError: (error) => {
       const message = getErrorMessage(

@@ -21,7 +21,7 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { ForgotPassword200Data } from "./forgotPassword200Data"
+import type { ForgotPasswordResponse } from "./forgotPasswordResponse"
 import type { ResponseMeta } from "./responseMeta"
 
 /**
@@ -30,6 +30,6 @@ import type { ResponseMeta } from "./responseMeta"
 export type ForgotPassword200 = {
   success: true
   message: string
-  data: ForgotPassword200Data
+  data: ForgotPasswordResponse
   meta: ResponseMeta
 }

@@ -14,10 +14,11 @@ import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { VerifyPasswordResetOtpFormSchema } from "@/lib/schemas"
 import { Loader2, ShieldCheck } from "lucide-react"
-import { type VerifyPasswordResetOtpRequest } from "@/generated"
+
 import { toast } from "@/components/ui/toast"
 import { useRouter } from "next/navigation"
 import { useVerifyPasswordResetOtpMutation } from "@/app/(auth)/_hooks"
+import { VerifyPasswordResetOtpRequest } from "@/generated"
 
 interface VerifyPasswordResetOtpFormProps {
   email?: string

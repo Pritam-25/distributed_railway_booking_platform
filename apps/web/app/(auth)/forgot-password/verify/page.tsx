@@ -7,7 +7,7 @@ interface PageProps {
 
 export default async function VerifyPasswordResetOtpPage({
   searchParams,
-}: PageProps) {
+}: Readonly<PageProps>) {
   const { email, sessionId } = await searchParams
 
   if (!sessionId) {

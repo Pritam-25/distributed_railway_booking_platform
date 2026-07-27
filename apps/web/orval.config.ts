@@ -4,6 +4,9 @@ export default defineConfig({
   apiGateway: {
     input: {
       target: "../api-gateway/openapi.json",
+      override: {
+        transformer: "./scripts/orval-transformer.ts",
+      },
     },
     output: {
       mode: "tags-split",

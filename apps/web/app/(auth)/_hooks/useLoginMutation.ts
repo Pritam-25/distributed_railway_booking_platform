@@ -31,22 +31,14 @@ export function useLoginMutation({
   return useMutation({
     mutationFn: (payload: LoginRequest) => login(payload),
     onSuccess: (response) => {
-      if (response.success) {
-        toast.add({
-          type: "success",
-          title: "Welcome back!",
-          description: response.message || "Login successful.",
-        })
-        queryClient.invalidateQueries({ queryKey: profileKeys.all })
-        queryClient.invalidateQueries({ queryKey: sessionKeys.all })
-        router.push(safeRedirectTarget)
-      } else {
-        toast.add({
-          type: "error",
-          title: "Login Error",
-          description: response.message || "Invalid credentials",
-        })
-      }
+      toast.add({
+        type: "success",
+        title: "Welcome back!",
+        description: response.message || "Login successful.",
+      })
+      queryClient.invalidateQueries({ queryKey: profileKeys.all })
+      queryClient.invalidateQueries({ queryKey: sessionKeys.all })
+      router.push(safeRedirectTarget)
     },
     onError: (error) => {
       const message = getErrorMessage(error, "Invalid email or password.")

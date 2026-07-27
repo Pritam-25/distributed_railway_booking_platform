@@ -16,23 +16,13 @@ export function useSignupMutation() {
   return useMutation({
     mutationFn: (payload: RegisterRequest) => sendOtp(payload),
     onSuccess: (response, variables) => {
-      if (response.success) {
-        toast.add({
-          type: "success",
-          title: "OTP Sent",
-          description:
-            response.message || "Verification code sent to your email.",
-        })
-        router.push(
-          `/verify-email?email=${encodeURIComponent(variables.email)}`
-        )
-      } else {
-        toast.add({
-          type: "error",
-          title: "Registration Error",
-          description: response.message || "Failed to send OTP",
-        })
-      }
+      toast.add({
+        type: "success",
+        title: "OTP Sent",
+        description:
+          response.message || "Verification code sent to your email.",
+      })
+      router.push(`/verify-email?email=${encodeURIComponent(variables.email)}`)
     },
     onError: (error) => {
       const message = getErrorMessage(

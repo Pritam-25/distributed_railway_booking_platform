@@ -21,15 +21,7 @@
  *
  * OpenAPI spec version: 1.0.0
  */
-import type { ResponseMeta } from "./responseMeta"
-import type { RevokeSession404Error } from "./revokeSession404Error"
 
-/**
- * Error Response Envelope (NOT_FOUND)
- */
-export type RevokeSession404 = {
-  success: false
-  /** Error Detail Payload */
-  error: RevokeSession404Error
-  meta: ResponseMeta
+export interface ForgotPasswordResponse {
+  sessionId: string
 }

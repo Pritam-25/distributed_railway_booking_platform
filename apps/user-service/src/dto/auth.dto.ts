@@ -1,6 +1,41 @@
 import "@irctc/openapi";
 import { z } from "zod";
 import type { UserResponseDto } from "@dto";
+/**
+ * Reusable email schema
+ */
+
+export const emailSchema = z
+  .email("Invalid email format")
+  .trim()
+  .openapi({ example: "jhon@example.com" });
+
+/**
+ * Reusable uuid schema
+ */
+export const uuidSchema = z.uuid("Invalid UUID format").openapi({
+  example: "550e8400-e29b-41d4-a716-446655440000",
+});
+
+/**
+ * Reusable first name schema
+ */
+export const firstNameSchema = z
+  .string()
+  .trim()
+  .min(3, "First name must be at least 3 characters long")
+  .max(50, "First name must not exceed 50 characters")
+  .openapi({ example: "Jhon" });
+
+/**
+ * Reusable last name schema
+ */
+export const lastNameSchema = z
+  .string()
+  .trim()
+  .min(2, "Last name must be at least 2 characters long")
+  .max(50, "Last name must not exceed 50 characters")
+  .openapi({ example: "Doe" });
 
 /**
  * Reusable Password Schema
@@ -23,24 +58,23 @@ export const passwordSchema = z
   });
 
 /**
+ * Reusable OTP Schema
+ * - Must be exactly 6 digits
+ */
+export const otpSchema = z
+  .string()
+  .length(6, "OTP must be exactly 6 digits")
+  .regex(/^\d{6}$/, "OTP must contain only numbers")
+  .openapi({ example: "123456" });
+
+/**
  * Registration Schema for User Sign-Up
  */
 export const RegisterSchema = z
   .object({
-    firstName: z
-      .string()
-      .min(3, "First name must be at least 3 characters")
-      .max(50, "First name must not exceed 50 characters")
-      .openapi({ example: "Jhon" }),
-    lastName: z
-      .string()
-      .min(2, "Last name must be at least 2 characters")
-      .max(50, "Last name must not exceed 50 characters")
-      .openapi({ example: "Doe" }),
-    email: z
-      .email("Invalid email format")
-      .trim()
-      .openapi({ example: "jhon@example.com" }),
+    firstName: firstNameSchema,
+    lastName: lastNameSchema,
+    email: emailSchema,
     password: passwordSchema,
   })
   .openapi("RegisterRequest");
@@ -52,10 +86,7 @@ export type RegisterRequestDto = z.infer<typeof RegisterSchema>;
  */
 export const LoginSchema = z
   .object({
-    email: z
-      .email("Invalid email format")
-      .trim()
-      .openapi({ example: "jhon@example.com" }),
+    email: emailSchema,
     password: passwordSchema,
   })
   .openapi("LoginRequest");
@@ -67,11 +98,7 @@ export type LoginRequestDto = z.infer<typeof LoginSchema>;
  */
 export const VerifyOtpRequestSchema = z
   .object({
-    otp: z
-      .string()
-      .length(6, "OTP must be exactly 6 digits")
-      .regex(/^\d{6}$/, "OTP must contain only numbers")
-      .openapi({ example: "123456" }),
+    otp: otpSchema,
   })
   .openapi("VerifyOtpRequest");
 
@@ -90,42 +117,32 @@ export interface AuthResponseDto {
  */
 export const SessionSummarySchema = z
   .object({
-    sessionId: z.uuid().openapi({
-      example: "550e8400-e29b-41d4-a716-446655440000",
+    sessionId: uuidSchema,
+    userId: uuidSchema,
+    fingerprint: z.string().openapi({
+      example:
+        "9b32928e81333d238159cd131c9551adce20bd02b90d4a6a89d482ff4c10fba7",
     }),
-    userId: z.uuid().openapi({
-      example: "550e8400-e29b-41d4-a716-446655440000",
+    ipAddress: z.string().openapi({ example: "192:168:1:1" }),
+    userAgent: z.string().openapi({
+      example:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
     }),
-    fingerprint: z.string().openapi({ example: "device-fingerprint" }),
-    ipAddress: z.string().openapi({ example: "client-ip-address" }),
-    userAgent: z.string().openapi({ example: "Mozilla/5.0..." }),
     location: z.string().openapi({ example: "New Delhi, IN" }),
-    createdAt: z.string().openapi({ example: "2026-07-24T00:00:00.000Z" }),
-    lastUsedAt: z.string().openapi({ example: "2026-07-24T12:00:00.000Z" }),
-    expiresAt: z.string().openapi({ example: "2026-08-23T12:00:00.000Z" }),
+    createdAt: z.date().openapi({ example: "2026-07-24T00:00:00.000Z" }),
+    lastUsedAt: z.date().openapi({ example: "2026-07-24T12:00:00.000Z" }),
+    expiresAt: z.date().openapi({ example: "2026-08-23T12:00:00.000Z" }),
   })
   .openapi("SessionSummary");
 
 export type SessionSummaryDto = z.infer<typeof SessionSummarySchema>;
 
 /**
- * Active session payload returned to clients.
- */
-export const ActiveSessionSchema = SessionSummarySchema.extend({
-  isCurrent: z.boolean(),
-}).openapi("ActiveSession");
-
-export type ActiveSessionDto = z.infer<typeof ActiveSessionSchema>;
-
-/**
  * Forgot Password Request DTO Schema
  */
 export const ForgotPasswordRequestSchema = z
   .object({
-    email: z
-      .email("Invalid email format")
-      .trim()
-      .openapi({ example: "rahul.sharma@example.com" }),
+    email: emailSchema,
   })
   .openapi("ForgotPasswordRequest");
 
@@ -138,14 +155,8 @@ export type ForgotPasswordRequestDto = z.infer<
  */
 export const VerifyPasswordResetOtpRequestSchema = z
   .object({
-    sessionId: z.uuid("Invalid session ID format").openapi({
-      example: "550e8400-e29b-41d4-a716-446655440000",
-    }),
-    otp: z
-      .string()
-      .length(6, "OTP must be exactly 6 digits")
-      .regex(/^\d{6}$/, "OTP must contain only numbers")
-      .openapi({ example: "123456" }),
+    sessionId: uuidSchema,
+    otp: otpSchema,
   })
   .openapi("VerifyPasswordResetOtpRequest");
 
@@ -158,9 +169,7 @@ export type VerifyPasswordResetOtpRequestDto = z.infer<
  */
 export const ResetPasswordRequestSchema = z
   .object({
-    passwordResetToken: z.uuid("Invalid reset token format").openapi({
-      example: "550e8400-e29b-41d4-a716-446655440000",
-    }),
+    passwordResetToken: uuidSchema,
     password: passwordSchema,
     confirmPassword: passwordSchema,
   })
@@ -173,3 +182,30 @@ export const ResetPasswordRequestSchema = z
 export type ResetPasswordRequestDto = z.infer<
   typeof ResetPasswordRequestSchema
 >;
+
+/**
+ * Active session payload returned to clients.
+ */
+export const ActiveSessionSchema = SessionSummarySchema.extend({
+  isCurrent: z.boolean().openapi({ example: true }),
+}).openapi("ActiveSession");
+
+export type ActiveSessionDto = z.infer<typeof ActiveSessionSchema>;
+
+/**
+ * Forgot Password Response Schema
+ */
+export const ForgotPasswordResponseSchema = z
+  .object({
+    sessionId: uuidSchema,
+  })
+  .openapi("ForgotPasswordResponse");
+
+/**
+ * Verify Password Reset OTP Response Schema
+ */
+export const VerifyPasswordResetOtpResponseSchema = z
+  .object({
+    passwordResetToken: uuidSchema,
+  })
+  .openapi("VerifyPasswordResetOtpResponse");

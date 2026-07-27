@@ -98,7 +98,7 @@
           "email": {
             "type": "string",
             "format": "email",
-            "example": "rahul.sharma@example.com"
+            "example": "jhon@example.com"
           }
         },
         "required": ["email"]
@@ -146,42 +146,6 @@
         },
         "required": ["passwordResetToken", "password", "confirmPassword"]
       },
-      "UserResponse": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "example": "550e8400-e29b-41d4-a716-446655440000"
-          },
-          "firstName": {
-            "type": "string",
-            "example": "Jhon"
-          },
-          "lastName": {
-            "type": "string",
-            "example": "Doe"
-          },
-          "email": {
-            "type": "string",
-            "format": "email",
-            "example": "jhon@example.com"
-          },
-          "createdAt": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "string"
-              }
-            ],
-            "example": "2026-07-24T00:00:00.000Z"
-          }
-        },
-        "required": ["id", "firstName", "lastName", "email", "createdAt"]
-      },
       "UpdateProfileRequest": {
         "type": "object",
         "properties": {
@@ -197,7 +161,8 @@
             "maxLength": 50,
             "example": "Doe"
           }
-        }
+        },
+        "required": ["firstName", "lastName"]
       },
       "SessionSummary": {
         "type": "object",
@@ -214,15 +179,15 @@
           },
           "fingerprint": {
             "type": "string",
-            "example": "device-fingerprint"
+            "example": "9b32928e81333d238159cd131c9551adce20bd02b90d4a6a89d482ff4c10fba7"
           },
           "ipAddress": {
             "type": "string",
-            "example": "client-ip-address"
+            "example": "192:168:1:1"
           },
           "userAgent": {
             "type": "string",
-            "example": "Mozilla/5.0..."
+            "example": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
           },
           "location": {
             "type": "string",
@@ -230,14 +195,17 @@
           },
           "createdAt": {
             "type": "string",
+            "format": "date-time",
             "example": "2026-07-24T00:00:00.000Z"
           },
           "lastUsedAt": {
             "type": "string",
+            "format": "date-time",
             "example": "2026-07-24T12:00:00.000Z"
           },
           "expiresAt": {
             "type": "string",
+            "format": "date-time",
             "example": "2026-08-23T12:00:00.000Z"
           }
         },
@@ -262,7 +230,8 @@
             "type": "object",
             "properties": {
               "isCurrent": {
-                "type": "boolean"
+                "type": "boolean",
+                "example": true
               }
             },
             "required": ["isCurrent"]
@@ -323,129 +292,56 @@
         "type": "object",
         "properties": {}
       },
-      "BadRequestErrorResponse": {
+      "UserResponse": {
         "type": "object",
         "properties": {
-          "success": {
-            "type": "boolean",
-            "enum": [false],
-            "example": false
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
           },
-          "error": {
-            "type": "object",
-            "properties": {
-              "code": {
-                "type": "string",
-                "example": "BAD_REQUEST"
-              },
-              "message": {
-                "type": "string",
-                "example": "Bad request."
-              },
-              "details": {}
-            },
-            "required": ["code", "message"],
-            "description": "Error Detail Payload"
+          "firstName": {
+            "type": "string",
+            "example": "Jhon"
           },
-          "meta": {
-            "$ref": "#/components/schemas/ResponseMeta"
+          "lastName": {
+            "type": "string",
+            "example": "Doe"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "jhon@example.com"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-07-24T00:00:00.000Z"
           }
         },
-        "required": ["success", "error", "meta"],
-        "description": "Error Response Envelope (BAD_REQUEST)"
+        "required": ["id", "firstName", "lastName", "email", "createdAt"]
       },
-      "RateLimitErrorResponse": {
+      "ForgotPasswordResponse": {
         "type": "object",
         "properties": {
-          "success": {
-            "type": "boolean",
-            "enum": [false],
-            "example": false
-          },
-          "error": {
-            "type": "object",
-            "properties": {
-              "code": {
-                "type": "string",
-                "example": "RATE_LIMIT_EXCEEDED"
-              },
-              "message": {
-                "type": "string",
-                "example": "Rate limit exceeded."
-              },
-              "details": {}
-            },
-            "required": ["code", "message"],
-            "description": "Error Detail Payload"
-          },
-          "meta": {
-            "$ref": "#/components/schemas/ResponseMeta"
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
           }
         },
-        "required": ["success", "error", "meta"],
-        "description": "Error Response Envelope (RATE_LIMIT_EXCEEDED)"
+        "required": ["sessionId"]
       },
-      "InternalServerErrorResponse": {
+      "VerifyPasswordResetOtpResponse": {
         "type": "object",
         "properties": {
-          "success": {
-            "type": "boolean",
-            "enum": [false],
-            "example": false
-          },
-          "error": {
-            "type": "object",
-            "properties": {
-              "code": {
-                "type": "string",
-                "example": "INTERNAL_ERROR"
-              },
-              "message": {
-                "type": "string",
-                "example": "Internal server error."
-              },
-              "details": {}
-            },
-            "required": ["code", "message"],
-            "description": "Error Detail Payload"
-          },
-          "meta": {
-            "$ref": "#/components/schemas/ResponseMeta"
+          "passwordResetToken": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
           }
         },
-        "required": ["success", "error", "meta"],
-        "description": "Error Response Envelope (INTERNAL_ERROR)"
-      },
-      "UnauthorizedErrorResponse": {
-        "type": "object",
-        "properties": {
-          "success": {
-            "type": "boolean",
-            "enum": [false],
-            "example": false
-          },
-          "error": {
-            "type": "object",
-            "properties": {
-              "code": {
-                "type": "string",
-                "example": "UNAUTHORIZED"
-              },
-              "message": {
-                "type": "string",
-                "example": "Unauthorized."
-              },
-              "details": {}
-            },
-            "required": ["code", "message"],
-            "description": "Error Detail Payload"
-          },
-          "meta": {
-            "$ref": "#/components/schemas/ResponseMeta"
-          }
-        },
-        "required": ["success", "error", "meta"],
-        "description": "Error Response Envelope (UNAUTHORIZED)"
+        "required": ["passwordResetToken"]
       }
     },
     "parameters": {}
@@ -500,7 +396,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BadRequestErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "BAD_REQUEST"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Bad request."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (BAD_REQUEST)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "BadRequestErrorResponse"
                 }
               }
             }
@@ -538,7 +464,8 @@
                     }
                   },
                   "required": ["success", "error", "meta"],
-                  "description": "Error Response Envelope (USER_ALREADY_EXISTS)"
+                  "description": "Error Response Envelope (USER_ALREADY_EXISTS)",
+                  "x-sdk-ref": "ErrorResponse"
                 }
               }
             }
@@ -548,7 +475,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RateLimitErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "RATE_LIMIT_EXCEEDED"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Rate limit exceeded."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (RATE_LIMIT_EXCEEDED)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "RateLimitErrorResponse"
                 }
               }
             }
@@ -558,7 +515,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InternalServerErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "INTERNAL_ERROR"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Internal server error."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (INTERNAL_ERROR)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "InternalServerErrorResponse"
                 }
               }
             }
@@ -643,7 +630,8 @@
                     }
                   },
                   "required": ["success", "error", "meta"],
-                  "description": "Error Response Envelope (INVALID_INPUT)"
+                  "description": "Error Response Envelope (INVALID_INPUT)",
+                  "x-sdk-ref": "ErrorResponse"
                 }
               }
             }
@@ -653,7 +641,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RateLimitErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "RATE_LIMIT_EXCEEDED"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Rate limit exceeded."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (RATE_LIMIT_EXCEEDED)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "RateLimitErrorResponse"
                 }
               }
             }
@@ -663,7 +681,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InternalServerErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "INTERNAL_ERROR"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Internal server error."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (INTERNAL_ERROR)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "InternalServerErrorResponse"
                 }
               }
             }
@@ -720,7 +768,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BadRequestErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "BAD_REQUEST"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Bad request."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (BAD_REQUEST)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "BadRequestErrorResponse"
                 }
               }
             }
@@ -758,7 +836,8 @@
                     }
                   },
                   "required": ["success", "error", "meta"],
-                  "description": "Error Response Envelope (UNAUTHORIZED)"
+                  "description": "Error Response Envelope (UNAUTHORIZED)",
+                  "x-sdk-ref": "ErrorResponse"
                 }
               }
             }
@@ -768,7 +847,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RateLimitErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "RATE_LIMIT_EXCEEDED"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Rate limit exceeded."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (RATE_LIMIT_EXCEEDED)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "RateLimitErrorResponse"
                 }
               }
             }
@@ -778,7 +887,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InternalServerErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "INTERNAL_ERROR"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Internal server error."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (INTERNAL_ERROR)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "InternalServerErrorResponse"
                 }
               }
             }
@@ -826,7 +965,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BadRequestErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "BAD_REQUEST"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Bad request."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (BAD_REQUEST)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "BadRequestErrorResponse"
                 }
               }
             }
@@ -864,7 +1033,8 @@
                     }
                   },
                   "required": ["success", "error", "meta"],
-                  "description": "Error Response Envelope (UNAUTHORIZED)"
+                  "description": "Error Response Envelope (UNAUTHORIZED)",
+                  "x-sdk-ref": "ErrorResponse"
                 }
               }
             }
@@ -874,7 +1044,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RateLimitErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "RATE_LIMIT_EXCEEDED"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Rate limit exceeded."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (RATE_LIMIT_EXCEEDED)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "RateLimitErrorResponse"
                 }
               }
             }
@@ -884,7 +1084,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InternalServerErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "INTERNAL_ERROR"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Internal server error."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (INTERNAL_ERROR)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "InternalServerErrorResponse"
                 }
               }
             }
@@ -943,7 +1173,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BadRequestErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "BAD_REQUEST"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Bad request."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (BAD_REQUEST)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "BadRequestErrorResponse"
                 }
               }
             }
@@ -953,7 +1213,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "UNAUTHORIZED"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Unauthorized."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (UNAUTHORIZED)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "UnauthorizedErrorResponse"
                 }
               }
             }
@@ -963,7 +1253,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RateLimitErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "RATE_LIMIT_EXCEEDED"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Rate limit exceeded."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (RATE_LIMIT_EXCEEDED)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "RateLimitErrorResponse"
                 }
               }
             }
@@ -973,7 +1293,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InternalServerErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "INTERNAL_ERROR"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Internal server error."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (INTERNAL_ERROR)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "InternalServerErrorResponse"
                 }
               }
             }
@@ -1041,7 +1391,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BadRequestErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "BAD_REQUEST"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Bad request."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (BAD_REQUEST)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "BadRequestErrorResponse"
                 }
               }
             }
@@ -1051,7 +1431,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "UNAUTHORIZED"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Unauthorized."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (UNAUTHORIZED)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "UnauthorizedErrorResponse"
                 }
               }
             }
@@ -1089,7 +1499,8 @@
                     }
                   },
                   "required": ["success", "error", "meta"],
-                  "description": "Error Response Envelope (NOT_FOUND)"
+                  "description": "Error Response Envelope (NOT_FOUND)",
+                  "x-sdk-ref": "ErrorResponse"
                 }
               }
             }
@@ -1099,7 +1510,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RateLimitErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "RATE_LIMIT_EXCEEDED"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Rate limit exceeded."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (RATE_LIMIT_EXCEEDED)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "RateLimitErrorResponse"
                 }
               }
             }
@@ -1109,7 +1550,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InternalServerErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "INTERNAL_ERROR"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Internal server error."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (INTERNAL_ERROR)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "InternalServerErrorResponse"
                 }
               }
             }
@@ -1157,7 +1628,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BadRequestErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "BAD_REQUEST"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Bad request."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (BAD_REQUEST)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "BadRequestErrorResponse"
                 }
               }
             }
@@ -1167,7 +1668,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RateLimitErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "RATE_LIMIT_EXCEEDED"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Rate limit exceeded."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (RATE_LIMIT_EXCEEDED)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "RateLimitErrorResponse"
                 }
               }
             }
@@ -1177,7 +1708,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InternalServerErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "INTERNAL_ERROR"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Internal server error."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (INTERNAL_ERROR)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "InternalServerErrorResponse"
                 }
               }
             }
@@ -1225,7 +1786,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BadRequestErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "BAD_REQUEST"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Bad request."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (BAD_REQUEST)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "BadRequestErrorResponse"
                 }
               }
             }
@@ -1235,7 +1826,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RateLimitErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "RATE_LIMIT_EXCEEDED"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Rate limit exceeded."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (RATE_LIMIT_EXCEEDED)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "RateLimitErrorResponse"
                 }
               }
             }
@@ -1245,7 +1866,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InternalServerErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "INTERNAL_ERROR"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Internal server error."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (INTERNAL_ERROR)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "InternalServerErrorResponse"
                 }
               }
             }
@@ -1285,15 +1936,7 @@
                       "example": "OTP sent successfully to your registered email"
                     },
                     "data": {
-                      "type": "object",
-                      "properties": {
-                        "sessionId": {
-                          "type": "string",
-                          "format": "uuid",
-                          "example": "550e8400-e29b-41d4-a716-446655440000"
-                        }
-                      },
-                      "required": ["sessionId"]
+                      "$ref": "#/components/schemas/ForgotPasswordResponse"
                     },
                     "meta": {
                       "$ref": "#/components/schemas/ResponseMeta"
@@ -1310,7 +1953,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BadRequestErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "BAD_REQUEST"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Bad request."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (BAD_REQUEST)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "BadRequestErrorResponse"
                 }
               }
             }
@@ -1348,7 +2021,8 @@
                     }
                   },
                   "required": ["success", "error", "meta"],
-                  "description": "Error Response Envelope (NOT_FOUND)"
+                  "description": "Error Response Envelope (NOT_FOUND)",
+                  "x-sdk-ref": "ErrorResponse"
                 }
               }
             }
@@ -1358,7 +2032,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RateLimitErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "RATE_LIMIT_EXCEEDED"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Rate limit exceeded."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (RATE_LIMIT_EXCEEDED)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "RateLimitErrorResponse"
                 }
               }
             }
@@ -1368,7 +2072,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InternalServerErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "INTERNAL_ERROR"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Internal server error."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (INTERNAL_ERROR)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "InternalServerErrorResponse"
                 }
               }
             }
@@ -1408,15 +2142,7 @@
                       "example": "OTP verified successfully"
                     },
                     "data": {
-                      "type": "object",
-                      "properties": {
-                        "passwordResetToken": {
-                          "type": "string",
-                          "format": "uuid",
-                          "example": "550e8400-e29b-41d4-a716-446655440000"
-                        }
-                      },
-                      "required": ["passwordResetToken"]
+                      "$ref": "#/components/schemas/VerifyPasswordResetOtpResponse"
                     },
                     "meta": {
                       "$ref": "#/components/schemas/ResponseMeta"
@@ -1461,7 +2187,8 @@
                     }
                   },
                   "required": ["success", "error", "meta"],
-                  "description": "Error Response Envelope (INVALID_INPUT)"
+                  "description": "Error Response Envelope (INVALID_INPUT)",
+                  "x-sdk-ref": "ErrorResponse"
                 }
               }
             }
@@ -1471,7 +2198,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RateLimitErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "RATE_LIMIT_EXCEEDED"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Rate limit exceeded."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (RATE_LIMIT_EXCEEDED)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "RateLimitErrorResponse"
                 }
               }
             }
@@ -1481,7 +2238,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InternalServerErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "INTERNAL_ERROR"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Internal server error."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (INTERNAL_ERROR)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "InternalServerErrorResponse"
                 }
               }
             }
@@ -1538,7 +2325,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BadRequestErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "BAD_REQUEST"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Bad request."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (BAD_REQUEST)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "BadRequestErrorResponse"
                 }
               }
             }
@@ -1548,7 +2365,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RateLimitErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "RATE_LIMIT_EXCEEDED"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Rate limit exceeded."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (RATE_LIMIT_EXCEEDED)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "RateLimitErrorResponse"
                 }
               }
             }
@@ -1558,7 +2405,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InternalServerErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "INTERNAL_ERROR"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Internal server error."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (INTERNAL_ERROR)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "InternalServerErrorResponse"
                 }
               }
             }
@@ -1614,7 +2491,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BadRequestErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "BAD_REQUEST"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Bad request."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (BAD_REQUEST)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "BadRequestErrorResponse"
                 }
               }
             }
@@ -1624,7 +2531,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "UNAUTHORIZED"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Unauthorized."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (UNAUTHORIZED)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "UnauthorizedErrorResponse"
                 }
               }
             }
@@ -1662,7 +2599,8 @@
                     }
                   },
                   "required": ["success", "error", "meta"],
-                  "description": "Error Response Envelope (NOT_FOUND)"
+                  "description": "Error Response Envelope (NOT_FOUND)",
+                  "x-sdk-ref": "ErrorResponse"
                 }
               }
             }
@@ -1672,7 +2610,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RateLimitErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "RATE_LIMIT_EXCEEDED"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Rate limit exceeded."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (RATE_LIMIT_EXCEEDED)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "RateLimitErrorResponse"
                 }
               }
             }
@@ -1682,7 +2650,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InternalServerErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "INTERNAL_ERROR"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Internal server error."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (INTERNAL_ERROR)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "InternalServerErrorResponse"
                 }
               }
             }
@@ -1745,7 +2743,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BadRequestErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "BAD_REQUEST"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Bad request."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (BAD_REQUEST)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "BadRequestErrorResponse"
                 }
               }
             }
@@ -1755,7 +2783,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "UNAUTHORIZED"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Unauthorized."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (UNAUTHORIZED)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "UnauthorizedErrorResponse"
                 }
               }
             }
@@ -1765,7 +2823,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RateLimitErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "RATE_LIMIT_EXCEEDED"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Rate limit exceeded."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (RATE_LIMIT_EXCEEDED)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "RateLimitErrorResponse"
                 }
               }
             }
@@ -1775,7 +2863,37 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/InternalServerErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "INTERNAL_ERROR"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Internal server error."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (INTERNAL_ERROR)",
+                  "x-sdk-ref": "ErrorResponse",
+                  "refId": "InternalServerErrorResponse"
                 }
               }
             }

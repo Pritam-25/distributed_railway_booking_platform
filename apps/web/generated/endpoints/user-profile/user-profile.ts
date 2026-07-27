@@ -38,12 +38,8 @@ import type {
 } from "@tanstack/react-query"
 
 import type {
-  BadRequestErrorResponse,
+  ErrorResponse,
   GetProfile200,
-  GetProfile404,
-  InternalServerErrorResponse,
-  RateLimitErrorResponse,
-  UnauthorizedErrorResponse,
   UpdateProfile200,
   UpdateProfileRequest,
 } from "../../model"
@@ -84,12 +80,7 @@ export const getProfile = (
 }
 
 export const getGetProfileMutationOptions = <
-  TError =
-    | BadRequestErrorResponse
-    | UnauthorizedErrorResponse
-    | GetProfile404
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -128,25 +119,12 @@ export type GetProfileMutationResult = NonNullable<
   Awaited<ReturnType<typeof getProfile>>
 >
 
-export type GetProfileMutationError =
-  | BadRequestErrorResponse
-  | UnauthorizedErrorResponse
-  | GetProfile404
-  | RateLimitErrorResponse
-  | InternalServerErrorResponse
+export type GetProfileMutationError = ErrorResponse
 
 /**
  * @summary Get Current User Profile
  */
-export const useGetProfile = <
-  TError =
-    | BadRequestErrorResponse
-    | UnauthorizedErrorResponse
-    | GetProfile404
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
-  TContext = unknown,
->(
+export const useGetProfile = <TError = ErrorResponse, TContext = unknown>(
   options?: {
     mutation?: UseMutationOptions<
       Awaited<ReturnType<typeof getProfile>>,
@@ -193,11 +171,7 @@ export const getUpdateProfileQueryKey = (
 
 export const getUpdateProfileQueryOptions = <
   TData = Awaited<ReturnType<typeof updateProfile>>,
-  TError =
-    | BadRequestErrorResponse
-    | UnauthorizedErrorResponse
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   updateProfileRequest?: UpdateProfileRequest,
   options?: {
@@ -226,19 +200,11 @@ export const getUpdateProfileQueryOptions = <
 export type UpdateProfileQueryResult = NonNullable<
   Awaited<ReturnType<typeof updateProfile>>
 >
-export type UpdateProfileQueryError =
-  | BadRequestErrorResponse
-  | UnauthorizedErrorResponse
-  | RateLimitErrorResponse
-  | InternalServerErrorResponse
+export type UpdateProfileQueryError = ErrorResponse
 
 export function useUpdateProfile<
   TData = Awaited<ReturnType<typeof updateProfile>>,
-  TError =
-    | BadRequestErrorResponse
-    | UnauthorizedErrorResponse
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   updateProfileRequest: undefined | UpdateProfileRequest,
   options: {
@@ -261,11 +227,7 @@ export function useUpdateProfile<
 }
 export function useUpdateProfile<
   TData = Awaited<ReturnType<typeof updateProfile>>,
-  TError =
-    | BadRequestErrorResponse
-    | UnauthorizedErrorResponse
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   updateProfileRequest?: UpdateProfileRequest,
   options?: {
@@ -288,11 +250,7 @@ export function useUpdateProfile<
 }
 export function useUpdateProfile<
   TData = Awaited<ReturnType<typeof updateProfile>>,
-  TError =
-    | BadRequestErrorResponse
-    | UnauthorizedErrorResponse
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   updateProfileRequest?: UpdateProfileRequest,
   options?: {
@@ -311,11 +269,7 @@ export function useUpdateProfile<
 
 export function useUpdateProfile<
   TData = Awaited<ReturnType<typeof updateProfile>>,
-  TError =
-    | BadRequestErrorResponse
-    | UnauthorizedErrorResponse
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   updateProfileRequest?: UpdateProfileRequest,
   options?: {

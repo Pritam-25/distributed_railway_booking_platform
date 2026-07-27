@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
-import { getProfile } from "@/generated"
+
 import { profileKeys } from "@/app/(protected)/profile/_hooks/keys"
+import { getProfile } from "@/generated"
 
 export { profileKeys }
 

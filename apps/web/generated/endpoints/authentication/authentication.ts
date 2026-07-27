@@ -38,33 +38,23 @@ import type {
 } from "@tanstack/react-query"
 
 import type {
-  BadRequestErrorResponse,
+  ErrorResponse,
   ForgotPassword200,
-  ForgotPassword404,
   ForgotPasswordRequest,
   GetSessions200,
-  InternalServerErrorResponse,
   Login200,
-  Login401,
   LoginRequest,
   Logout200,
   LogoutAll200,
-  RateLimitErrorResponse,
   RefreshToken200,
-  RefreshToken401,
   RegisterRequest,
   ResetPassword200,
   ResetPasswordRequest,
   RevokeSession200,
-  RevokeSession404,
   SendOtp200,
-  SendOtp409,
-  UnauthorizedErrorResponse,
   VerifyOtp200,
-  VerifyOtp400,
   VerifyOtpRequest,
   VerifyPasswordResetOtp200,
-  VerifyPasswordResetOtp400,
   VerifyPasswordResetOtpRequest,
 } from "../../model"
 
@@ -116,11 +106,7 @@ export const getSendOtpQueryKey = (registerRequest?: RegisterRequest) => {
 
 export const getSendOtpQueryOptions = <
   TData = Awaited<ReturnType<typeof sendOtp>>,
-  TError =
-    | BadRequestErrorResponse
-    | SendOtp409
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   registerRequest?: RegisterRequest,
   options?: {
@@ -148,19 +134,11 @@ export const getSendOtpQueryOptions = <
 export type SendOtpQueryResult = NonNullable<
   Awaited<ReturnType<typeof sendOtp>>
 >
-export type SendOtpQueryError =
-  | BadRequestErrorResponse
-  | SendOtp409
-  | RateLimitErrorResponse
-  | InternalServerErrorResponse
+export type SendOtpQueryError = ErrorResponse
 
 export function useSendOtp<
   TData = Awaited<ReturnType<typeof sendOtp>>,
-  TError =
-    | BadRequestErrorResponse
-    | SendOtp409
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   registerRequest: undefined | RegisterRequest,
   options: {
@@ -183,11 +161,7 @@ export function useSendOtp<
 }
 export function useSendOtp<
   TData = Awaited<ReturnType<typeof sendOtp>>,
-  TError =
-    | BadRequestErrorResponse
-    | SendOtp409
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   registerRequest?: RegisterRequest,
   options?: {
@@ -210,11 +184,7 @@ export function useSendOtp<
 }
 export function useSendOtp<
   TData = Awaited<ReturnType<typeof sendOtp>>,
-  TError =
-    | BadRequestErrorResponse
-    | SendOtp409
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   registerRequest?: RegisterRequest,
   options?: {
@@ -233,11 +203,7 @@ export function useSendOtp<
 
 export function useSendOtp<
   TData = Awaited<ReturnType<typeof sendOtp>>,
-  TError =
-    | BadRequestErrorResponse
-    | SendOtp409
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   registerRequest?: RegisterRequest,
   options?: {
@@ -286,7 +252,7 @@ export const getVerifyOtpQueryKey = (verifyOtpRequest?: VerifyOtpRequest) => {
 
 export const getVerifyOtpQueryOptions = <
   TData = Awaited<ReturnType<typeof verifyOtp>>,
-  TError = VerifyOtp400 | RateLimitErrorResponse | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   verifyOtpRequest?: VerifyOtpRequest,
   options?: {
@@ -315,12 +281,11 @@ export const getVerifyOtpQueryOptions = <
 export type VerifyOtpQueryResult = NonNullable<
   Awaited<ReturnType<typeof verifyOtp>>
 >
-export type VerifyOtpQueryError =
-  VerifyOtp400 | RateLimitErrorResponse | InternalServerErrorResponse
+export type VerifyOtpQueryError = ErrorResponse
 
 export function useVerifyOtp<
   TData = Awaited<ReturnType<typeof verifyOtp>>,
-  TError = VerifyOtp400 | RateLimitErrorResponse | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   verifyOtpRequest: undefined | VerifyOtpRequest,
   options: {
@@ -343,7 +308,7 @@ export function useVerifyOtp<
 }
 export function useVerifyOtp<
   TData = Awaited<ReturnType<typeof verifyOtp>>,
-  TError = VerifyOtp400 | RateLimitErrorResponse | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   verifyOtpRequest?: VerifyOtpRequest,
   options?: {
@@ -366,7 +331,7 @@ export function useVerifyOtp<
 }
 export function useVerifyOtp<
   TData = Awaited<ReturnType<typeof verifyOtp>>,
-  TError = VerifyOtp400 | RateLimitErrorResponse | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   verifyOtpRequest?: VerifyOtpRequest,
   options?: {
@@ -385,7 +350,7 @@ export function useVerifyOtp<
 
 export function useVerifyOtp<
   TData = Awaited<ReturnType<typeof verifyOtp>>,
-  TError = VerifyOtp400 | RateLimitErrorResponse | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   verifyOtpRequest?: VerifyOtpRequest,
   options?: {
@@ -434,11 +399,7 @@ export const getLoginQueryKey = (loginRequest?: LoginRequest) => {
 
 export const getLoginQueryOptions = <
   TData = Awaited<ReturnType<typeof login>>,
-  TError =
-    | BadRequestErrorResponse
-    | Login401
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   loginRequest?: LoginRequest,
   options?: {
@@ -464,19 +425,11 @@ export const getLoginQueryOptions = <
 }
 
 export type LoginQueryResult = NonNullable<Awaited<ReturnType<typeof login>>>
-export type LoginQueryError =
-  | BadRequestErrorResponse
-  | Login401
-  | RateLimitErrorResponse
-  | InternalServerErrorResponse
+export type LoginQueryError = ErrorResponse
 
 export function useLogin<
   TData = Awaited<ReturnType<typeof login>>,
-  TError =
-    | BadRequestErrorResponse
-    | Login401
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   loginRequest: undefined | LoginRequest,
   options: {
@@ -499,11 +452,7 @@ export function useLogin<
 }
 export function useLogin<
   TData = Awaited<ReturnType<typeof login>>,
-  TError =
-    | BadRequestErrorResponse
-    | Login401
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   loginRequest?: LoginRequest,
   options?: {
@@ -526,11 +475,7 @@ export function useLogin<
 }
 export function useLogin<
   TData = Awaited<ReturnType<typeof login>>,
-  TError =
-    | BadRequestErrorResponse
-    | Login401
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   loginRequest?: LoginRequest,
   options?: {
@@ -549,11 +494,7 @@ export function useLogin<
 
 export function useLogin<
   TData = Awaited<ReturnType<typeof login>>,
-  TError =
-    | BadRequestErrorResponse
-    | Login401
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   loginRequest?: LoginRequest,
   options?: {
@@ -595,11 +536,7 @@ export const getRefreshTokenQueryKey = () => {
 
 export const getRefreshTokenQueryOptions = <
   TData = Awaited<ReturnType<typeof refreshToken>>,
-  TError =
-    | BadRequestErrorResponse
-    | RefreshToken401
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(options?: {
   query?: Partial<
     UseQueryOptions<Awaited<ReturnType<typeof refreshToken>>, TError, TData>
@@ -624,19 +561,11 @@ export const getRefreshTokenQueryOptions = <
 export type RefreshTokenQueryResult = NonNullable<
   Awaited<ReturnType<typeof refreshToken>>
 >
-export type RefreshTokenQueryError =
-  | BadRequestErrorResponse
-  | RefreshToken401
-  | RateLimitErrorResponse
-  | InternalServerErrorResponse
+export type RefreshTokenQueryError = ErrorResponse
 
 export function useRefreshToken<
   TData = Awaited<ReturnType<typeof refreshToken>>,
-  TError =
-    | BadRequestErrorResponse
-    | RefreshToken401
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   options: {
     query: Partial<
@@ -658,11 +587,7 @@ export function useRefreshToken<
 }
 export function useRefreshToken<
   TData = Awaited<ReturnType<typeof refreshToken>>,
-  TError =
-    | BadRequestErrorResponse
-    | RefreshToken401
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   options?: {
     query?: Partial<
@@ -684,11 +609,7 @@ export function useRefreshToken<
 }
 export function useRefreshToken<
   TData = Awaited<ReturnType<typeof refreshToken>>,
-  TError =
-    | BadRequestErrorResponse
-    | RefreshToken401
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   options?: {
     query?: Partial<
@@ -706,11 +627,7 @@ export function useRefreshToken<
 
 export function useRefreshToken<
   TData = Awaited<ReturnType<typeof refreshToken>>,
-  TError =
-    | BadRequestErrorResponse
-    | RefreshToken401
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   options?: {
     query?: Partial<
@@ -746,11 +663,7 @@ export const getSessions = (
 }
 
 export const getGetSessionsMutationOptions = <
-  TError =
-    | BadRequestErrorResponse
-    | UnauthorizedErrorResponse
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -789,23 +702,12 @@ export type GetSessionsMutationResult = NonNullable<
   Awaited<ReturnType<typeof getSessions>>
 >
 
-export type GetSessionsMutationError =
-  | BadRequestErrorResponse
-  | UnauthorizedErrorResponse
-  | RateLimitErrorResponse
-  | InternalServerErrorResponse
+export type GetSessionsMutationError = ErrorResponse
 
 /**
  * @summary Get Active User Sessions
  */
-export const useGetSessions = <
-  TError =
-    | BadRequestErrorResponse
-    | UnauthorizedErrorResponse
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
-  TContext = unknown,
->(
+export const useGetSessions = <TError = ErrorResponse, TContext = unknown>(
   options?: {
     mutation?: UseMutationOptions<
       Awaited<ReturnType<typeof getSessions>>,
@@ -844,12 +746,7 @@ export const getRevokeSessionQueryKey = (sessionId: string) => {
 
 export const getRevokeSessionQueryOptions = <
   TData = Awaited<ReturnType<typeof revokeSession>>,
-  TError =
-    | BadRequestErrorResponse
-    | UnauthorizedErrorResponse
-    | RevokeSession404
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   sessionId: string,
   options?: {
@@ -882,21 +779,11 @@ export const getRevokeSessionQueryOptions = <
 export type RevokeSessionQueryResult = NonNullable<
   Awaited<ReturnType<typeof revokeSession>>
 >
-export type RevokeSessionQueryError =
-  | BadRequestErrorResponse
-  | UnauthorizedErrorResponse
-  | RevokeSession404
-  | RateLimitErrorResponse
-  | InternalServerErrorResponse
+export type RevokeSessionQueryError = ErrorResponse
 
 export function useRevokeSession<
   TData = Awaited<ReturnType<typeof revokeSession>>,
-  TError =
-    | BadRequestErrorResponse
-    | UnauthorizedErrorResponse
-    | RevokeSession404
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   sessionId: string,
   options: {
@@ -919,12 +806,7 @@ export function useRevokeSession<
 }
 export function useRevokeSession<
   TData = Awaited<ReturnType<typeof revokeSession>>,
-  TError =
-    | BadRequestErrorResponse
-    | UnauthorizedErrorResponse
-    | RevokeSession404
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   sessionId: string,
   options?: {
@@ -947,12 +829,7 @@ export function useRevokeSession<
 }
 export function useRevokeSession<
   TData = Awaited<ReturnType<typeof revokeSession>>,
-  TError =
-    | BadRequestErrorResponse
-    | UnauthorizedErrorResponse
-    | RevokeSession404
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   sessionId: string,
   options?: {
@@ -971,12 +848,7 @@ export function useRevokeSession<
 
 export function useRevokeSession<
   TData = Awaited<ReturnType<typeof revokeSession>>,
-  TError =
-    | BadRequestErrorResponse
-    | UnauthorizedErrorResponse
-    | RevokeSession404
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   sessionId: string,
   options?: {
@@ -1018,10 +890,7 @@ export const getLogoutQueryKey = () => {
 
 export const getLogoutQueryOptions = <
   TData = Awaited<ReturnType<typeof logout>>,
-  TError =
-    | BadRequestErrorResponse
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(options?: {
   query?: Partial<
     UseQueryOptions<Awaited<ReturnType<typeof logout>>, TError, TData>
@@ -1044,15 +913,11 @@ export const getLogoutQueryOptions = <
 }
 
 export type LogoutQueryResult = NonNullable<Awaited<ReturnType<typeof logout>>>
-export type LogoutQueryError =
-  BadRequestErrorResponse | RateLimitErrorResponse | InternalServerErrorResponse
+export type LogoutQueryError = ErrorResponse
 
 export function useLogout<
   TData = Awaited<ReturnType<typeof logout>>,
-  TError =
-    | BadRequestErrorResponse
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   options: {
     query: Partial<
@@ -1074,10 +939,7 @@ export function useLogout<
 }
 export function useLogout<
   TData = Awaited<ReturnType<typeof logout>>,
-  TError =
-    | BadRequestErrorResponse
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   options?: {
     query?: Partial<
@@ -1099,10 +961,7 @@ export function useLogout<
 }
 export function useLogout<
   TData = Awaited<ReturnType<typeof logout>>,
-  TError =
-    | BadRequestErrorResponse
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   options?: {
     query?: Partial<
@@ -1120,10 +979,7 @@ export function useLogout<
 
 export function useLogout<
   TData = Awaited<ReturnType<typeof logout>>,
-  TError =
-    | BadRequestErrorResponse
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   options?: {
     query?: Partial<
@@ -1164,10 +1020,7 @@ export const getLogoutAllQueryKey = () => {
 
 export const getLogoutAllQueryOptions = <
   TData = Awaited<ReturnType<typeof logoutAll>>,
-  TError =
-    | BadRequestErrorResponse
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(options?: {
   query?: Partial<
     UseQueryOptions<Awaited<ReturnType<typeof logoutAll>>, TError, TData>
@@ -1192,15 +1045,11 @@ export const getLogoutAllQueryOptions = <
 export type LogoutAllQueryResult = NonNullable<
   Awaited<ReturnType<typeof logoutAll>>
 >
-export type LogoutAllQueryError =
-  BadRequestErrorResponse | RateLimitErrorResponse | InternalServerErrorResponse
+export type LogoutAllQueryError = ErrorResponse
 
 export function useLogoutAll<
   TData = Awaited<ReturnType<typeof logoutAll>>,
-  TError =
-    | BadRequestErrorResponse
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   options: {
     query: Partial<
@@ -1222,10 +1071,7 @@ export function useLogoutAll<
 }
 export function useLogoutAll<
   TData = Awaited<ReturnType<typeof logoutAll>>,
-  TError =
-    | BadRequestErrorResponse
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   options?: {
     query?: Partial<
@@ -1247,10 +1093,7 @@ export function useLogoutAll<
 }
 export function useLogoutAll<
   TData = Awaited<ReturnType<typeof logoutAll>>,
-  TError =
-    | BadRequestErrorResponse
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   options?: {
     query?: Partial<
@@ -1268,10 +1111,7 @@ export function useLogoutAll<
 
 export function useLogoutAll<
   TData = Awaited<ReturnType<typeof logoutAll>>,
-  TError =
-    | BadRequestErrorResponse
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   options?: {
     query?: Partial<
@@ -1325,11 +1165,7 @@ export const getForgotPasswordQueryKey = (
 
 export const getForgotPasswordQueryOptions = <
   TData = Awaited<ReturnType<typeof forgotPassword>>,
-  TError =
-    | BadRequestErrorResponse
-    | ForgotPassword404
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   forgotPasswordRequest?: ForgotPasswordRequest,
   options?: {
@@ -1358,19 +1194,11 @@ export const getForgotPasswordQueryOptions = <
 export type ForgotPasswordQueryResult = NonNullable<
   Awaited<ReturnType<typeof forgotPassword>>
 >
-export type ForgotPasswordQueryError =
-  | BadRequestErrorResponse
-  | ForgotPassword404
-  | RateLimitErrorResponse
-  | InternalServerErrorResponse
+export type ForgotPasswordQueryError = ErrorResponse
 
 export function useForgotPassword<
   TData = Awaited<ReturnType<typeof forgotPassword>>,
-  TError =
-    | BadRequestErrorResponse
-    | ForgotPassword404
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   forgotPasswordRequest: undefined | ForgotPasswordRequest,
   options: {
@@ -1393,11 +1221,7 @@ export function useForgotPassword<
 }
 export function useForgotPassword<
   TData = Awaited<ReturnType<typeof forgotPassword>>,
-  TError =
-    | BadRequestErrorResponse
-    | ForgotPassword404
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   forgotPasswordRequest?: ForgotPasswordRequest,
   options?: {
@@ -1420,11 +1244,7 @@ export function useForgotPassword<
 }
 export function useForgotPassword<
   TData = Awaited<ReturnType<typeof forgotPassword>>,
-  TError =
-    | BadRequestErrorResponse
-    | ForgotPassword404
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   forgotPasswordRequest?: ForgotPasswordRequest,
   options?: {
@@ -1443,11 +1263,7 @@ export function useForgotPassword<
 
 export function useForgotPassword<
   TData = Awaited<ReturnType<typeof forgotPassword>>,
-  TError =
-    | BadRequestErrorResponse
-    | ForgotPassword404
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   forgotPasswordRequest?: ForgotPasswordRequest,
   options?: {
@@ -1505,10 +1321,7 @@ export const getVerifyPasswordResetOtpQueryKey = (
 
 export const getVerifyPasswordResetOtpQueryOptions = <
   TData = Awaited<ReturnType<typeof verifyPasswordResetOtp>>,
-  TError =
-    | VerifyPasswordResetOtp400
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   verifyPasswordResetOtpRequest?: VerifyPasswordResetOtpRequest,
   options?: {
@@ -1547,17 +1360,11 @@ export const getVerifyPasswordResetOtpQueryOptions = <
 export type VerifyPasswordResetOtpQueryResult = NonNullable<
   Awaited<ReturnType<typeof verifyPasswordResetOtp>>
 >
-export type VerifyPasswordResetOtpQueryError =
-  | VerifyPasswordResetOtp400
-  | RateLimitErrorResponse
-  | InternalServerErrorResponse
+export type VerifyPasswordResetOtpQueryError = ErrorResponse
 
 export function useVerifyPasswordResetOtp<
   TData = Awaited<ReturnType<typeof verifyPasswordResetOtp>>,
-  TError =
-    | VerifyPasswordResetOtp400
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   verifyPasswordResetOtpRequest: undefined | VerifyPasswordResetOtpRequest,
   options: {
@@ -1584,10 +1391,7 @@ export function useVerifyPasswordResetOtp<
 }
 export function useVerifyPasswordResetOtp<
   TData = Awaited<ReturnType<typeof verifyPasswordResetOtp>>,
-  TError =
-    | VerifyPasswordResetOtp400
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   verifyPasswordResetOtpRequest?: VerifyPasswordResetOtpRequest,
   options?: {
@@ -1614,10 +1418,7 @@ export function useVerifyPasswordResetOtp<
 }
 export function useVerifyPasswordResetOtp<
   TData = Awaited<ReturnType<typeof verifyPasswordResetOtp>>,
-  TError =
-    | VerifyPasswordResetOtp400
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   verifyPasswordResetOtpRequest?: VerifyPasswordResetOtpRequest,
   options?: {
@@ -1640,10 +1441,7 @@ export function useVerifyPasswordResetOtp<
 
 export function useVerifyPasswordResetOtp<
   TData = Awaited<ReturnType<typeof verifyPasswordResetOtp>>,
-  TError =
-    | VerifyPasswordResetOtp400
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   verifyPasswordResetOtpRequest?: VerifyPasswordResetOtpRequest,
   options?: {
@@ -1701,10 +1499,7 @@ export const getResetPasswordQueryKey = (
 
 export const getResetPasswordQueryOptions = <
   TData = Awaited<ReturnType<typeof resetPassword>>,
-  TError =
-    | BadRequestErrorResponse
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   resetPasswordRequest?: ResetPasswordRequest,
   options?: {
@@ -1733,15 +1528,11 @@ export const getResetPasswordQueryOptions = <
 export type ResetPasswordQueryResult = NonNullable<
   Awaited<ReturnType<typeof resetPassword>>
 >
-export type ResetPasswordQueryError =
-  BadRequestErrorResponse | RateLimitErrorResponse | InternalServerErrorResponse
+export type ResetPasswordQueryError = ErrorResponse
 
 export function useResetPassword<
   TData = Awaited<ReturnType<typeof resetPassword>>,
-  TError =
-    | BadRequestErrorResponse
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   resetPasswordRequest: undefined | ResetPasswordRequest,
   options: {
@@ -1764,10 +1555,7 @@ export function useResetPassword<
 }
 export function useResetPassword<
   TData = Awaited<ReturnType<typeof resetPassword>>,
-  TError =
-    | BadRequestErrorResponse
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   resetPasswordRequest?: ResetPasswordRequest,
   options?: {
@@ -1790,10 +1578,7 @@ export function useResetPassword<
 }
 export function useResetPassword<
   TData = Awaited<ReturnType<typeof resetPassword>>,
-  TError =
-    | BadRequestErrorResponse
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   resetPasswordRequest?: ResetPasswordRequest,
   options?: {
@@ -1812,10 +1597,7 @@ export function useResetPassword<
 
 export function useResetPassword<
   TData = Awaited<ReturnType<typeof resetPassword>>,
-  TError =
-    | BadRequestErrorResponse
-    | RateLimitErrorResponse
-    | InternalServerErrorResponse,
+  TError = ErrorResponse,
 >(
   resetPasswordRequest?: ResetPasswordRequest,
   options?: {

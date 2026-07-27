@@ -24,6 +24,8 @@ import {
   UpdateProfileSchema,
   SessionSummarySchema,
   ActiveSessionSchema,
+  ForgotPasswordResponseSchema,
+  VerifyPasswordResetOtpResponseSchema,
 } from "@dto";
 import { ERROR_MESSAGES, ERROR_CODES as USER_ERROR } from "@utils/errors";
 
@@ -41,7 +43,6 @@ registry.register(
   VerifyPasswordResetOtpRequestSchema,
 );
 registry.register("ResetPasswordRequest", ResetPasswordRequestSchema);
-registry.register("UserResponse", UserResponseSchema);
 registry.register("UpdateProfileRequest", UpdateProfileSchema);
 registry.register("SessionSummary", SessionSummarySchema);
 registry.register("ActiveSession", ActiveSessionSchema);
@@ -271,11 +272,7 @@ registry.registerPath({
     200: createOpenApiResponse(
       "Password reset OTP sent to email",
       SuccessResponseSchema(
-        z.object({
-          sessionId: z.uuid().openapi({
-            example: "550e8400-e29b-41d4-a716-446655440000",
-          }),
-        }),
+        ForgotPasswordResponseSchema,
         "OTP sent successfully to your registered email",
       ),
     ),
@@ -309,11 +306,7 @@ registry.registerPath({
     200: createOpenApiResponse(
       "OTP verified, returns password reset token",
       SuccessResponseSchema(
-        z.object({
-          passwordResetToken: z.uuid().openapi({
-            example: "550e8400-e29b-41d4-a716-446655440000",
-          }),
-        }),
+        VerifyPasswordResetOtpResponseSchema,
         "OTP verified successfully",
       ),
     ),
