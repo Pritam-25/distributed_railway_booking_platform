@@ -49,3 +49,4 @@ description: |
   All requests use the `{{baseUrl}}` environment variable as the API base URL. Before sending requests, ensure the **IRCTC Environment** is selected and `baseUrl` is configured correctly.
 variables:
   baseUrl: http://localhost:4000
+  apiUrl: "{{apiUrl}}"

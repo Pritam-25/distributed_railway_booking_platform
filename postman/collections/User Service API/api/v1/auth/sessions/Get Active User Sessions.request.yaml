@@ -14,13 +14,12 @@ description: |-
   - 401 Unauthorized - Authentication credentials were missing or invalid.
   - 429 Too Many Requests - Session lookup was rate-limited.
   - 500 Internal Server Error - The service could not load session data.
-url: "{{baseUrl}}/api/v1/auth/sessions"
+url: "{{apiUrl}}/auth/sessions"
 method: GET
 headers:
   Accept: application/json
 body:
   type: text
   content: ""
-settings: {}
 examples: ./.resources/Get Active User Sessions.resources/examples
-order: 1000
+order: 2000

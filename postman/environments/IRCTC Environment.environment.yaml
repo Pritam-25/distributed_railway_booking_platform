@@ -1,0 +1,27 @@
+owner: "28871900"
+team: "15266848"
+lastUpdatedBy: "28871900"
+lastRevision: 1785257986000
+name: IRCTC Environment
+color: 0
+values:
+  - key: baseUrl
+    value: http://localhost:4000
+    enabled: true
+  - key: apiUrl
+    value: http://localhost:4000/api/v1
+    enabled: true
+  - key: firstName
+    value: Jhon
+    enabled: true
+  - key: lastName
+    value: Doe
+    enabled: true
+  - key: email
+    value: jhon@example.com
+    enabled: true
+  - key: password
+    value: Password@123
+    enabled: true
+createdAt: 2026-07-28T08:41:38.000Z
+updatedAt: 2026-07-28T16:59:46.000Z

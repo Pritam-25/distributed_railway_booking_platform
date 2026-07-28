@@ -18,7 +18,7 @@ description: |-
 
   **Notes:**
   - The current request schema requires both firstName and lastName.
-url: "{{baseUrl}}/api/v1/users/me"
+url: "{{apiUrl}}/users/me"
 method: PUT
 headers:
   Content-Type: application/json
@@ -27,31 +27,8 @@ body:
   type: json
   content: |-
     {
-      "firstName": "Jhon",
-      "lastName": "Doe"
+      "firstName": {{firstName}},
+      "lastName": {{lastName}}
     }
-  $type: |-
-    {
-      "type": "object",
-      "properties": {
-        "firstName": {
-          "type": "string",
-          "minLength": 3,
-          "maxLength": 50,
-          "example": "Jhon"
-        },
-        "lastName": {
-          "type": "string",
-          "minLength": 2,
-          "maxLength": 50,
-          "example": "Doe"
-        }
-      },
-      "required": [
-        "firstName",
-        "lastName"
-      ]
-    }
-settings: {}
 examples: ./.resources/Update Current User Profile.resources/examples
 order: 2000

@@ -2,20 +2,21 @@ workspace:
   id: 0d20fd01-735f-4d22-9539-c2b9bd0ff563
 localResources:
   specs:
-    - ../D:/dev/distributed_railway_booking_platform/apps/api-gateway/openapi.json
-    - ../D:/dev/distributed_railway_booking_platform/apps/user-service/openapi.yaml
     - ../postman/specs/User Service API/openapi.yaml
+    - ../postman/specs/API Gateway/openapi.yaml
   documents:
     - ../README.md
 resourceNameMappings:
   specs:
-    - ../apps/api-gateway/openapi.json: openapi.json
-    - ../apps/user-service/openapi.yaml: openapi.yaml
     - ../postman/specs/User Service API/openapi.yaml: User Service API
+    - ../postman/specs/API Gateway/openapi.yaml: Railway Booking Platform API
 cloudResources:
   collections:
     ../postman/collections/User Service API: 28871900-5a2003b8-ea03-48bf-a6b4-fe1f07b7f67e
   specs:
-    ../postman/specs/User Service API/openapi.yaml: 21c9eb54-8a55-4fca-8965-a7865d7b6ec3
+    ../postman/specs/API Gateway/openapi.yaml: d24162ef-1d89-48a8-9bce-87729141f766
+    ../postman/specs/User Service API/openapi.yaml: b5b9fd25-841a-4ee0-a8ef-695e9719dc57
   documents:
     ../README.md: 63e415d5-dfb8-45ca-9677-f80c6c20effb
+  environments:
+    ../postman/environments/IRCTC Environment.environment.yaml: 28871900-2a43cd22-b84e-4e29-b8df-2c3277ceac6c

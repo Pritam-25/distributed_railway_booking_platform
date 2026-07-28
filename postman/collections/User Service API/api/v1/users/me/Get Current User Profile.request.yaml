@@ -15,13 +15,12 @@ description: |-
   - 404 Not Found - No profile exists for the authenticated user.
   - 429 Too Many Requests - Profile lookup was rate-limited.
   - 500 Internal Server Error - The service could not load the profile.
-url: "{{baseUrl}}/api/v1/users/me"
+url: "{{apiUrl}}/users/me"
 method: GET
 headers:
   Accept: application/json
 body:
   type: text
   content: ""
-settings: {}
 examples: ./.resources/Get Current User Profile.resources/examples
 order: 1000

@@ -14,13 +14,12 @@ description: |-
   - 401 Unauthorized - The session could not be authenticated.
   - 429 Too Many Requests - Logout was rate-limited.
   - 500 Internal Server Error - The service could not complete logout.
-url: "{{baseUrl}}/api/v1/auth/logout"
+url: "{{apiUrl}}/auth/logout"
 method: POST
 headers:
   Accept: application/json
 body:
   type: text
   content: ""
-settings: {}
 examples: ./.resources/Logout Current Session.resources/examples
 order: 1000

@@ -16,7 +16,7 @@ description: |-
 
   **Notes:**
   - The response body contains the user profile; authentication tokens are delivered through cookies.
-url: "{{baseUrl}}/api/v1/auth/verify-otp"
+url: "{{apiUrl}}/auth/verify-otp"
 method: POST
 headers:
   Content-Type: application/json
@@ -27,22 +27,5 @@ body:
     {
       "otp": "123456"
     }
-  $type: |-
-    {
-      "type": "object",
-      "properties": {
-        "otp": {
-          "type": "string",
-          "minLength": 6,
-          "maxLength": 6,
-          "pattern": "^\\d{6}$",
-          "example": "123456"
-        }
-      },
-      "required": [
-        "otp"
-      ]
-    }
-settings: {}
 examples: ./.resources/Verify OTP & Complete Registration.resources/examples
 order: 1000

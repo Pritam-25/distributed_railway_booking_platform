@@ -119,35 +119,34 @@ const discoverServices = (): DiscoveredService[] => {
   }
 
   const entries = fs.readdirSync(APPS_DIR, { withFileTypes: true });
-  const discovered: DiscoveredService[] = [];
 
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
+  const discovered: DiscoveredService[] = entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => {
+      const serviceId = entry.name;
+      const sourceSpecPath = path.join(APPS_DIR, serviceId, "openapi.yaml");
+      const hasSpec = fs.existsSync(sourceSpecPath);
 
-    const serviceId = entry.name;
-    const sourceSpecPath = path.join(APPS_DIR, serviceId, "openapi.yaml");
-    const hasSpec = fs.existsSync(sourceSpecPath);
+      const metadata = SERVICES[serviceId];
+      const displayName =
+        metadata?.displayName ?? deriveDefaultDisplayName(serviceId);
+      const publish = metadata?.publish === true;
 
-    const metadata = SERVICES[serviceId];
-    const displayName =
-      metadata?.displayName ?? deriveDefaultDisplayName(serviceId);
-    const publish = metadata?.publish === true;
+      let skipReason: string | null = null;
+      if (!hasSpec) {
+        skipReason = "no openapi.yaml";
+      } else if (!publish) {
+        skipReason = "publish=false";
+      }
 
-    let skipReason: string | null = null;
-    if (!hasSpec) {
-      skipReason = "no openapi.yaml";
-    } else if (!publish) {
-      skipReason = "publish=false";
-    }
-
-    discovered.push({
-      id: serviceId,
-      displayName,
-      publish: hasSpec && publish,
-      sourceSpecPath: hasSpec ? sourceSpecPath : null,
-      skipReason,
+      return {
+        id: serviceId,
+        displayName,
+        publish: hasSpec && publish,
+        sourceSpecPath: hasSpec ? sourceSpecPath : null,
+        skipReason,
+      };
     });
-  }
 
   // Stable sort: published services first (alphabetical), then unpublished
   // (alphabetical). CI logs scan easier when the order is deterministic.
@@ -186,46 +185,57 @@ const renderSummary = (
   services: DiscoveredService[],
   updatedNames: string[],
 ): string => {
-  const lines: string[] = [];
-  lines.push("─".repeat(50));
-  lines.push("OpenAPI → Postman Sync");
-  lines.push("");
+  const updatedSet = new Set(updatedNames);
 
-  for (const service of services) {
-    if (service.publish && updatedNames.includes(service.displayName)) {
-      lines.push(`✓ ${service.displayName}`);
-    } else if (service.skipReason) {
-      lines.push(`○ ${service.displayName} (${service.skipReason})`);
-    } else {
-      // Defensive: a service that was publishable but did not get mirrored
-      // for any reason. Should not happen in practice, but a clear log
-      // line is better than silent loss.
-      lines.push(`? ${service.displayName} (skipped, reason unknown)`);
+  const serviceLines = services.map((service) => {
+    if (service.publish && updatedSet.has(service.displayName)) {
+      return `✓ ${service.displayName}`;
     }
-  }
+    if (service.skipReason) {
+      return `○ ${service.displayName} (${service.skipReason})`;
+    }
+    // Defensive: a service that was publishable but did not get mirrored
+    // for any reason. Should not happen in practice, but a clear log
+    // line is better than silent loss.
+    return `? ${service.displayName} (skipped, reason unknown)`;
+  });
 
-  lines.push("");
-  lines.push(`Updated: ${updatedNames.length}`);
-  lines.push(`Skipped : ${services.length - updatedNames.length}`);
-  lines.push("─".repeat(50));
+  const lines = [
+    "─".repeat(50),
+    "OpenAPI → Postman Sync",
+    "",
+    ...serviceLines,
+    "",
+    `Updated: ${updatedNames.length}`,
+    `Skipped : ${services.length - updatedNames.length}`,
+    "─".repeat(50),
+  ];
   return lines.join("\n");
 };
 
 const main = (): void => {
   const services = discoverServices();
-  const updatedNames: string[] = [];
 
-  for (const service of services) {
-    if (!service.publish || !service.sourceSpecPath) continue;
+  // Compute the mirror plan up front so we can build updatedNames with a
+  // single allocation rather than pushing per iteration. The mirror side
+  // effects themselves still run one-per-service in the second loop.
+  const mirrorPlan = services.flatMap((service) => {
+    if (!service.publish || !service.sourceSpecPath) return [];
+    return [
+      { source: service.sourceSpecPath, displayName: service.displayName },
+    ];
+  });
 
+  for (const { source, displayName } of mirrorPlan) {
     const destinationPath = path.join(
       POSTMAN_SPECS_DIR,
-      service.displayName,
+      displayName,
       "openapi.yaml",
     );
-    mirrorSpec(service.sourceSpecPath, destinationPath);
-    updatedNames.push(service.displayName);
+    mirrorSpec(source, destinationPath);
   }
+
+  const updatedNames = mirrorPlan.map(({ displayName }) => displayName);
 
   // Print summary. We deliberately use process.stdout.write (rather than
   // console.log) so the entire block is one write and CI parsers don't

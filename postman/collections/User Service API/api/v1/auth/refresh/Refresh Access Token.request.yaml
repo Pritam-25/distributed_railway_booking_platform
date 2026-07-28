@@ -17,13 +17,12 @@ description: |-
 
   **Notes:**
   - The endpoint does not accept a request body.
-url: "{{baseUrl}}/api/v1/auth/refresh"
+url: "{{apiUrl}}/auth/refresh"
 method: POST
 headers:
   Accept: application/json
 body:
   type: text
   content: ""
-settings: {}
 examples: ./.resources/Refresh Access Token.resources/examples
 order: 1000
