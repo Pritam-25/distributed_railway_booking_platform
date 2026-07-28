@@ -5,19 +5,50 @@
  *
  * # User Service API
  *
- * Microservice handling authentication, identity management, OTP verification, and user sessions for the IRCTC Railway Booking Platform.
+ * The **User Service API** provides authentication, identity, and profile management for the IRCTC Railway Booking Platform. It enables secure user registration, login, session management, password recovery, and profile operations through a RESTful API.
  *
  * ## Core Capabilities
  *
- * - **Registration & Verification**: Multi-step signup with 6-digit email OTP verification.
- * - **Authentication**: JWT Access Tokens (Bearer / Cookie) and Refresh Token rotation.
- * - **Session Management**: Active session tracking, single session revoke, and global logout-all.
- * - **Password Management**: Self-service OTP password resets.
+ * ### Authentication
  *
- * ## Authentication Schemes
+ * The authentication module supports the complete user lifecycle:
  *
- * - **Bearer JWT**: `Authorization: Bearer <access_token>`
- * - **Cookie Auth**: `access_token` HTTP-only cookie
+ * - **OTP Registration** — Register new users through email OTP verification.
+ * - **Login & Logout** — Authenticate users and terminate the current session or all active sessions.
+ * - **JWT Authentication** — Secure access using short-lived Access Tokens with Refresh Token rotation.
+ * - **Token Refresh** — Obtain a new access token using a valid refresh token.
+ * - **Session Management** — List active sessions and revoke individual sessions by ID.
+ * - **Password Reset** — Reset passwords through a secure email OTP verification flow.
+ *
+ * ### User Profile
+ *
+ * Authenticated users can manage their own account information using:
+ *
+ * - `GET /api/v1/users/me` — Retrieve the authenticated user's profile.
+ * - `PUT /api/v1/users/me` — Update the authenticated user's profile.
+ *
+ * ## Authentication Methods
+ *
+ * This API supports two authentication mechanisms:
+ *
+ * - **Bearer Token**
+ *   ```
+ *   Authorization: Bearer <access_token>
+ *   ```
+ *
+ * - **HTTP-only Cookie**
+ *   ```
+ *   access_token
+ *   ```
+ *
+ * Some authentication endpoints also use the following secure cookies:
+ *
+ * - `refresh_token`
+ * - `otp_session`
+ *
+ * ---
+ *
+ * All requests use the `{{baseUrl}}` environment variable as the API base URL. Before sending requests, ensure the **IRCTC Environment** is selected and `baseUrl` is configured correctly.
  *
  * OpenAPI spec version: 1.0.0
  */

@@ -18,6 +18,7 @@ const SERVICES = [
 
 function mergeSpecs() {
   const targetPath = path.resolve(__dirname, "../openapi.json");
+  const targetYamlPath = path.resolve(__dirname, "../openapi.yaml");
 
   for (const service of SERVICES) {
     const serviceSpecPath = path.resolve(
@@ -29,6 +30,18 @@ function mergeSpecs() {
       console.log(
         `✅ Copied OpenAPI spec from ${service} to api-gateway/openapi.json`,
       );
+
+      const serviceYamlPath = path.resolve(
+        __dirname,
+        `../../${service}/openapi.yaml`,
+      );
+      if (fs.existsSync(serviceYamlPath)) {
+        fs.copyFileSync(serviceYamlPath, targetYamlPath);
+        console.log(
+          `✅ Copied OpenAPI YAML from ${service} to api-gateway/openapi.yaml`,
+        );
+      }
+
       return;
     }
   }

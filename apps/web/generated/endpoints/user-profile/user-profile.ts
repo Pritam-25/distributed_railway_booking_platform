@@ -5,19 +5,50 @@
  *
  * # User Service API
  *
- * Microservice handling authentication, identity management, OTP verification, and user sessions for the IRCTC Railway Booking Platform.
+ * The **User Service API** provides authentication, identity, and profile management for the IRCTC Railway Booking Platform. It enables secure user registration, login, session management, password recovery, and profile operations through a RESTful API.
  *
  * ## Core Capabilities
  *
- * - **Registration & Verification**: Multi-step signup with 6-digit email OTP verification.
- * - **Authentication**: JWT Access Tokens (Bearer / Cookie) and Refresh Token rotation.
- * - **Session Management**: Active session tracking, single session revoke, and global logout-all.
- * - **Password Management**: Self-service OTP password resets.
+ * ### Authentication
  *
- * ## Authentication Schemes
+ * The authentication module supports the complete user lifecycle:
  *
- * - **Bearer JWT**: `Authorization: Bearer <access_token>`
- * - **Cookie Auth**: `access_token` HTTP-only cookie
+ * - **OTP Registration** — Register new users through email OTP verification.
+ * - **Login & Logout** — Authenticate users and terminate the current session or all active sessions.
+ * - **JWT Authentication** — Secure access using short-lived Access Tokens with Refresh Token rotation.
+ * - **Token Refresh** — Obtain a new access token using a valid refresh token.
+ * - **Session Management** — List active sessions and revoke individual sessions by ID.
+ * - **Password Reset** — Reset passwords through a secure email OTP verification flow.
+ *
+ * ### User Profile
+ *
+ * Authenticated users can manage their own account information using:
+ *
+ * - `GET /api/v1/users/me` — Retrieve the authenticated user's profile.
+ * - `PUT /api/v1/users/me` — Update the authenticated user's profile.
+ *
+ * ## Authentication Methods
+ *
+ * This API supports two authentication mechanisms:
+ *
+ * - **Bearer Token**
+ *   ```
+ *   Authorization: Bearer <access_token>
+ *   ```
+ *
+ * - **HTTP-only Cookie**
+ *   ```
+ *   access_token
+ *   ```
+ *
+ * Some authentication endpoints also use the following secure cookies:
+ *
+ * - `refresh_token`
+ * - `otp_session`
+ *
+ * ---
+ *
+ * All requests use the `{{baseUrl}}` environment variable as the API base URL. Before sending requests, ensure the **IRCTC Environment** is selected and `baseUrl` is configured correctly.
  *
  * OpenAPI spec version: 1.0.0
  */
@@ -67,6 +98,21 @@ const withQueryKey = <T extends object, K>(
 }
 
 /**
+ * Returns the profile information for the currently authenticated user.
+ *
+ * **Request Body Fields:**
+ * - None - The user is resolved from the active authentication context.
+ *
+ * **Response:**
+ * Returns the user profile object with id, firstName, lastName, email, and createdAt.
+ *
+ * **Outcomes:**
+ * - 200 OK - The profile was retrieved successfully.
+ * - 400 Bad Request - The request could not be processed.
+ * - 401 Unauthorized - Authentication credentials were missing or invalid.
+ * - 404 Not Found - No profile exists for the authenticated user.
+ * - 429 Too Many Requests - Profile lookup was rate-limited.
+ * - 500 Internal Server Error - The service could not load the profile.
  * @summary Get Current User Profile
  */
 export const getProfile = (
@@ -144,6 +190,24 @@ export const useGetProfile = <TError = ErrorResponse, TContext = unknown>(
   return useMutation(getGetProfileMutationOptions(options), queryClient)
 }
 /**
+ * Updates the authenticated user's profile fields using the current request schema.
+ *
+ * **Request Body Fields:**
+ * - `firstName` - Updated first name for the user profile.
+ * - `lastName` - Updated last name for the user profile.
+ *
+ * **Response:**
+ * Returns the updated user profile object after the stored record and cache have been synchronized.
+ *
+ * **Outcomes:**
+ * - 200 OK - The profile was updated successfully.
+ * - 400 Bad Request - The request body failed validation.
+ * - 401 Unauthorized - Authentication credentials were missing or invalid.
+ * - 429 Too Many Requests - Profile updates were rate-limited.
+ * - 500 Internal Server Error - The service could not update the profile.
+ *
+ * **Notes:**
+ * - The current request schema requires both firstName and lastName.
  * @summary Update Current User Profile
  */
 export const updateProfile = (

@@ -3,7 +3,7 @@
   "info": {
     "title": "User Service API",
     "version": "1.0.0",
-    "description": "\n# User Service API\n\nMicroservice handling authentication, identity management, OTP verification, and user sessions for the IRCTC Railway Booking Platform.\n\n## Core Capabilities\n\n- **Registration & Verification**: Multi-step signup with 6-digit email OTP verification.\n- **Authentication**: JWT Access Tokens (Bearer / Cookie) and Refresh Token rotation.\n- **Session Management**: Active session tracking, single session revoke, and global logout-all.\n- **Password Management**: Self-service OTP password resets.\n\n## Authentication Schemes\n\n- **Bearer JWT**: `Authorization: Bearer <access_token>`\n- **Cookie Auth**: `access_token` HTTP-only cookie\n"
+    "description": "\n# User Service API\n\nThe **User Service API** provides authentication, identity, and profile management for the IRCTC Railway Booking Platform. It enables secure user registration, login, session management, password recovery, and profile operations through a RESTful API.\n\n## Core Capabilities\n\n### Authentication\n\nThe authentication module supports the complete user lifecycle:\n\n- **OTP Registration** — Register new users through email OTP verification.\n- **Login & Logout** — Authenticate users and terminate the current session or all active sessions.\n- **JWT Authentication** — Secure access using short-lived Access Tokens with Refresh Token rotation.\n- **Token Refresh** — Obtain a new access token using a valid refresh token.\n- **Session Management** — List active sessions and revoke individual sessions by ID.\n- **Password Reset** — Reset passwords through a secure email OTP verification flow.\n\n### User Profile\n\nAuthenticated users can manage their own account information using:\n\n- `GET /api/v1/users/me` — Retrieve the authenticated user's profile.\n- `PUT /api/v1/users/me` — Update the authenticated user's profile.\n\n## Authentication Methods\n\nThis API supports two authentication mechanisms:\n\n- **Bearer Token**\n  ```\n  Authorization: Bearer <access_token>\n  ```\n\n- **HTTP-only Cookie**\n  ```\n  access_token\n  ```\n\nSome authentication endpoints also use the following secure cookies:\n\n- `refresh_token`\n- `otp_session`\n\n---\n\nAll requests use the `{{baseUrl}}` environment variable as the API base URL. Before sending requests, ensure the **IRCTC Environment** is selected and `baseUrl` is configured correctly.\n"
   },
   "servers": [
     {
@@ -321,7 +321,9 @@
           }
         },
         "required": ["success", "error", "meta"],
-        "description": "Error Response Envelope (BAD_REQUEST)"
+        "description": "Error Response Envelope (BAD_REQUEST)",
+        "x-sdk-ref": "ErrorResponse",
+        "refId": "BadRequestErrorResponse"
       },
       "RateLimitErrorResponse": {
         "type": "object",
@@ -352,7 +354,9 @@
           }
         },
         "required": ["success", "error", "meta"],
-        "description": "Error Response Envelope (RATE_LIMIT_EXCEEDED)"
+        "description": "Error Response Envelope (RATE_LIMIT_EXCEEDED)",
+        "x-sdk-ref": "ErrorResponse",
+        "refId": "RateLimitErrorResponse"
       },
       "InternalServerErrorResponse": {
         "type": "object",
@@ -383,7 +387,9 @@
           }
         },
         "required": ["success", "error", "meta"],
-        "description": "Error Response Envelope (INTERNAL_ERROR)"
+        "description": "Error Response Envelope (INTERNAL_ERROR)",
+        "x-sdk-ref": "ErrorResponse",
+        "refId": "InternalServerErrorResponse"
       },
       "UserResponse": {
         "type": "object",
@@ -443,7 +449,9 @@
           }
         },
         "required": ["success", "error", "meta"],
-        "description": "Error Response Envelope (UNAUTHORIZED)"
+        "description": "Error Response Envelope (UNAUTHORIZED)",
+        "x-sdk-ref": "ErrorResponse",
+        "refId": "UnauthorizedErrorResponse"
       },
       "ForgotPasswordResponse": {
         "type": "object",
@@ -476,6 +484,7 @@
         "operationId": "sendOtp",
         "tags": ["Authentication"],
         "summary": "Send OTP for User Registration",
+        "description": "Starts the registration flow by validating the submitted identity and password payload, then dispatching a one-time password to the provided email address.\n\n**Request Body Fields:**\n- `firstName` - User's given name used to personalize the account.\n- `lastName` - User's family name used together with the first name.\n- `email` - Unique email address that receives the registration OTP.\n- `password` - Account password validated against the password policy.\n\n**Response:**\nReturns a success envelope with an empty data payload. The short-lived OTP session is stored by the service and the OTP session cookie is set separately.\n\n**Outcomes:**\n- 200 OK - OTP was generated and sent to the registered email address.\n- 409 Conflict - The email is already registered.\n- 400 Bad Request - Request validation failed or the payload is incomplete.\n- 429 Too Many Requests - OTP delivery was rate-limited.\n- 500 Internal Server Error - The service could not complete OTP dispatch.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -558,7 +567,8 @@
                     }
                   },
                   "required": ["success", "error", "meta"],
-                  "description": "Error Response Envelope (USER_ALREADY_EXISTS)"
+                  "description": "Error Response Envelope (USER_ALREADY_EXISTS)",
+                  "x-sdk-ref": "ErrorResponse"
                 }
               }
             }
@@ -591,6 +601,7 @@
         "operationId": "verifyOtp",
         "tags": ["Authentication"],
         "summary": "Verify OTP & Complete Registration",
+        "description": "Validates the registration OTP, creates the user account, and completes the sign-up flow for the current OTP session.\n\n**Request Body Fields:**\n- `otp` - The 6-digit one-time password sent to the user's email address.\n\n**Response:**\nReturns the created user in the response body and sets the access and refresh token cookies for immediate authentication.\n\n**Outcomes:**\n- 200 OK - Registration succeeded and the user is authenticated.\n- 400 Bad Request - The OTP session is missing or the OTP is invalid or expired.\n- 429 Too Many Requests - OTP verification was rate-limited.\n- 500 Internal Server Error - The service could not complete registration.\n\n**Notes:**\n- The response body contains the user profile; authentication tokens are delivered through cookies.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -663,7 +674,8 @@
                     }
                   },
                   "required": ["success", "error", "meta"],
-                  "description": "Error Response Envelope (INVALID_INPUT)"
+                  "description": "Error Response Envelope (INVALID_INPUT)",
+                  "x-sdk-ref": "ErrorResponse"
                 }
               }
             }
@@ -696,6 +708,7 @@
         "operationId": "login",
         "tags": ["Authentication"],
         "summary": "Login User",
+        "description": "Authenticates an existing user with email and password credentials, then rotates the active session cookies on success.\n\n**Request Body Fields:**\n- `email` - Registered email address used to locate the account.\n- `password` - Account password that must satisfy the password policy.\n\n**Response:**\nReturns the user profile in the response body and sets fresh access and refresh token cookies for subsequent authenticated requests.\n\n**Outcomes:**\n- 200 OK - Credentials were accepted and a new authenticated session was created.\n- 400 Bad Request - The request body failed validation.\n- 401 Unauthorized - The credentials were invalid.\n- 429 Too Many Requests - Login attempts were rate-limited.\n- 500 Internal Server Error - The service could not complete authentication.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -778,7 +791,8 @@
                     }
                   },
                   "required": ["success", "error", "meta"],
-                  "description": "Error Response Envelope (UNAUTHORIZED)"
+                  "description": "Error Response Envelope (UNAUTHORIZED)",
+                  "x-sdk-ref": "ErrorResponse"
                 }
               }
             }
@@ -811,6 +825,7 @@
         "operationId": "refreshToken",
         "tags": ["Authentication"],
         "summary": "Refresh Access Token",
+        "description": "Uses the refresh token from the current session to rotate credentials and issue a new access token pair.\n\n**Request Body Fields:**\n- None - The refresh token is read from the HTTP-only refresh cookie.\n\n**Response:**\nReturns the refreshed user profile in the response body while issuing new access and refresh token cookies.\n\n**Outcomes:**\n- 200 OK - The session was refreshed successfully.\n- 400 Bad Request - The request could not be processed.\n- 401 Unauthorized - The refresh token was missing, invalid, or expired.\n- 429 Too Many Requests - Token refresh was rate-limited.\n- 500 Internal Server Error - The service could not rotate the session.\n\n**Notes:**\n- The endpoint does not accept a request body.",
         "responses": {
           "200": {
             "description": "Token refreshed successfully",
@@ -884,7 +899,8 @@
                     }
                   },
                   "required": ["success", "error", "meta"],
-                  "description": "Error Response Envelope (UNAUTHORIZED)"
+                  "description": "Error Response Envelope (UNAUTHORIZED)",
+                  "x-sdk-ref": "ErrorResponse"
                 }
               }
             }
@@ -917,6 +933,7 @@
         "operationId": "getSessions",
         "tags": ["Authentication"],
         "summary": "Get Active User Sessions",
+        "description": "Retrieves the list of active sessions for the authenticated user and marks the currently requested session in the returned payload.\n\n**Request Body Fields:**\n- None - The authenticated user is resolved from the access token or session cookie.\n\n**Response:**\nReturns an array of session summaries with device metadata, IP address, location, timestamps, and an `isCurrent` flag.\n\n**Outcomes:**\n- 200 OK - Active sessions were retrieved successfully.\n- 400 Bad Request - The request could not be validated.\n- 401 Unauthorized - Authentication credentials were missing or invalid.\n- 429 Too Many Requests - Session lookup was rate-limited.\n- 500 Internal Server Error - The service could not load session data.",
         "security": [
           {
             "bearerAuth": []
@@ -1006,6 +1023,7 @@
         "operationId": "revokeSession",
         "tags": ["Authentication"],
         "summary": "Revoke Active Session",
+        "description": "Revokes a single active session by session ID so a user can sign out one device without affecting the others.\n\n**Request Body Fields:**\n- `sessionId` - Path parameter that identifies the session to revoke.\n\n**Response:**\nReturns a success envelope with an empty data payload after the session key has been removed.\n\n**Outcomes:**\n- 200 OK - The selected session was revoked.\n- 400 Bad Request - The session ID was missing or invalid.\n- 401 Unauthorized - The user was not authenticated.\n- 404 Not Found - No active session matched the provided session ID.\n- 429 Too Many Requests - Session revocation was rate-limited.\n- 500 Internal Server Error - The service could not revoke the session.",
         "security": [
           {
             "bearerAuth": []
@@ -1109,7 +1127,8 @@
                     }
                   },
                   "required": ["success", "error", "meta"],
-                  "description": "Error Response Envelope (NOT_FOUND)"
+                  "description": "Error Response Envelope (NOT_FOUND)",
+                  "x-sdk-ref": "ErrorResponse"
                 }
               }
             }
@@ -1142,6 +1161,7 @@
         "operationId": "logout",
         "tags": ["Authentication"],
         "summary": "Logout Current Session",
+        "description": "Ends the current authenticated session by clearing the refresh token state and removing the session cookies from the client.\n\n**Request Body Fields:**\n- None - The current session is identified from the refresh token cookie.\n\n**Response:**\nReturns a success envelope with an empty data payload after the session cookies are cleared.\n\n**Outcomes:**\n- 200 OK - The current session was logged out successfully.\n- 400 Bad Request - The request could not be processed.\n- 401 Unauthorized - The session could not be authenticated.\n- 429 Too Many Requests - Logout was rate-limited.\n- 500 Internal Server Error - The service could not complete logout.",
         "responses": {
           "200": {
             "description": "Logged out successfully",
@@ -1210,6 +1230,7 @@
         "operationId": "logoutAll",
         "tags": ["Authentication"],
         "summary": "Logout All Sessions",
+        "description": "Invalidates every active session for the authenticated user so all devices are signed out at once.\n\n**Request Body Fields:**\n- None - All sessions are derived from the authenticated user context.\n\n**Response:**\nReturns a success envelope with an empty data payload after all session cookies are cleared.\n\n**Outcomes:**\n- 200 OK - All sessions were logged out successfully.\n- 400 Bad Request - The request could not be processed.\n- 401 Unauthorized - The user was not authenticated.\n- 429 Too Many Requests - Logout-all was rate-limited.\n- 500 Internal Server Error - The service could not revoke every session.",
         "responses": {
           "200": {
             "description": "Logged out from all sessions",
@@ -1278,6 +1299,7 @@
         "operationId": "forgotPassword",
         "tags": ["Authentication"],
         "summary": "Request Password Reset OTP",
+        "description": "Starts the password reset flow by sending a reset OTP to the registered email address for the account.\n\n**Request Body Fields:**\n- `email` - Registered email address that should receive the reset OTP.\n\n**Response:**\nReturns a reset session identifier that is used in the OTP verification step.\n\n**Outcomes:**\n- 200 OK - The reset OTP was sent and a reset session ID was created.\n- 400 Bad Request - The email field failed validation.\n- 404 Not Found - No user exists for the provided email address.\n- 429 Too Many Requests - Password reset requests were rate-limited.\n- 500 Internal Server Error - The service could not start the reset flow.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1360,7 +1382,8 @@
                     }
                   },
                   "required": ["success", "error", "meta"],
-                  "description": "Error Response Envelope (NOT_FOUND)"
+                  "description": "Error Response Envelope (NOT_FOUND)",
+                  "x-sdk-ref": "ErrorResponse"
                 }
               }
             }
@@ -1393,6 +1416,7 @@
         "operationId": "VerifyPasswordResetOtp",
         "tags": ["Authentication"],
         "summary": "Verify Password Reset OTP",
+        "description": "Validates the reset OTP for the current reset session and issues a short-lived password reset token.\n\n**Request Body Fields:**\n- `sessionId` - Reset session identifier returned by the forgot-password step.\n- `otp` - The 6-digit reset code sent to the user's email address.\n\n**Response:**\nReturns a password reset token that must be supplied to the reset-password endpoint.\n\n**Outcomes:**\n- 200 OK - The reset OTP was verified successfully.\n- 400 Bad Request - The OTP was invalid or expired.\n- 429 Too Many Requests - OTP verification was rate-limited.\n- 500 Internal Server Error - The service could not complete OTP verification.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1465,7 +1489,8 @@
                     }
                   },
                   "required": ["success", "error", "meta"],
-                  "description": "Error Response Envelope (INVALID_INPUT)"
+                  "description": "Error Response Envelope (INVALID_INPUT)",
+                  "x-sdk-ref": "ErrorResponse"
                 }
               }
             }
@@ -1498,6 +1523,7 @@
         "operationId": "resetPassword",
         "tags": ["Authentication"],
         "summary": "Reset Password",
+        "description": "Completes the password reset flow by validating the password reset token and writing the new password to the account.\n\n**Request Body Fields:**\n- `passwordResetToken` - Short-lived reset token issued by the OTP verification step.\n- `password` - New account password that must satisfy the password policy.\n- `confirmPassword` - Confirmation value that must match the new password.\n\n**Response:**\nReturns a success envelope with an empty data payload after the password is updated and existing session cookies are cleared.\n\n**Outcomes:**\n- 200 OK - The password was updated successfully.\n- 400 Bad Request - The token was invalid, expired, or the passwords did not match.\n- 429 Too Many Requests - Password reset was rate-limited.\n- 500 Internal Server Error - The service could not complete the password reset.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1575,6 +1601,7 @@
         "operationId": "getProfile",
         "tags": ["User Profile"],
         "summary": "Get Current User Profile",
+        "description": "Returns the profile information for the currently authenticated user.\n\n**Request Body Fields:**\n- None - The user is resolved from the active authentication context.\n\n**Response:**\nReturns the user profile object with id, firstName, lastName, email, and createdAt.\n\n**Outcomes:**\n- 200 OK - The profile was retrieved successfully.\n- 400 Bad Request - The request could not be processed.\n- 401 Unauthorized - Authentication credentials were missing or invalid.\n- 404 Not Found - No profile exists for the authenticated user.\n- 429 Too Many Requests - Profile lookup was rate-limited.\n- 500 Internal Server Error - The service could not load the profile.",
         "security": [
           {
             "bearerAuth": []
@@ -1666,7 +1693,8 @@
                     }
                   },
                   "required": ["success", "error", "meta"],
-                  "description": "Error Response Envelope (NOT_FOUND)"
+                  "description": "Error Response Envelope (NOT_FOUND)",
+                  "x-sdk-ref": "ErrorResponse"
                 }
               }
             }
@@ -1697,6 +1725,7 @@
         "operationId": "updateProfile",
         "tags": ["User Profile"],
         "summary": "Update Current User Profile",
+        "description": "Updates the authenticated user's profile fields using the current request schema.\n\n**Request Body Fields:**\n- `firstName` - Updated first name for the user profile.\n- `lastName` - Updated last name for the user profile.\n\n**Response:**\nReturns the updated user profile object after the stored record and cache have been synchronized.\n\n**Outcomes:**\n- 200 OK - The profile was updated successfully.\n- 400 Bad Request - The request body failed validation.\n- 401 Unauthorized - Authentication credentials were missing or invalid.\n- 429 Too Many Requests - Profile updates were rate-limited.\n- 500 Internal Server Error - The service could not update the profile.\n\n**Notes:**\n- The current request schema requires both firstName and lastName.",
         "security": [
           {
             "bearerAuth": []

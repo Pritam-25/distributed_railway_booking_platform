@@ -97,6 +97,14 @@ export const ErrorResponseSchema = z
 
 /**
  * Error envelope builder matching `@irctc/http` errorResponse payload format.
+ *
+ * When `schemaName` is provided, the resulting schema is registered as a named
+ * component under `#/components/schemas/<schemaName>` in the generated spec, and
+ * downstream path responses reference it via `$ref`. The `x-sdk-ref` marker and
+ * the `refId` metadata field are kept so that the orval transformer in
+ * `apps/web/scripts/orval-transformer.ts` can still detect these envelopes and
+ * collapse them into a single shared `ErrorResponse` reference for the React
+ * Query client.
  */
 export const createErrorResponseSchema = (
   code: ErrorCode | (string & {}),
@@ -111,19 +119,21 @@ export const createErrorResponseSchema = (
     metadata.refId = schemaName;
   }
 
-  return z
-    .object({
-      success: z.literal(false).openapi({ example: false }),
-      error: z
-        .object({
-          code: z.string().openapi({ example: code }),
-          message: z.string().openapi({ example: message }),
-          details: z.unknown().optional(),
-        })
-        .openapi({ description: "Error Detail Payload" }),
-      meta: MetaSchema,
-    })
-    .openapi(metadata);
+  const schema = z.object({
+    success: z.literal(false).openapi({ example: false }),
+    error: z
+      .object({
+        code: z.string().openapi({ example: code }),
+        message: z.string().openapi({ example: message }),
+        details: z.unknown().optional(),
+      })
+      .openapi({ description: "Error Detail Payload" }),
+    meta: MetaSchema,
+  });
+
+  return schemaName
+    ? schema.openapi(schemaName, metadata)
+    : schema.openapi(metadata);
 };
 
 /**

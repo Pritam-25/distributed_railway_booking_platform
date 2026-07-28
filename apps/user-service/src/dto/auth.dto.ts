@@ -217,3 +217,13 @@ export const VerifyPasswordResetOtpResponseSchema = z
 export type VerifyPasswordResetOtpResponseDto = z.infer<
   typeof VerifyPasswordResetOtpResponseSchema
 >;
+
+/**
+ * Session Param Schema
+ */
+
+export const SessionParamSchema = z
+  .object({
+    sessionId: uuidSchema,
+  })
+  .openapi("SessionParam");
