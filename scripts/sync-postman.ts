@@ -29,6 +29,20 @@
 //
 // ─── Behavior ────────────────────────────────────────────────────────────────
 //
+//   - In-place content replacement: each run writes the latest spec bytes into
+//     the existing destination file (openapi.yaml) at the same relative path.
+//     Files are NEVER deleted-and-recreated; the path is stable across runs so
+//     Postman's Native Git watcher sees content modifications rather than
+//     delete+add events. A delete+add cycle causes Postman to re-detect the
+//     "new" file and append an absolute-path entry alongside the relative one
+//     in `.postman/resources.yaml`, which is what we want to avoid.
+//
+//   - Stale-directory pruning: directories under `postman/specs/` whose name
+//     no longer matches a current `publish: true` service are removed after
+//     the live mirrors have been written. This still cleans up renamed or
+//     removed services, but does so AFTER the live files are stable so the
+//     watcher never sees a moment of empty postman/specs/.
+//
 //   - Discovery: scans apps/<id>/openapi.yaml for every workspace app. This
 //     is glob-style discovery so adding a new service app automatically
 //     participates in the report (visible in CI logs) without editing a list.
@@ -51,9 +65,8 @@
 //
 //   - .postman/resources.yaml — managed by Postman; do not edit here.
 //   - .postman/workflows.yaml — managed by Postman; do not edit here.
-//   - Multi-spec OpenAPI merge — the gateway currently copies a single spec;
-//     a real multi-source merge is a separate change once multiple services
-//     generate specs.
+//   - Multi-spec OpenAPI merge — that's handled by api-gateway's own
+//     build:spec task; this script only mirrors already-merged outputs.
 //
 // ─── Invocation ──────────────────────────────────────────────────────────────
 //
@@ -168,6 +181,26 @@ const mirrorSpec = (sourcePath: string, destinationPath: string): void => {
   fs.writeFileSync(destinationPath, bytes);
 };
 
+// Remove directories under POSTMAN_SPECS_DIR whose names don't match any
+// currently-published service. This is the cleanup pass that replaces the
+// previous "wipe everything first" behaviour: we now write the live mirrors
+// first so Postman's git watcher never sees an empty directory, then prune
+// only the directories that are truly stale (renamed or removed services).
+//
+// The parent postman/ directory (which holds collections/, environments/,
+// mocks/, etc.) is never touched.
+const pruneStaleSpecDirs = (liveDisplayNames: Set<string>): void => {
+  if (!fs.existsSync(POSTMAN_SPECS_DIR)) return;
+
+  for (const entry of fs.readdirSync(POSTMAN_SPECS_DIR)) {
+    if (liveDisplayNames.has(entry)) continue;
+    fs.rmSync(path.join(POSTMAN_SPECS_DIR, entry), {
+      recursive: true,
+      force: true,
+    });
+  }
+};
+
 // Render the summary block in the agreed shape:
 //
 //   ──────────────────────────────────
@@ -214,6 +247,14 @@ const renderSummary = (
 };
 
 const main = (): void => {
+  // In-place mirror: write the live specs into their existing destinations
+  // first. Each run touches the same relative path the Postman workspace
+  // already tracks, so the watcher sees a content modification rather than a
+  // delete+add event. Files at the destination may not exist yet (first
+  // run, or a new service was added) — `mirrorSpec` creates the directory
+  // tree on demand.
+  fs.mkdirSync(POSTMAN_SPECS_DIR, { recursive: true });
+
   const services = discoverServices();
 
   // Compute the mirror plan up front so we can build updatedNames with a
@@ -234,6 +275,15 @@ const main = (): void => {
     );
     mirrorSpec(source, destinationPath);
   }
+
+  // After the live mirrors are in place, prune any directories under
+  // postman/specs/ that no longer correspond to a published service. This
+  // preserves the clean-mirror invariant for renamed/removed services while
+  // keeping the existing display-name directories untouched on every run.
+  const liveDisplayNames = new Set(
+    mirrorPlan.map(({ displayName }) => displayName),
+  );
+  pruneStaleSpecDirs(liveDisplayNames);
 
   const updatedNames = mirrorPlan.map(({ displayName }) => displayName);
 
