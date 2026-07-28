@@ -59,7 +59,7 @@ registry.registerPath({
   method: "post",
   path: "/api/v1/admin/auth/login",
   operationId: "adminLogin",
-  tags: ["Admin Authentication"],
+  tags: ["Admin"],
   summary: adminServiceOpenApiDescriptions.auth.login.summary,
   description: adminServiceOpenApiDescriptions.auth.login.description,
   security: [],
@@ -99,7 +99,7 @@ registry.registerPath({
   method: "post",
   path: "/api/v1/admin/auth/logout",
   operationId: "adminLogout",
-  tags: ["Admin Authentication"],
+  tags: ["Admin"],
   summary: adminServiceOpenApiDescriptions.auth.logout.summary,
   description: adminServiceOpenApiDescriptions.auth.logout.description,
   // Both Bearer JWT and cookie auth are accepted; the routes file's

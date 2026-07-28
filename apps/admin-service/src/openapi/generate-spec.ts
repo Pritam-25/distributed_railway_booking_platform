@@ -23,19 +23,23 @@ try {
       },
       {
         url: "http://localhost:4002",
-        description: "Local Direct Service URL",
+        description: "Local Direct Admin Service URL",
       },
     ],
   });
 
+  /*
   const outputPath = path.resolve(__dirname, "../../openapi.json");
-  const yamlOutputPath = path.resolve(__dirname, "../../openapi.yaml");
-
+  
   fs.writeFileSync(
     outputPath,
     JSON.stringify(openapiDocument, null, 2),
     "utf-8",
   );
+  */
+
+  const yamlOutputPath = path.resolve(__dirname, "../../openapi.yaml");
+
   fs.writeFileSync(
     yamlOutputPath,
     yaml.dump(openapiDocument, {
@@ -46,7 +50,8 @@ try {
     "utf-8",
   );
   console.log(
-    `✅ admin-service openapi spec generated:\n   ${outputPath}\n   ${yamlOutputPath}`,
+    // `✅ admin-service openapi spec generated:\n   ${outputPath}\n   ${yamlOutputPath}`,
+    `✅ admin-service openapi spec generated:\n ${yamlOutputPath}`,
   );
 } catch (err: unknown) {
   console.error("❌ Spec Generation Error details:");

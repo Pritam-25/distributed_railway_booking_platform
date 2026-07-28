@@ -7,16 +7,16 @@
   },
   "tags": [
     {
-      "name": "Admin Authentication",
-      "x-displayName": "Admin Authentication"
+      "name": "Admin",
+      "x-displayName": "Admin"
     },
     {
       "name": "Authentication",
       "x-displayName": "Authentication"
     },
     {
-      "name": "User Profile",
-      "x-displayName": "User Profile"
+      "name": "Users",
+      "x-displayName": "Users"
     }
   ],
   "paths": {
@@ -28,12 +28,12 @@
         },
         {
           "url": "http://localhost:4002",
-          "description": "Local Direct Service URL"
+          "description": "Local Direct Admin Service URL"
         }
       ],
       "post": {
         "operationId": "adminLogin",
-        "tags": ["Admin Authentication"],
+        "tags": ["Admin"],
         "summary": "Admin Login",
         "description": "Authenticates an administrator using email and password. On success, and the JWT access_token (7-day expiry) is set as an HTTP-only cookie scoped to the admin auth path.\n\n**Request Body Fields:**\n- `email` - The administrator's email address.\n- `password` - Administrator password validated against the password policy.\n\n**Response:**\nReturns the authenticated admin profile in the success envelope's `data` field.\n\n**Outcomes:**\n- 200 OK - Credentials are valid and the admin is authenticated.\n- 400 Bad Request - The request body failed schema validation.\n- 401 Unauthorized - The email is unknown or the password does not match.\n- 429 Too Many Requests - Login attempts were rate-limited.\n- 500 Internal Server Error - The service could not complete authentication.\n\n**Notes:**\n- Admin accounts are seeded at database setup time. There is no public admin signup flow.\n- All subsequent admin-only endpoints require the access token returned by this endpoint.",
         "security": [],
@@ -172,12 +172,12 @@
         },
         {
           "url": "http://localhost:4002",
-          "description": "Local Direct Service URL"
+          "description": "Local Direct Admin Service URL"
         }
       ],
       "post": {
         "operationId": "adminLogout",
-        "tags": ["Admin Authentication"],
+        "tags": ["Admin"],
         "summary": "Admin Logout",
         "description": "Clears the admin-side access token cookie for the current session. The endpoint is idempotent and does not require a request body.\n\n**Response:**\nReturns a success envelope with an empty data payload after the admin access token cookie has been cleared.\n\n**Outcomes:**\n- 200 OK - The admin session cookie was cleared.\n- 401 Unauthorized - The admin access token cookie is missing, invalid, or has already expired.\n- 500 Internal Server Error - The service could not complete logout.\n\n**Notes:**\n- The endpoint expects the admin access token cookie to be present. Clients should send credentials with the request.",
         "security": [
@@ -298,7 +298,7 @@
         },
         {
           "url": "http://localhost:4001",
-          "description": "Local Direct Service URL"
+          "description": "Local Direct User Service URL"
         }
       ],
       "post": {
@@ -425,7 +425,7 @@
         },
         {
           "url": "http://localhost:4001",
-          "description": "Local Direct Service URL"
+          "description": "Local Direct User Service URL"
         }
       ],
       "post": {
@@ -542,7 +542,7 @@
         },
         {
           "url": "http://localhost:4001",
-          "description": "Local Direct Service URL"
+          "description": "Local Direct User Service URL"
         }
       ],
       "post": {
@@ -669,7 +669,7 @@
         },
         {
           "url": "http://localhost:4001",
-          "description": "Local Direct Service URL"
+          "description": "Local Direct User Service URL"
         }
       ],
       "post": {
@@ -787,7 +787,7 @@
         },
         {
           "url": "http://localhost:4001",
-          "description": "Local Direct Service URL"
+          "description": "Local Direct User Service URL"
         }
       ],
       "get": {
@@ -887,7 +887,7 @@
         },
         {
           "url": "http://localhost:4001",
-          "description": "Local Direct Service URL"
+          "description": "Local Direct User Service URL"
         }
       ],
       "delete": {
@@ -1035,7 +1035,7 @@
         },
         {
           "url": "http://localhost:4001",
-          "description": "Local Direct Service URL"
+          "description": "Local Direct User Service URL"
         }
       ],
       "post": {
@@ -1114,7 +1114,7 @@
         },
         {
           "url": "http://localhost:4001",
-          "description": "Local Direct Service URL"
+          "description": "Local Direct User Service URL"
         }
       ],
       "post": {
@@ -1193,7 +1193,7 @@
         },
         {
           "url": "http://localhost:4001",
-          "description": "Local Direct Service URL"
+          "description": "Local Direct User Service URL"
         }
       ],
       "post": {
@@ -1320,7 +1320,7 @@
         },
         {
           "url": "http://localhost:4001",
-          "description": "Local Direct Service URL"
+          "description": "Local Direct User Service URL"
         }
       ],
       "post": {
@@ -1437,7 +1437,7 @@
         },
         {
           "url": "http://localhost:4001",
-          "description": "Local Direct Service URL"
+          "description": "Local Direct User Service URL"
         }
       ],
       "post": {
@@ -1525,12 +1525,12 @@
         },
         {
           "url": "http://localhost:4001",
-          "description": "Local Direct Service URL"
+          "description": "Local Direct User Service URL"
         }
       ],
       "get": {
         "operationId": "getProfile",
-        "tags": ["User Profile"],
+        "tags": ["Users"],
         "summary": "Get Current User Profile",
         "description": "Returns the profile information for the currently authenticated user.\n\n**Request Body Fields:**\n- None - The user is resolved from the active authentication context.\n\n**Response:**\nReturns the user profile object with id, firstName, lastName, email, and createdAt.\n\n**Outcomes:**\n- 200 OK - The profile was retrieved successfully.\n- 400 Bad Request - The request could not be processed.\n- 401 Unauthorized - Authentication credentials were missing or invalid.\n- 404 Not Found - No profile exists for the authenticated user.\n- 429 Too Many Requests - Profile lookup was rate-limited.\n- 500 Internal Server Error - The service could not load the profile.",
         "security": [
@@ -1654,7 +1654,7 @@
       },
       "put": {
         "operationId": "updateProfile",
-        "tags": ["User Profile"],
+        "tags": ["Users"],
         "summary": "Update Current User Profile",
         "description": "Updates the authenticated user's profile fields using the current request schema.\n\n**Request Body Fields:**\n- `firstName` - Updated first name for the user profile.\n- `lastName` - Updated last name for the user profile.\n\n**Response:**\nReturns the updated user profile object after the stored record and cache have been synchronized.\n\n**Outcomes:**\n- 200 OK - The profile was updated successfully.\n- 400 Bad Request - The request body failed validation.\n- 401 Unauthorized - Authentication credentials were missing or invalid.\n- 429 Too Many Requests - Profile updates were rate-limited.\n- 500 Internal Server Error - The service could not update the profile.\n\n**Notes:**\n- The current request schema requires both firstName and lastName.",
         "security": [
@@ -2253,11 +2253,11 @@
   "x-tagGroups": [
     {
       "name": "Admin Service API",
-      "tags": ["Admin Authentication"]
+      "tags": ["Admin"]
     },
     {
       "name": "User Service API",
-      "tags": ["Authentication", "User Profile"]
+      "tags": ["Authentication", "Users"]
     }
   ]
 }

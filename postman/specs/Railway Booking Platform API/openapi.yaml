@@ -20,23 +20,23 @@ info:
       - **Payment Service** — Payment processing. *(future)*
       - **Notification Service** — User-facing notifications. *(internal)*
 tags:
-  - name: Admin Authentication
-    x-displayName: Admin Authentication
+  - name: Admin
+    x-displayName: Admin
   - name: Authentication
     x-displayName: Authentication
-  - name: User Profile
-    x-displayName: User Profile
+  - name: Users
+    x-displayName: Users
 paths:
   /api/v1/admin/auth/login:
     servers:
       - url: http://localhost:4000
         description: API Gateway Proxy URL
       - url: http://localhost:4002
-        description: Local Direct Service URL
+        description: Local Direct Admin Service URL
     post:
       operationId: adminLogin
       tags:
-        - Admin Authentication
+        - Admin
       summary: Admin Login
       description: >-
         Authenticates an administrator using email and password. On success, and the JWT access_token (7-day expiry) is
@@ -183,11 +183,11 @@ paths:
       - url: http://localhost:4000
         description: API Gateway Proxy URL
       - url: http://localhost:4002
-        description: Local Direct Service URL
+        description: Local Direct Admin Service URL
     post:
       operationId: adminLogout
       tags:
-        - Admin Authentication
+        - Admin
       summary: Admin Logout
       description: >-
         Clears the admin-side access token cookie for the current session. The endpoint is idempotent and does not
@@ -298,7 +298,7 @@ paths:
       - url: http://localhost:4000
         description: API Gateway Proxy URL
       - url: http://localhost:4001
-        description: Local Direct Service URL
+        description: Local Direct User Service URL
     post:
       operationId: sendOtp
       tags:
@@ -425,7 +425,7 @@ paths:
       - url: http://localhost:4000
         description: API Gateway Proxy URL
       - url: http://localhost:4001
-        description: Local Direct Service URL
+        description: Local Direct User Service URL
     post:
       operationId: verifyOtp
       tags:
@@ -543,7 +543,7 @@ paths:
       - url: http://localhost:4000
         description: API Gateway Proxy URL
       - url: http://localhost:4001
-        description: Local Direct Service URL
+        description: Local Direct User Service URL
     post:
       operationId: login
       tags:
@@ -666,7 +666,7 @@ paths:
       - url: http://localhost:4000
         description: API Gateway Proxy URL
       - url: http://localhost:4001
-        description: Local Direct Service URL
+        description: Local Direct User Service URL
     post:
       operationId: refreshToken
       tags:
@@ -773,7 +773,7 @@ paths:
       - url: http://localhost:4000
         description: API Gateway Proxy URL
       - url: http://localhost:4001
-        description: Local Direct Service URL
+        description: Local Direct User Service URL
     get:
       operationId: getSessions
       tags:
@@ -866,7 +866,7 @@ paths:
       - url: http://localhost:4000
         description: API Gateway Proxy URL
       - url: http://localhost:4001
-        description: Local Direct Service URL
+        description: Local Direct User Service URL
     delete:
       operationId: revokeSession
       tags:
@@ -988,7 +988,7 @@ paths:
       - url: http://localhost:4000
         description: API Gateway Proxy URL
       - url: http://localhost:4001
-        description: Local Direct Service URL
+        description: Local Direct User Service URL
     post:
       operationId: logout
       tags:
@@ -1069,7 +1069,7 @@ paths:
       - url: http://localhost:4000
         description: API Gateway Proxy URL
       - url: http://localhost:4001
-        description: Local Direct Service URL
+        description: Local Direct User Service URL
     post:
       operationId: logoutAll
       tags:
@@ -1139,7 +1139,7 @@ paths:
       - url: http://localhost:4000
         description: API Gateway Proxy URL
       - url: http://localhost:4001
-        description: Local Direct Service URL
+        description: Local Direct User Service URL
     post:
       operationId: forgotPassword
       tags:
@@ -1248,7 +1248,7 @@ paths:
       - url: http://localhost:4000
         description: API Gateway Proxy URL
       - url: http://localhost:4001
-        description: Local Direct Service URL
+        description: Local Direct User Service URL
     post:
       operationId: VerifyPasswordResetOtp
       tags:
@@ -1351,7 +1351,7 @@ paths:
       - url: http://localhost:4000
         description: API Gateway Proxy URL
       - url: http://localhost:4001
-        description: Local Direct Service URL
+        description: Local Direct User Service URL
     post:
       operationId: resetPassword
       tags:
@@ -1440,11 +1440,11 @@ paths:
       - url: http://localhost:4000
         description: API Gateway Proxy URL
       - url: http://localhost:4001
-        description: Local Direct Service URL
+        description: Local Direct User Service URL
     get:
       operationId: getProfile
       tags:
-        - User Profile
+        - Users
       summary: Get Current User Profile
       description: |-
         Returns the profile information for the currently authenticated user.
@@ -1552,7 +1552,7 @@ paths:
     put:
       operationId: updateProfile
       tags:
-        - User Profile
+        - Users
       summary: Update Current User Profile
       description: |-
         Updates the authenticated user's profile fields using the current request schema.
@@ -2105,8 +2105,8 @@ components:
 x-tagGroups:
   - name: Admin Service API
     tags:
-      - Admin Authentication
+      - Admin
   - name: User Service API
     tags:
       - Authentication
-      - User Profile
+      - Users

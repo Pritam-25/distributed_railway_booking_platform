@@ -1,7 +1,7 @@
 owner: "28871900"
 team: "15266848"
 lastUpdatedBy: "28871900"
-lastRevision: 1785257986000
+lastRevision: 1785279223000
 name: IRCTC Environment
 color: 0
 values:
@@ -24,4 +24,4 @@ values:
     value: Password@123
     enabled: true
 createdAt: 2026-07-28T08:41:38.000Z
-updatedAt: 2026-07-28T16:59:46.000Z
+updatedAt: 2026-07-28T22:53:43.000Z

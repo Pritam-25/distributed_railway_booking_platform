@@ -22,7 +22,7 @@ servers:
   - url: http://localhost:4000
     description: API Gateway Proxy URL
   - url: http://localhost:4002
-    description: Local Direct Service URL
+    description: Local Direct Admin Service URL
 components:
   securitySchemes:
     bearerAuth:
@@ -193,7 +193,7 @@ paths:
     post:
       operationId: adminLogin
       tags:
-        - Admin Authentication
+        - Admin
       summary: Admin Login
       description: >-
         Authenticates an administrator using email and password. On success, and the JWT access_token (7-day expiry) is
@@ -339,7 +339,7 @@ paths:
     post:
       operationId: adminLogout
       tags:
-        - Admin Authentication
+        - Admin
       summary: Admin Logout
       description: >-
         Clears the admin-side access token cookie for the current session. The endpoint is idempotent and does not

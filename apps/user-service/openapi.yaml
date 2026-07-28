@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: >+
 
-    # User Service API
+    # Pritam's User Service API
 
 
     The **User Service API** provides authentication, identity, and profile management for the IRCTC Railway Booking
@@ -48,7 +48,7 @@ servers:
   - url: http://localhost:4000
     description: API Gateway Proxy URL
   - url: http://localhost:4001
-    description: Local Direct Service URL
+    description: Local Direct User Service URL
 components:
   securitySchemes:
     bearerAuth:
@@ -1572,7 +1572,7 @@ paths:
     get:
       operationId: getProfile
       tags:
-        - User Profile
+        - Users
       summary: Get Current User Profile
       description: |-
         Returns the profile information for the currently authenticated user.
@@ -1680,7 +1680,7 @@ paths:
     put:
       operationId: updateProfile
       tags:
-        - User Profile
+        - Users
       summary: Update Current User Profile
       description: |-
         Updates the authenticated user's profile fields using the current request schema.

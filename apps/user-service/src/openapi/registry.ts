@@ -364,7 +364,7 @@ registry.registerPath({
   method: "get",
   path: "/api/v1/users/me",
   operationId: "getProfile",
-  tags: ["User Profile"],
+  tags: ["Users"],
   summary: userServiceOpenApiDescriptions.userProfile.getProfile.summary,
   description:
     userServiceOpenApiDescriptions.userProfile.getProfile.description,
@@ -393,7 +393,7 @@ registry.registerPath({
   method: "put",
   path: "/api/v1/users/me",
   operationId: "updateProfile",
-  tags: ["User Profile"],
+  tags: ["Users"],
   summary: userServiceOpenApiDescriptions.userProfile.updateProfile.summary,
   description:
     userServiceOpenApiDescriptions.userProfile.updateProfile.description,

@@ -23,12 +23,6 @@
  */
 
 export * from "./activeSession"
-export * from "./adminAuthResponse"
-export * from "./adminAuthResponseAdmin"
-export * from "./adminLogin200"
-export * from "./adminLoginBody"
-export * from "./adminLoginRequest"
-export * from "./adminLogout200"
 export * from "./emptyResponse"
 export * from "./errorDetail"
 export * from "./errorResponse"

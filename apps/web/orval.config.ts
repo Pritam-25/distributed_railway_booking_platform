@@ -3,7 +3,7 @@ import { defineConfig } from "orval"
 export default defineConfig({
   apiGateway: {
     input: {
-      target: "../api-gateway/openapi.json",
+      target: "../api-gateway/openapi.yaml",
       override: {
         transformer: "./scripts/orval-transformer.ts",
       },

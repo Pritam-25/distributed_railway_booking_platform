@@ -247,7 +247,7 @@ export const apiTitle = "User Service API";
 export const apiVersion = "1.0.0";
 
 export const apiDescription = `
-# User Service API
+# Pritam's User Service API
 
 The **User Service API** provides authentication, identity, and profile management for the IRCTC Railway Booking Platform. It enables secure user registration, login, session management, password recovery, and profile operations through a RESTful API.
 

@@ -23,19 +23,22 @@ try {
       },
       {
         url: "http://localhost:4001",
-        description: "Local Direct Service URL",
+        description: "Local Direct User Service URL",
       },
     ],
   });
 
+  /*
   const outputPath = path.resolve(__dirname, "../../openapi.json");
-  const yamlOutputPath = path.resolve(__dirname, "../../openapi.yaml");
 
   fs.writeFileSync(
     outputPath,
     JSON.stringify(openapiDocument, null, 2),
     "utf-8",
   );
+  */
+
+  const yamlOutputPath = path.resolve(__dirname, "../../openapi.yaml");
   fs.writeFileSync(
     yamlOutputPath,
     yaml.dump(openapiDocument, {
@@ -46,7 +49,8 @@ try {
     "utf-8",
   );
   console.log(
-    `✅ user-service openapi spec generated:\n   ${outputPath}\n   ${yamlOutputPath}`,
+    // `✅ user-service openapi spec generated:\n   ${outputPath}\n   ${yamlOutputPath}`,
+    `✅ user-service openapi spec generated:\n ${yamlOutputPath}`,
   );
 } catch (err: unknown) {
   console.error("❌ Spec Generation Error details:");
