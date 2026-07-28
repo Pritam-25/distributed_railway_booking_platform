@@ -6,7 +6,7 @@
       "cache": false
     },
     "api-gateway#build:spec": {
-      "dependsOn": ["user-service#build:spec"],
+      "dependsOn": ["user-service#build:spec", "admin-service#build:spec"],
       "cache": false
     },
     "generate:api": {

@@ -34,7 +34,6 @@
     "tsx": "^4.23.0"
   },
   "dependencies": {
-    "@asteasolutions/zod-to-openapi": "^9.1.0",
     "@irctc/contracts": "workspace:*",
     "@irctc/errors": "workspace:*",
     "@irctc/http": "workspace:*",

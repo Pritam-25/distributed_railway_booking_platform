@@ -35,6 +35,18 @@ export type ServiceMetadata = {
    * (a log line is still emitted so the omission is visible).
    */
   publish: boolean;
+
+  /**
+   * When `true`, the service's `apps/<id>/openapi.yaml` is included as an
+   * input to the gateway's `redocly join` step. The api-gateway itself is
+   * the merged output and must opt out — set this to `false` to exclude a
+   * service from the merged gateway contract while still publishing it to
+   * Postman (or vice versa).
+   *
+   * Defaults to `true` when omitted, so leaf services do not need to set
+   * this explicitly.
+   */
+  mergeInput?: boolean;
 };
 
 /**
@@ -50,15 +62,19 @@ export const SERVICES: Readonly<Record<string, ServiceMetadata>> = {
     displayName: "User Service API",
     publish: true,
   },
-  "api-gateway": {
-    displayName: "API Gateway",
+  "admin-service": {
+    displayName: "Admin Service API",
     publish: true,
   },
+  "api-gateway": {
+    displayName: "Railway Booking Platform API",
+    publish: true,
+    mergeInput: false,
+  },
   // Future services — add entries here when they are intended for Postman:
+  // "inventory-service": { displayName: "Inventory Service API", publish: true  },
   // "booking-service":   { displayName: "Booking Service API",   publish: true  },
   // "payment-service":   { displayName: "Payment Service API",   publish: true  },
-  // "inventory-service": { displayName: "Inventory Service API", publish: true  },
   // "search-service":    { displayName: "Search Service API",    publish: true  },
-  // "admin-service":     { displayName: "Admin Service API",     publish: true  },
   // "notification-service": { displayName: "Notification Service API", publish: false },
 };

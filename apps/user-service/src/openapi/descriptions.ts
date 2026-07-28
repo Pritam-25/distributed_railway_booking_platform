@@ -1,40 +1,4 @@
-type EndpointDoc = {
-  summary: string;
-  description: string;
-  sessionIdDescription?: string;
-};
-
-const bulletList = (items: string[]) =>
-  items.map((item) => `- ${item}`).join("\n");
-
-const joinSections = (...sections: Array<string | undefined>) =>
-  sections
-    .filter((section) => section && section.trim().length > 0)
-    .join("\n\n");
-
-const buildEndpointDoc = (input: {
-  summary: string;
-  overview: string;
-  requestBodyFields: string[];
-  response: string;
-  outcomes: string[];
-  notes?: string[];
-  sessionIdDescription?: string;
-}): EndpointDoc => ({
-  summary: input.summary,
-  description: joinSections(
-    input.overview,
-    `**Request Body Fields:**\n${bulletList(input.requestBodyFields)}`,
-    `**Response:**\n${input.response}`,
-    `**Outcomes:**\n${bulletList(input.outcomes)}`,
-    input.notes && input.notes.length > 0
-      ? `**Notes:**\n${bulletList(input.notes)}`
-      : undefined,
-  ),
-  ...(input.sessionIdDescription
-    ? { sessionIdDescription: input.sessionIdDescription }
-    : {}),
-});
+import { buildEndpointDoc } from "@irctc/openapi";
 
 export const userServiceOpenApiDescriptions = {
   auth: {
@@ -147,8 +111,6 @@ export const userServiceOpenApiDescriptions = {
         "429 Too Many Requests - Session revocation was rate-limited.",
         "500 Internal Server Error - The service could not revoke the session.",
       ],
-      sessionIdDescription:
-        "The unique identifier of the session to be revoked.",
     }),
     logout: buildEndpointDoc({
       summary: "Logout Current Session",
@@ -309,26 +271,4 @@ Authenticated users can manage their own account information using:
 - \`GET /api/v1/users/me\` — Retrieve the authenticated user's profile.
 - \`PUT /api/v1/users/me\` — Update the authenticated user's profile.
 
-## Authentication Methods
-
-This API supports two authentication mechanisms:
-
-- **Bearer Token**
-  \`\`\`
-  Authorization: Bearer <access_token>
-  \`\`\`
-
-- **HTTP-only Cookie**
-  \`\`\`
-  access_token
-  \`\`\`
-
-Some authentication endpoints also use the following secure cookies:
-
-- \`refresh_token\`
-- \`otp_session\`
-
----
-
-All requests use the \`{{baseUrl}}\` environment variable as the API base URL. Before sending requests, ensure the **IRCTC Environment** is selected and \`baseUrl\` is configured correctly.
 `;

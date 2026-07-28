@@ -4,12 +4,13 @@ localResources:
   specs:
     - ../postman/specs/User Service API/openapi.yaml
     - ../postman/specs/API Gateway/openapi.yaml
+    - ../D:/dev/distributed_railway_booking_platform/apps/admin-service/package.json
+    - ../D:/dev/distributed_railway_booking_platform/apps/user-service/package.json
+    - ../D:/dev/distributed_railway_booking_platform/apps/api-gateway/package.json
+    - ../D:/dev/distributed_railway_booking_platform/postman/specs/User Service API/openapi.yaml
+    - ../D:/dev/distributed_railway_booking_platform/postman/specs/API Gateway/openapi.yaml
   documents:
     - ../README.md
-resourceNameMappings:
-  specs:
-    - ../postman/specs/User Service API/openapi.yaml: User Service API
-    - ../postman/specs/API Gateway/openapi.yaml: Railway Booking Platform API
 cloudResources:
   collections:
     ../postman/collections/User Service API: 28871900-5a2003b8-ea03-48bf-a6b4-fe1f07b7f67e
@@ -20,3 +21,7 @@ cloudResources:
     ../README.md: 63e415d5-dfb8-45ca-9677-f80c6c20effb
   environments:
     ../postman/environments/IRCTC Environment.environment.yaml: 28871900-2a43cd22-b84e-4e29-b8df-2c3277ceac6c
+resourceNameMappings:
+  specs:
+    - ../postman/specs/User Service API/openapi.yaml: openapi.yaml
+    - ../postman/specs/API Gateway/openapi.yaml: openapi.yaml

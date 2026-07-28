@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: User Service API
   version: 1.0.0
-  description: >
+  description: >+
 
     # User Service API
 
@@ -44,36 +44,6 @@ info:
 
     - `PUT /api/v1/users/me` — Update the authenticated user's profile.
 
-
-    ## Authentication Methods
-
-
-    This API supports two authentication mechanisms:
-
-
-    - **Bearer Token**
-      ```
-      Authorization: Bearer <access_token>
-      ```
-
-    - **HTTP-only Cookie**
-      ```
-      access_token
-      ```
-
-    Some authentication endpoints also use the following secure cookies:
-
-
-    - `refresh_token`
-
-    - `otp_session`
-
-
-    ---
-
-
-    All requests use the `{{baseUrl}}` environment variable as the API base URL. Before sending requests, ensure the
-    **IRCTC Environment** is selected and `baseUrl` is configured correctly.
 servers:
   - url: http://localhost:4000
     description: API Gateway Proxy URL
