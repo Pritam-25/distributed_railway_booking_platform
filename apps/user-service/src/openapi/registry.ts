@@ -8,6 +8,8 @@ import {
   EmptySchema,
   registerGatewayAuth,
   GatewayAuthSecurity,
+  ErrorResponseSchema,
+  ErrorDetailSchema,
   z,
 } from "@irctc/openapi";
 import { ERROR_CODES } from "@irctc/errors";
@@ -16,10 +18,14 @@ import {
   LoginSchema,
   VerifyOtpRequestSchema,
   ForgotPasswordRequestSchema,
-  VerifyResetOtpRequestSchema,
+  VerifyPasswordResetOtpRequestSchema,
   ResetPasswordRequestSchema,
   UserResponseSchema,
-  UserUpdateSchema,
+  UpdateProfileSchema,
+  SessionSummarySchema,
+  ActiveSessionSchema,
+  ForgotPasswordResponseSchema,
+  VerifyPasswordResetOtpResponseSchema,
 } from "@dto";
 import { ERROR_MESSAGES, ERROR_CODES as USER_ERROR } from "@utils/errors";
 
@@ -32,10 +38,16 @@ registry.register("RegisterRequest", RegisterSchema);
 registry.register("LoginRequest", LoginSchema);
 registry.register("VerifyOtpRequest", VerifyOtpRequestSchema);
 registry.register("ForgotPasswordRequest", ForgotPasswordRequestSchema);
-registry.register("VerifyResetOtpRequest", VerifyResetOtpRequestSchema);
+registry.register(
+  "VerifyPasswordResetOtpRequest",
+  VerifyPasswordResetOtpRequestSchema,
+);
 registry.register("ResetPasswordRequest", ResetPasswordRequestSchema);
-registry.register("UserResponse", UserResponseSchema);
-registry.register("UserUpdateRequest", UserUpdateSchema);
+registry.register("UpdateProfileRequest", UpdateProfileSchema);
+registry.register("SessionSummary", SessionSummarySchema);
+registry.register("ActiveSession", ActiveSessionSchema);
+registry.register("ErrorDetail", ErrorDetailSchema);
+registry.register("ErrorResponse", ErrorResponseSchema);
 
 /**
  * Security Schemes (Bearer JWT & access_token Cookie for Gateway Auth)
@@ -48,6 +60,7 @@ registerGatewayAuth(registry);
 registry.registerPath({
   method: "post",
   path: "/api/v1/auth/send-otp",
+  operationId: "sendOtp",
   tags: ["Authentication"],
   summary: "Send OTP for User Registration",
   request: {
@@ -78,6 +91,7 @@ registry.registerPath({
 registry.registerPath({
   method: "post",
   path: "/api/v1/auth/verify-otp",
+  operationId: "verifyOtp",
   tags: ["Authentication"],
   summary: "Verify OTP & Complete Registration",
   request: {
@@ -108,6 +122,7 @@ registry.registerPath({
 registry.registerPath({
   method: "post",
   path: "/api/v1/auth/login",
+  operationId: "login",
   tags: ["Authentication"],
   summary: "Login User",
   request: {
@@ -138,17 +153,13 @@ registry.registerPath({
 registry.registerPath({
   method: "post",
   path: "/api/v1/auth/refresh",
+  operationId: "refreshToken",
   tags: ["Authentication"],
   summary: "Refresh Access Token",
   responses: {
     200: createOpenApiResponse(
       "Token refreshed successfully",
-      SuccessResponseSchema(
-        z.object({
-          accessToken: z.string().openapi({ example: "eyJhbGciOi..." }),
-        }),
-        "Token refreshed successfully",
-      ),
+      SuccessResponseSchema(UserResponseSchema, "Token refreshed successfully"),
     ),
     ...CommonErrorResponses,
     401: createOpenApiResponse(
@@ -164,6 +175,7 @@ registry.registerPath({
 registry.registerPath({
   method: "get",
   path: "/api/v1/auth/sessions",
+  operationId: "getSessions",
   tags: ["Authentication"],
   summary: "Get Active User Sessions",
   security: GatewayAuthSecurity,
@@ -171,16 +183,7 @@ registry.registerPath({
     200: createOpenApiResponse(
       "List of active sessions",
       SuccessResponseSchema(
-        z.array(
-          z.object({
-            id: z.string().openapi({ format: "uuid" }),
-            ipAddress: z.string().openapi({ example: "192.168.1.1" }),
-            userAgent: z.string().openapi({ example: "Mozilla/5.0..." }),
-            createdAt: z
-              .string()
-              .openapi({ example: "2026-07-24T00:00:00.000Z" }),
-          }),
-        ),
+        z.array(ActiveSessionSchema),
         "Active sessions retrieved successfully",
       ),
     ),
@@ -192,15 +195,15 @@ registry.registerPath({
 registry.registerPath({
   method: "delete",
   path: "/api/v1/auth/sessions/{sessionId}",
+  operationId: "revokeSession",
   tags: ["Authentication"],
   summary: "Revoke Active Session",
   security: GatewayAuthSecurity,
   request: {
     params: z.object({
-      sessionId: z.string().openapi({
-        format: "uuid",
-        example: "550e8400-e29b-41d4-a716-446655440000",
-      }),
+      sessionId: z
+        .uuid()
+        .openapi({ example: "550e8400-e29b-41d4-a716-446655440000" }),
     }),
   },
   responses: {
@@ -223,41 +226,37 @@ registry.registerPath({
 registry.registerPath({
   method: "post",
   path: "/api/v1/auth/logout",
+  operationId: "logout",
   tags: ["Authentication"],
   summary: "Logout Current Session",
-  security: GatewayAuthSecurity,
   responses: {
     200: createOpenApiResponse(
       "Logged out successfully",
       SuccessResponseSchema(EmptySchema, "Logged out successfully"),
     ),
     ...CommonErrorResponses,
-    401: ErrorResponses[401],
   },
 });
 
 registry.registerPath({
   method: "post",
   path: "/api/v1/auth/logout-all",
+  operationId: "logoutAll",
   tags: ["Authentication"],
   summary: "Logout All Sessions",
-  security: GatewayAuthSecurity,
   responses: {
     200: createOpenApiResponse(
       "Logged out from all sessions",
-      SuccessResponseSchema(
-        EmptySchema,
-        "Logged out from all sessions successfully",
-      ),
+      SuccessResponseSchema(EmptySchema, "Logged out from all devices"),
     ),
     ...CommonErrorResponses,
-    401: ErrorResponses[401],
   },
 });
 
 registry.registerPath({
   method: "post",
   path: "/api/v1/auth/forgot-password",
+  operationId: "forgotPassword",
   tags: ["Authentication"],
   summary: "Request Password Reset OTP",
   request: {
@@ -273,8 +272,8 @@ registry.registerPath({
     200: createOpenApiResponse(
       "Password reset OTP sent to email",
       SuccessResponseSchema(
-        EmptySchema,
-        "Password reset OTP sent successfully",
+        ForgotPasswordResponseSchema,
+        "OTP sent successfully to your registered email",
       ),
     ),
     ...CommonErrorResponses,
@@ -291,13 +290,14 @@ registry.registerPath({
 registry.registerPath({
   method: "post",
   path: "/api/v1/auth/verify-reset-otp",
+  operationId: "VerifyPasswordResetOtp",
   tags: ["Authentication"],
   summary: "Verify Password Reset OTP",
   request: {
     body: {
       content: {
         "application/json": {
-          schema: VerifyResetOtpRequestSchema,
+          schema: VerifyPasswordResetOtpRequestSchema,
         },
       },
     },
@@ -306,13 +306,8 @@ registry.registerPath({
     200: createOpenApiResponse(
       "OTP verified, returns password reset token",
       SuccessResponseSchema(
-        z.object({
-          passwordResetToken: z.string().openapi({
-            format: "uuid",
-            example: "550e8400-e29b-41d4-a716-446655440000",
-          }),
-        }),
-        "Reset OTP verified successfully",
+        VerifyPasswordResetOtpResponseSchema,
+        "OTP verified successfully",
       ),
     ),
     ...CommonErrorResponses,
@@ -329,6 +324,7 @@ registry.registerPath({
 registry.registerPath({
   method: "post",
   path: "/api/v1/auth/reset-password",
+  operationId: "resetPassword",
   tags: ["Authentication"],
   summary: "Reset Password",
   request: {
@@ -343,7 +339,10 @@ registry.registerPath({
   responses: {
     200: createOpenApiResponse(
       "Password reset successfully",
-      SuccessResponseSchema(EmptySchema, "Password reset successfully"),
+      SuccessResponseSchema(
+        EmptySchema,
+        "Password reset successfully. Please login with your new credentials.",
+      ),
     ),
     ...CommonErrorResponses,
   },
@@ -355,6 +354,7 @@ registry.registerPath({
 registry.registerPath({
   method: "get",
   path: "/api/v1/users/me",
+  operationId: "getProfile",
   tags: ["User Profile"],
   summary: "Get Current User Profile",
   security: GatewayAuthSecurity,
@@ -363,7 +363,7 @@ registry.registerPath({
       "User profile retrieved successfully",
       SuccessResponseSchema(
         UserResponseSchema,
-        "User profile retrieved successfully",
+        "Profile retrieved successfully",
       ),
     ),
     ...CommonErrorResponses,
@@ -381,6 +381,7 @@ registry.registerPath({
 registry.registerPath({
   method: "put",
   path: "/api/v1/users/me",
+  operationId: "updateProfile",
   tags: ["User Profile"],
   summary: "Update Current User Profile",
   security: GatewayAuthSecurity,
@@ -388,7 +389,7 @@ registry.registerPath({
     body: {
       content: {
         "application/json": {
-          schema: UserUpdateSchema,
+          schema: UpdateProfileSchema,
         },
       },
     },
@@ -396,10 +397,7 @@ registry.registerPath({
   responses: {
     200: createOpenApiResponse(
       "Profile updated successfully",
-      SuccessResponseSchema(
-        UserResponseSchema,
-        "User profile updated successfully",
-      ),
+      SuccessResponseSchema(UserResponseSchema, "Profile updated successfully"),
     ),
     ...CommonErrorResponses,
     401: ErrorResponses[401],

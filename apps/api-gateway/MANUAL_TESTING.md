@@ -82,8 +82,8 @@ running before the auth/rate-limit gate.
 | :-- | :------------------ | :------------------------------------------ | :-------------- | :----------------------------------------------------------------- | :----------------------- |
 | 1   | Happy path          | Valid JWT, upstream up                      | `200`           | upstream payload                                                   | Yes                      |
 | 2   | Public route        | `auth: none` (e.g. `auth/send-otp`)         | `200`           | upstream payload, `userId=anonymous` in log                        | Yes                      |
-| 3   | Auth missing        | No `Authorization` header                   | `401`           | `ACCESS_TOKEN_MISSING`                                             | **No**                   |
-| 4   | Auth invalid        | Bogus `Bearer` token                        | `401`           | `ACCESS_TOKEN_INVALID`                                             | **No**                   |
+| 3   | Auth missing        | No `Authorization` header                   | `401`           | `UNAUTHORIZED` "Token is invalid or expired"                       | **No**                   |
+| 4   | Auth invalid        | Bogus `Bearer` token                        | `401`           | `UNAUTHORIZED` "Token is invalid or expired"                       | **No**                   |
 | 5   | Rate limit hit      | >10 calls in <60s on an `auth` preset route | `429`           | `RATE_LIMIT_EXCEEDED`; `Retry-After`, `X-RateLimit-*` headers      | **No**                   |
 | 6   | Method not allowed  | HTTP method outside `route.methods`         | `405`           | `METHOD_NOT_ALLOWED`                                               | **No**                   |
 | 7   | Upstream 4xx        | `GET` a non-existent user id                | `404`           | upstream's payload (passed through), proxy logs `INFO` (not error) | Yes                      |
@@ -133,7 +133,7 @@ GET {{gateway}}/api/v1/users/me
 ```
 
 - **Status:** `401`
-- **Body:** `{"success": false, "code": "ACCESS_TOKEN_MISSING", "message": "Access token is missing"}`
+- **Body:** `{"success": false, "error": {"code": "UNAUTHORIZED", "message": "Token is invalid or expired"}}`
 - The proxy log line must be **absent** — the auth middleware short-circuits before the proxy.
 
 ### 4. Auth invalid → 401
@@ -144,7 +144,7 @@ Authorization: Bearer not-a-real-token
 ```
 
 - **Status:** `401`
-- **Body:** `{"success": false, "code": "ACCESS_TOKEN_INVALID", ...}`
+- **Body:** `{"success": false, "error": {"code": "UNAUTHORIZED", "message": "Token is invalid or expired"}}`
 - Same as test 3 — no proxy log line.
 
 ### 5. Rate limit hit → 429

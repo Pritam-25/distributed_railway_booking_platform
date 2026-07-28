@@ -1,0 +1,5 @@
+reviews:
+  path_filters:
+    - "!apps/web/components/**"
+    - "!apps/web/generated/**"
+    - "!apps/web/.agents/**"

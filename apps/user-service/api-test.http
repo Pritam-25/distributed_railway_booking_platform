@@ -20,7 +20,7 @@
 @userId = {{login.response.body.data.id}}
 @activeSessionId = {{getSessions.response.body.data[0].sessionId}}
 @recoverySessionId = {{forgotPassword.response.body.data.sessionId}}
-@passwordResetToken = {{verifyResetOtp.response.body.data.passwordResetToken}}
+@passwordResetToken = {{VerifyPasswordResetOtp.response.body.data.passwordResetToken}}
 
 # ==============================================================================
 # 1. Diagnostics & Health Check
@@ -160,7 +160,7 @@ Content-Type: application/json
 }
 
 ### Phase 2: Verify Password Reset OTP
-# @name verifyResetOtp
+# @name VerifyPasswordResetOtp
 POST {{auth}}/verify-reset-otp
 Content-Type: application/json
 

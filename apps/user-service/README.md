@@ -29,22 +29,22 @@ All under `/api/v1`. All responses use the `@irctc/http`
 | `POST` | `/auth/verify-otp`       | `{ otp }` + `otp_session` cookie                            | `201 {user}` + `auth_token` + `refresh_token` cookies; clears otp_session | `400 OTP_INVALID`, `404 OTP_EXPIRED`, `429 OTP_LOCKED`                             |
 | `POST` | `/auth/login`            | `{ email, password }`                                       | `200 {user}` + `auth_token` + `refresh_token` cookies                     | `401 INVALID_CREDENTIALS`                                                          |
 | `POST` | `/auth/refresh`          | `refresh_token` cookie                                      | `200 {user}` + rotated auth cookies                                       | `401 REFRESH_TOKEN_*`, `DEVICE_FINGERPRINT_MISMATCH`, `SESSION_EXPIRED_OR_REVOKED` |
+| `POST` | `/auth/logout`           | `refresh_token` cookie (optional)                           | `200` + clears both auth cookies (idempotent, never 401)                  | —                                                                                  |
+| `POST` | `/auth/logout-all`       | `refresh_token` cookie (optional)                           | `200` + clears both auth cookies (idempotent, never 401)                  | —                                                                                  |
 | `POST` | `/auth/forgot-password`  | `{ email }`                                                 | `200 {sessionId}` (constant-time — same for unknown email)                | `429 RATE_LIMIT_EXCEEDED`                                                          |
 | `POST` | `/auth/verify-reset-otp` | `{ sessionId, otp }`                                        | `200 {passwordResetToken}` (short-lived bearer)                           | `400 OTP_INVALID`, `404 OTP_EXPIRED`, `429 OTP_LOCKED`                             |
 | `POST` | `/auth/reset-password`   | `{ passwordResetToken, password, confirmPassword }`         | `200` + clears all active sessions for that user                          | `404 RESET_TOKEN_INVALID_OR_EXPIRED`                                               |
 
 ### Authenticated (Gateway-injected headers required)
 
-These routes require valid client identity headers (`X-User-Id` and `X-Session-Id`) injected by the API gateway and verified by `trustGatewayHeaders` middleware.
+These routes require valid client identity headers (`X-User-Id` and `X-Session-Id`) injected by the API gateway and verified by `trustGatewayHeaders` + `sessionMiddleware`.
 
-| Method   | Endpoint                    | Body / params                              | Success                                                                                | Errors                          |
-| -------- | --------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------- | ------------------------------- |
-| `GET`    | `/auth/sessions`            | —                                          | `200 [{ sessionId, fingerprint, createdAt, lastUsedAt, expiresAt }]` (no token hashes) | `401 *`                         |
-| `DELETE` | `/auth/sessions/:sessionId` | path: `sessionId`                          | `200`                                                                                  | `403 SESSION_OWNERSHIP_INVALID` |
-| `POST`   | `/auth/logout`              | `refresh_token` cookie                     | `200` + clears both auth cookies                                                       | `401 *`                         |
-| `POST`   | `/auth/logout-all`          | `refresh_token` cookie                     | `200` + clears both auth cookies                                                       | `401 *`                         |
-| `GET`    | `/users/me`                 | —                                          | `200 {user}`                                                                           | `404 USER_NOT_FOUND`            |
-| `PUT`    | `/users/me`                 | `{ firstName?, lastName? }` (at least one) | `200 {user}`                                                                           | `400 INVALID_INPUT`             |
+| Method   | Endpoint                    | Body / params                              | Success                                                                                                                  | Errors                          |
+| -------- | --------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------- |
+| `GET`    | `/auth/sessions`            | —                                          | `200 [{ sessionId, fingerprint, ipAddress, userAgent, isCurrent?, createdAt, lastUsedAt, expiresAt }]` (no token hashes) | `401 *`                         |
+| `DELETE` | `/auth/sessions/:sessionId` | path: `sessionId`                          | `200`                                                                                                                    | `403 SESSION_OWNERSHIP_INVALID` |
+| `GET`    | `/users/me`                 | —                                          | `200 {user}`                                                                                                             | `404 USER_NOT_FOUND`            |
+| `PUT`    | `/users/me`                 | `{ firstName?, lastName? }` (at least one) | `200 {user}`                                                                                                             | `400 INVALID_INPUT`             |
 
 ### Health
 
@@ -173,18 +173,19 @@ treated as a theft signal — every session for that user is destroyed.
 All keys are prefixed `auth:*` so ops can grep, scan, and ACL them as one
 bucket. Source of truth: `src/utils/constants/redis-keys.ts`.
 
-| Key pattern                        | Type             | TTL            | Purpose                                                                                             |
-| ---------------------------------- | ---------------- | -------------- | --------------------------------------------------------------------------------------------------- |
-| `auth:otp_rate:{email}`            | int              | 1 h sliding    | Rate-limit: max 5 OTP-send requests per email per hour.                                             |
-| `auth:otp:{sessionId}`             | bcrypt           | 5 min          | The actual registration OTP, hashed.                                                                |
-| `auth:otp_attempts:{sessionId}`    | int              | 5 min          | Brute-force guard on registration OTP verify (5 wrong → delete OTP, return 429).                    |
-| `auth:registration:{sessionId}`    | JSON             | 5 min          | Form data (name, email, **hashed** password) between send-otp and verify-otp.                       |
-| `auth:otp_recovery:{sessionId}`    | bcrypt           | 5 min          | Recovery OTP for forgot-password.                                                                   |
-| `auth:otp_recovery_attempts:{sid}` | int              | 5 min          | Brute-force guard on recovery OTP verify.                                                           |
-| `auth:reset_target:{sessionId}`    | JSON             | 5 min          | `{userId, email}` the recovery OTP unlocks. Deleted when OTP is consumed.                           |
-| `auth:reset_token:{token}`         | string           | 10 min         | One-shot bearer token: trades "knows the OTP" for "can change the password". Self-destructs on use. |
-| `auth:session:{sessionId}`         | JSON             | 30 d           | Server-side session: userId, fingerprint, `sha256(refreshToken)`, timestamps.                       |
-| `auth:user:{userId}:sessions`      | set of sessionId | refreshed 30 d | Per-user index of active sessions; enables multi-device listing and "log out everywhere".           |
+| Key pattern                        | Type             | TTL            | Purpose                                                                                                                   |
+| ---------------------------------- | ---------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `auth:otp_rate:{email}`            | int              | 1 h sliding    | Rate-limit: max 5 OTP-send requests per email per hour.                                                                   |
+| `auth:otp:{sessionId}`             | bcrypt           | 5 min          | The actual registration OTP, hashed.                                                                                      |
+| `auth:otp_attempts:{sessionId}`    | int              | 5 min          | Brute-force guard on registration OTP verify (5 wrong → delete OTP, return 429).                                          |
+| `auth:registration:{sessionId}`    | JSON             | 5 min          | Form data (name, email, **hashed** password) between send-otp and verify-otp.                                             |
+| `auth:otp_recovery:{sessionId}`    | bcrypt           | 5 min          | Recovery OTP for forgot-password.                                                                                         |
+| `auth:otp_recovery_attempts:{sid}` | int              | 5 min          | Brute-force guard on recovery OTP verify.                                                                                 |
+| `auth:reset_target:{sessionId}`    | JSON             | 5 min          | `{userId, email}` the recovery OTP unlocks. Deleted when OTP is consumed.                                                 |
+| `auth:reset_token:{token}`         | string           | 10 min         | One-shot bearer token: trades "knows the OTP" for "can change the password". Self-destructs on use.                       |
+| `auth:session:{sessionId}`         | JSON             | 30 d sliding   | Server-side session: userId, fingerprint, `sha256(refreshToken)`, ipAddress, userAgent, timestamps. Extended on activity. |
+| `auth:user:{userId}:sessions`      | set of sessionId | refreshed 30 d | Per-user index of active sessions; enables multi-device listing and "log out everywhere". Self-cleans stale IDs.          |
+| `user:profile:{userId}`            | JSON             | 1 h            | Read-through profile cache for sub-millisecond `GET /users/me` responses with PostgreSQL fallback.                        |
 
 ## Kafka contract
 
@@ -224,11 +225,8 @@ Headers on every event: `x-event-id` (for log correlation), `x-schema-version`
 - **`notification-service` is down** → events accumulate in Kafka and are
   replayed by the consumer's own group on restart. The consumer's idempotency
   store (`notification:processed:*:{eventId}`) prevents double-send.
-- **Redis is down** → login, sessions, logout fail fast. `/health/ready`
-  returns 503; K8s re-routes traffic.
-- **Postgres is down** → send-otp, verify-otp, login, reset-password all fail
-  fast. We do **not** cache users in Redis — the password comparison is always
-  against the canonical record.
+- **Redis is down** → login, session verification, and logout fail fast. Profile reads (`GET /users/me`) degrade gracefully by falling back to direct PostgreSQL reads. `/health/ready` returns 503.
+- **Postgres is down** → send-otp, verify-otp, login, reset-password fail fast. Password verification is always performed against canonical PostgreSQL records. Cached profile reads continue serving if present in Redis.
 
 ### Graceful shutdown order
 

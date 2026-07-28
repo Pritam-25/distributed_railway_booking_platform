@@ -27,7 +27,7 @@ function mergeSpecs() {
     if (fs.existsSync(serviceSpecPath)) {
       fs.copyFileSync(serviceSpecPath, targetPath);
       console.log(
-        `✅ Copied OpenAPI specification from ${service} to api-gateway/openapi.json`,
+        `✅ Copied OpenAPI spec from ${service} to api-gateway/openapi.json`,
       );
       return;
     }

@@ -24,8 +24,6 @@ export const MetaSchema = z
   })
   .openapi("ResponseMeta");
 
-export type MetaDto = z.infer<typeof MetaSchema>;
-
 /**
  * Reusable schema for empty JSON object payload `{}`
  */
@@ -59,8 +57,6 @@ export const PaginationMetadataSchema = z
   })
   .openapi("PaginationMetadata");
 
-export type PaginationMetadataDto = z.infer<typeof PaginationMetadataSchema>;
-
 /**
  * Generic Paginated Response Envelope Schema `{ success: true, message, data: T[], meta }`
  */
@@ -78,6 +74,28 @@ export const PaginatedResponseSchema = <T extends z.ZodTypeAny>(
     .openapi({ description: "Paginated Response Envelope" });
 
 /**
+ * Error Detail Schema and Type
+ */
+export const ErrorDetailSchema = z
+  .object({
+    code: z.string().openapi({ example: "BAD_REQUEST" }),
+    message: z.string().openapi({ example: "Invalid input payload" }),
+    details: z.unknown().optional(),
+  })
+  .openapi("ErrorDetail");
+
+/**
+ * Error Response Envelope Schema and Type
+ */
+export const ErrorResponseSchema = z
+  .object({
+    success: z.literal(false).openapi({ example: false }),
+    error: ErrorDetailSchema,
+    meta: MetaSchema,
+  })
+  .openapi("ErrorResponse");
+
+/**
  * Error envelope builder matching `@irctc/http` errorResponse payload format.
  */
 export const createErrorResponseSchema = (
@@ -85,7 +103,15 @@ export const createErrorResponseSchema = (
   message: string,
   schemaName?: string,
 ) => {
-  const schema = z
+  const metadata: Record<string, unknown> = {
+    description: `Error Response Envelope (${code})`,
+    "x-sdk-ref": "ErrorResponse",
+  };
+  if (schemaName) {
+    metadata.refId = schemaName;
+  }
+
+  return z
     .object({
       success: z.literal(false).openapi({ example: false }),
       error: z
@@ -97,9 +123,7 @@ export const createErrorResponseSchema = (
         .openapi({ description: "Error Detail Payload" }),
       meta: MetaSchema,
     })
-    .openapi({ description: `Error Response Envelope (${code})` });
-
-  return schemaName ? schema.openapi(schemaName) : schema;
+    .openapi(metadata);
 };
 
 /**

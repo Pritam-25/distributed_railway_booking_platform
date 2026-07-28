@@ -7,6 +7,8 @@
 export { ERROR_CODES } from "@irctc/errors";
 
 export const GATEWAY_ERROR_CODES = {
+  /** Protected route requires authentication — client should attempt silent refresh. */
+  AUTH_REQUIRED: "AUTH_REQUIRED",
   /** Proxy could not reach the upstream (502). */
   GATEWAY_UPSTREAM_ERROR: "GATEWAY_UPSTREAM_ERROR",
   /** Circuit breaker for the upstream is OPEN. */

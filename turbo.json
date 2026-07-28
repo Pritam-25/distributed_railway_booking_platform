@@ -2,6 +2,17 @@
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
   "tasks": {
+    "build:spec": {
+      "cache": false
+    },
+    "api-gateway#build:spec": {
+      "dependsOn": ["user-service#build:spec"],
+      "cache": false
+    },
+    "generate:api": {
+      "dependsOn": ["build:spec"],
+      "cache": false
+    },
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
@@ -20,6 +31,10 @@
       "dependsOn": ["^test"]
     },
     "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "start": {
       "cache": false,
       "persistent": true
     }

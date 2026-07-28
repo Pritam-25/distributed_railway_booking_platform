@@ -50,9 +50,11 @@ export const sessionMiddleware = async (
     );
   }
 
-  // Optional: update lastUsedAt
+  // Optional: update lastUsedAt to now
   const session = JSON.parse(sessionJson);
   session.lastUsedAt = new Date().toISOString();
+
+  // extend the session TTL to (30 days) to prevent idle session logout (sliding session window)
   await redis.set(
     sessionKey,
     JSON.stringify(session),

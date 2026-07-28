@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
 import { apiReference } from "@scalar/express-api-reference";
 import fs from "node:fs";
 import path from "node:path";
@@ -55,31 +55,127 @@ docsRouter.get("/openapi.json", (_req, res) => {
 });
 
 /**
- * GET /docs
- * Serve interactive Scalar UI documentation with docs-specific CSP
+ * Loads and parses the OpenAPI specification JSON file.
+ * Returns null on parser, empty spec, or filesystem failures.
  */
-docsRouter.use(
-  "/docs",
-  (_req, res, next) => {
-    const nonce = crypto.randomBytes(16).toString("base64");
-    const docsCsp = [
-      "default-src 'self'",
-      `script-src 'self' 'unsafe-inline' 'nonce-${nonce}' https://cdn.jsdelivr.net`,
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "font-src 'self' https://fonts.gstatic.com data:",
-      "img-src 'self' data: https: blob:",
-      "connect-src 'self' https:",
-    ].join("; ");
+const loadOpenApiSpec = (specPath: string): Record<string, unknown> | null => {
+  if (!fs.existsSync(specPath)) {
+    return null;
+  }
+  try {
+    const content = fs.readFileSync(specPath, "utf-8");
+    const parsed = JSON.parse(content) as Record<string, unknown>;
+    if (!parsed || Object.keys(parsed).length === 0) {
+      return null;
+    }
+    return parsed;
+  } catch (err) {
+    console.error("Failed to parse OpenAPI spec for Scalar UI:", err);
+    return null;
+  }
+};
 
-    res.setHeader("Content-Security-Policy", docsCsp);
-    next();
-  },
-  apiReference({
-    theme: "purple",
+/**
+ * Type guard / safe parser to extract the url string property from a spec server object.
+ */
+const getServerUrlStr = (server: unknown): string | null => {
+  if (server && typeof server === "object" && "url" in server) {
+    const urlVal = (server as Record<string, unknown>)["url"];
+    if (typeof urlVal === "string") {
+      return urlVal;
+    }
+  }
+  return null;
+};
+
+/**
+ * Dynamically resolves allowed connect-src origins based on request context,
+ * upstream server environments, and servers configured in the OpenAPI specification.
+ */
+const getConnectSrcOrigins = (
+  req: Request,
+  specContent: Record<string, unknown>,
+): string => {
+  const allowedOrigins = new Set<string>(["'self'"]);
+
+  // 1. Current gateway origin from request context
+  try {
+    allowedOrigins.add(`${req.protocol}://${req.get("host")}`);
+  } catch {
+    // Ignore parsing failures
+  }
+
+  // Helper to safely add an origin from a URL string
+  const addOrigin = (urlStr?: string) => {
+    if (urlStr) {
+      try {
+        allowedOrigins.add(new URL(urlStr).origin);
+      } catch {
+        // Ignore invalid URLs
+      }
+    }
+  };
+
+  // 2. Configured upstream origins from env
+  addOrigin(env.USER_UPSTREAM);
+  addOrigin(env.ADMIN_UPSTREAM);
+
+  // 3. Known server URLs defined in openapi.json for Scalar's "Try it" panel
+  const specServers = specContent["servers"];
+  if (Array.isArray(specServers)) {
+    for (const server of specServers) {
+      const urlStr = getServerUrlStr(server);
+      if (urlStr) {
+        addOrigin(urlStr);
+      }
+    }
+  }
+
+  return Array.from(allowedOrigins).join(" ");
+};
+
+/**
+ * GET /docs
+ * Serve interactive Scalar UI documentation with embedded spec and request-specific CSP nonce
+ */
+docsRouter.use("/docs", (req, res, next) => {
+  const specPath = getOpenApiSpecPath();
+  const specContent = loadOpenApiSpec(specPath);
+
+  if (!specContent) {
+    res.status(503).json({
+      error: "OpenAPI specification is unavailable. Run pnpm build:spec first.",
+    });
+    return;
+  }
+
+  const nonce = crypto.randomBytes(16).toString("base64");
+  const connectSrcList = getConnectSrcOrigins(req, specContent);
+
+  // Set secure CSP & COOP headers with refined connect-src origins
+  res.setHeader(
+    "Content-Security-Policy",
+    `default-src 'self'; ` +
+      `script-src 'self' 'nonce-${nonce}' https://cdn.jsdelivr.net; ` +
+      `style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; ` +
+      `font-src 'self' https://cdn.jsdelivr.net; ` +
+      `img-src 'self' data: https://cdn.jsdelivr.net; ` +
+      `connect-src ${connectSrcList}; ` +
+      `frame-src 'self';`,
+  );
+
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+
+  // Create the middleware instance dynamically with the request's unique nonce
+  const scalarMiddleware = apiReference({
+    theme: "deepSpace",
     spec: {
-      url: "/openapi.json",
+      content: specContent,
     },
-  }),
-);
+    nonce,
+  });
+
+  scalarMiddleware(req as any, res as any, next);
+});
 
 export { docsRouter };

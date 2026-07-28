@@ -30,13 +30,13 @@ All public-facing API routes flow through the gateway. Responses follow the `@ir
 
 ### Routes Registry
 
-| Prefix                    | Upstream Target | Auth Level | Rate Limit Preset | Notes                                  |
-| :------------------------ | :-------------- | :--------- | :---------------- | :------------------------------------- |
-| `/api/v1/auth/sessions`   | `user-service`  | `required` | `default`         | Lists or revokes user sessions         |
-| `/api/v1/auth/logout-all` | `user-service`  | `required` | `default`         | Revokes all user sessions              |
-| `/api/v1/auth/logout`     | `user-service`  | `required` | `default`         | Revokes the current session            |
-| `/api/v1/auth`            | `user-service`  | `none`     | `auth`            | Registration, login, password recovery |
-| `/api/v1/users`           | `user-service`  | `required` | `default`         | Fetches or updates user info           |
+| Prefix                    | Upstream Target | Auth Level | Rate Limit Preset | Notes                                             |
+| :------------------------ | :-------------- | :--------- | :---------------- | :------------------------------------------------ |
+| `/api/v1/auth/sessions`   | `user-service`  | `required` | `default`         | Lists or revokes user sessions                    |
+| `/api/v1/auth/logout-all` | `user-service`  | `optional` | `default`         | Revokes all user sessions (idempotent, never 401) |
+| `/api/v1/auth/logout`     | `user-service`  | `optional` | `default`         | Revokes current session (idempotent, never 401)   |
+| `/api/v1/auth`            | `user-service`  | `none`     | `auth`            | Registration, login, password recovery            |
+| `/api/v1/users`           | `user-service`  | `required` | `default`         | Fetches or updates user info                      |
 
 ### Health Probes
 
@@ -46,8 +46,6 @@ Mounted directly at root before any middleware logic, allowing Kubernetes and lo
 | :----- | :-------------- | :--------------------------------------------------------------------- |
 | `GET`  | `/health/live`  | Liveness check. Always returns `200 OK` when the gateway is running.   |
 | `GET`  | `/health/ready` | Readiness check. Returns `200 OK` only when Redis connection is alive. |
-
----
 
 ## Architecture at a Glance
 
@@ -66,10 +64,8 @@ flowchart TD
 
   GW --> Pipeline
   P -- Proxy HTTP --> US[user-service]
-  L -- Token Invalidation / Bucket --> Redis[(Redis)]
+  L -- Rate-limit bucket --> Redis[(Redis)]
 ```
-
----
 
 ## Request Processing Pipeline
 
@@ -81,9 +77,21 @@ Every request entering the gateway passes through standard security filters:
 - **CORS**: Enforces origin checks (controlled via the `CORS_ORIGINS` env configuration).
 - **Cookie Parser**: Extracts cookie payloads so auth mechanisms can check both the `Authorization` header and request cookies.
 
-### 2. Route Matching
+### 2. Route Matching & Service Redirection
 
-The router performs a longest-prefix match against configured routes in `src/config/routes.ts`.
+The gateway matches incoming request paths and routes them to their respective destination microservice dynamically:
+
+- **Upstream and Path Mapping**: Route definitions in `src/config/routes.ts` map request prefixes (e.g. `/api/v1/users`) to target upstreams defined in `src/config/upstreams.ts` (which resolve to environment variables like `USER_UPSTREAM`).
+- **Routing Ingress**: Express mounts each prefix along with its middleware pipeline in `src/routing/mountRoutes.ts`:
+  ```typescript
+  app.use(route.prefix, authMw, rateLimitMw, proxyHandler);
+  ```
+- **Forwarding and Path Rewriting**: The terminal `proxyHandler` uses `http-proxy-middleware` to forward the matching request to the upstream service URL while stripping the ingress API namespace prefix:
+  ```typescript
+  pathRewrite: (_path, req) => {
+    return (req as any).originalUrl.replace(/^\/api\/v1/, "");
+  };
+  ```
 
 ### 3. Header Scrubbing
 
@@ -120,8 +128,6 @@ The gateway uses `@irctc/resilience` to isolate downstream failures:
 - If the downstream times out or fails repeatedly, the circuit opens, returning `503 Service Unavailable` on subsequent requests.
 - If a connection fails to establish, a `502 Bad Gateway` is returned.
 
----
-
 ## Configuration
 
 The gateway is configured via environment variables. Schema validation is enforced at boot time using Zod (`src/config/env.ts`).
@@ -140,8 +146,6 @@ The gateway is configured via environment variables. Schema validation is enforc
 | `RATE_LIMIT_AUTH_CAPACITY`          | Max tokens for auth rate limit bucket                     | `10`                    |
 | `RATE_LIMIT_AUTH_REFILL_PER_SEC`    | Token refill rate per second (auth)                       | `0.1667`                |
 | `TRUST_PROXY`                       | Express `trust proxy` setting (`true` / `false`)          | `false`                 |
-
----
 
 ## Development & Operations
 

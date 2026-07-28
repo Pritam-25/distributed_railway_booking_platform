@@ -55,4 +55,16 @@ export class UserRepository {
       data,
     });
   }
+
+  /**
+   * Deletes a user record by ID.
+   * Used for transactional rollback and compensating actions.
+   * @param id - User ID to delete.
+   * @returns The deleted User record.
+   */
+  async deleteUser(id: string): Promise<User> {
+    return this.prisma.user.delete({
+      where: { id },
+    });
+  }
 }

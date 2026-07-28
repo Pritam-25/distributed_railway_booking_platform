@@ -1,10 +1,44 @@
 import "@irctc/openapi";
-import type { UserResponseDto } from "./user.dto.js";
 import { z } from "zod";
+import type { UserResponseDto } from "@dto";
+/**
+ * Reusable email schema
+ */
+
+export const emailSchema = z
+  .email("Invalid email format")
+  .trim()
+  .openapi({ example: "jhon@example.com" });
 
 /**
- * Password Schema for User Registration and Login
- * Requirements:
+ * Reusable uuid schema
+ */
+export const uuidSchema = z.uuid("Invalid UUID format").openapi({
+  example: "550e8400-e29b-41d4-a716-446655440000",
+});
+
+/**
+ * Reusable first name schema
+ */
+export const firstNameSchema = z
+  .string()
+  .trim()
+  .min(3, "First name must be at least 3 characters long")
+  .max(50, "First name must not exceed 50 characters")
+  .openapi({ example: "Jhon" });
+
+/**
+ * Reusable last name schema
+ */
+export const lastNameSchema = z
+  .string()
+  .trim()
+  .min(2, "Last name must be at least 2 characters long")
+  .max(50, "Last name must not exceed 50 characters")
+  .openapi({ example: "Doe" });
+
+/**
+ * Reusable Password Schema
  * - Minimum 6 characters
  * - Must contain at least one uppercase letter
  * - Must contain at least one number
@@ -15,76 +49,59 @@ export const passwordSchema = z
   .min(6, "Password must be at least 6 characters long")
   .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
   .regex(/\d/, "Password must contain at least one number")
-  .regex(
-    /[@$#!%*~?&/\\(){}[\]]/,
-    "Password must contain at least one special character",
-  )
+  .regex(/[^a-zA-Z0-9]/, "Password must contain at least one special character")
   .openapi({
-    description: "User password",
+    pattern: String.raw`^(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z0-9]).{6,}$`,
     example: "Password@123",
+    description:
+      "### Password Requirements\n\n- Minimum **6** characters\n- At least **1 uppercase** letter\n- At least **1 number**\n- At least **1 special character**",
   });
 
 /**
- * Register Schema for User Registration
- * Requirements:
- * - First name must be at least 3 characters long
- * - Last name must be at least 2 characters long
- * - Email must be in valid email format
- * - Password must meet the passwordSchema requirements
- * - Confirm password must match the password
+ * Reusable OTP Schema
+ * - Must be exactly 6 digits
+ */
+export const otpSchema = z
+  .string()
+  .length(6, "OTP must be exactly 6 digits")
+  .regex(/^\d{6}$/, "OTP must contain only numbers")
+  .openapi({ example: "123456" });
+
+/**
+ * Registration Schema for User Sign-Up
  */
 export const RegisterSchema = z
   .object({
-    firstName: z
-      .string()
-      .trim()
-      .min(3, "First name must be at least 3 characters long")
-      .openapi({ example: "Jhon" }),
-    lastName: z
-      .string()
-      .trim()
-      .min(2, "Last name must be at least 2 characters long")
-      .openapi({ example: "Doe" }),
-    email: z
-      .email("Invalid email format")
-      .trim()
-      .openapi({ example: "jhon@example.com" }),
+    firstName: firstNameSchema,
+    lastName: lastNameSchema,
+    email: emailSchema,
     password: passwordSchema,
-    confirmPassword: passwordSchema,
   })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords do not match",
-    path: ["confirmPassword"],
-  });
-
-/**
- * Login Schema for User Login
- * Requirements:
- * - Email must be in valid email format
- * - Password must meet the passwordSchema requirements
- */
-export const LoginSchema = z.object({
-  email: z
-    .email("Invalid email format")
-    .trim()
-    .openapi({ example: "jhon@example.co" }),
-  password: passwordSchema,
-});
-
-/**
- * Verify OTP Request Schema for User Verification
- * Requirements:
- * - OTP must be a 6-digit number
- */
-export const VerifyOtpRequestSchema = z.object({
-  otp: z
-    .string()
-    .regex(/^\d{6}$/, "OTP must be a 6-digit number")
-    .openapi({ example: "123456" }),
-});
+  .openapi("RegisterRequest");
 
 export type RegisterRequestDto = z.infer<typeof RegisterSchema>;
+
+/**
+ * Login DTO Schema
+ */
+export const LoginSchema = z
+  .object({
+    email: emailSchema,
+    password: passwordSchema,
+  })
+  .openapi("LoginRequest");
+
 export type LoginRequestDto = z.infer<typeof LoginSchema>;
+
+/**
+ * OTP Verification DTO Schema
+ */
+export const VerifyOtpRequestSchema = z
+  .object({
+    otp: otpSchema,
+  })
+  .openapi("VerifyOtpRequest");
+
 export type VerifyOtpRequestDto = z.infer<typeof VerifyOtpRequestSchema>;
 
 export interface AuthResponseDto {
@@ -96,47 +113,107 @@ export interface AuthResponseDto {
 }
 
 /**
- * Forgot Password Schema for requesting OTP
+ * Session summary returned by the active sessions endpoint.
  */
-export const ForgotPasswordRequestSchema = z.object({
-  email: z.email().trim().openapi({ example: "jhon@example.com" }),
-});
+export const SessionSummarySchema = z
+  .object({
+    sessionId: uuidSchema,
+    userId: uuidSchema,
+    fingerprint: z.string().openapi({
+      example:
+        "9b32928e81333d238159cd131c9551adce20bd02b90d4a6a89d482ff4c10fba7",
+    }),
+    ipAddress: z.string().openapi({ example: "192:168:1:1" }),
+    userAgent: z.string().openapi({
+      example:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
+    }),
+    location: z.string().openapi({ example: "New Delhi, IN" }),
+    createdAt: z.date().openapi({ example: "2026-07-24T00:00:00.000Z" }),
+    lastUsedAt: z.date().openapi({ example: "2026-07-24T12:00:00.000Z" }),
+    expiresAt: z.date().openapi({ example: "2026-08-23T12:00:00.000Z" }),
+  })
+  .openapi("SessionSummary");
+
+export type SessionSummaryDto = z.infer<typeof SessionSummarySchema>;
 
 /**
- * Schema to verify OTP submitted during the password reset workflow.
+ * Forgot Password Request DTO Schema
  */
-export const VerifyResetOtpRequestSchema = z.object({
-  sessionId: z.uuid().openapi({
-    example: "550e8400-e29b-41d4-a716-446655440000",
-  }),
-  otp: z
-    .string()
-    .regex(/^\d{6}$/, "OTP must be a 6-digit number")
-    .openapi({ example: "123456" }),
-});
+export const ForgotPasswordRequestSchema = z
+  .object({
+    email: emailSchema,
+  })
+  .openapi("ForgotPasswordRequest");
+
+export type ForgotPasswordRequestDto = z.infer<
+  typeof ForgotPasswordRequestSchema
+>;
 
 /**
- * Reset Password Schema for resetting user password using a verified token
+ * Verify Reset OTP DTO Schema
+ */
+export const VerifyPasswordResetOtpRequestSchema = z
+  .object({
+    sessionId: uuidSchema,
+    otp: otpSchema,
+  })
+  .openapi("VerifyPasswordResetOtpRequest");
+
+export type VerifyPasswordResetOtpRequestDto = z.infer<
+  typeof VerifyPasswordResetOtpRequestSchema
+>;
+
+/**
+ * Reset Password DTO Schema
  */
 export const ResetPasswordRequestSchema = z
   .object({
-    passwordResetToken: z.uuid().openapi({
-      example: "550e8400-e29b-41d4-a716-446655440000",
-    }),
+    passwordResetToken: uuidSchema,
     password: passwordSchema,
     confirmPassword: passwordSchema,
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",
     path: ["confirmPassword"],
-  });
+  })
+  .openapi("ResetPasswordRequest");
 
-export type ForgotPasswordRequestDto = z.infer<
-  typeof ForgotPasswordRequestSchema
->;
-export type VerifyResetOtpRequestDto = z.infer<
-  typeof VerifyResetOtpRequestSchema
->;
 export type ResetPasswordRequestDto = z.infer<
   typeof ResetPasswordRequestSchema
+>;
+
+/**
+ * Active session payload returned to clients.
+ */
+export const ActiveSessionSchema = SessionSummarySchema.extend({
+  isCurrent: z.boolean().openapi({ example: true }),
+}).openapi("ActiveSession");
+
+export type ActiveSessionDto = z.infer<typeof ActiveSessionSchema>;
+
+/**
+ * Forgot Password Response Schema
+ */
+export const ForgotPasswordResponseSchema = z
+  .object({
+    sessionId: uuidSchema,
+  })
+  .openapi("ForgotPasswordResponse");
+
+export type ForgotPasswordResponseDto = z.infer<
+  typeof ForgotPasswordResponseSchema
+>;
+
+/**
+ * Verify Password Reset OTP Response Schema
+ */
+export const VerifyPasswordResetOtpResponseSchema = z
+  .object({
+    passwordResetToken: uuidSchema,
+  })
+  .openapi("VerifyPasswordResetOtpResponse");
+
+export type VerifyPasswordResetOtpResponseDto = z.infer<
+  typeof VerifyPasswordResetOtpResponseSchema
 >;

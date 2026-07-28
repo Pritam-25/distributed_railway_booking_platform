@@ -4,7 +4,7 @@ import {
   RegisterSchema,
   VerifyOtpRequestSchema,
   ForgotPasswordRequestSchema,
-  VerifyResetOtpRequestSchema,
+  VerifyPasswordResetOtpRequestSchema,
   ResetPasswordRequestSchema,
 } from "@dto";
 import { validateSchema, asyncHandler } from "@irctc/middleware";
@@ -84,8 +84,6 @@ router.delete(
  */
 router.post(
   "/logout",
-  trustGatewayHeaders,
-  sessionMiddleware,
   asyncHandler((req, res) => authController.logout(req, res)),
 );
 
@@ -95,8 +93,6 @@ router.post(
  */
 router.post(
   "/logout-all",
-  trustGatewayHeaders,
-  sessionMiddleware,
   asyncHandler((req, res) => authController.logoutAll(req, res)),
 );
 
@@ -116,8 +112,8 @@ router.post(
  */
 router.post(
   "/verify-reset-otp",
-  validateSchema(VerifyResetOtpRequestSchema),
-  asyncHandler((req, res) => authController.verifyResetOtp(req, res)),
+  validateSchema(VerifyPasswordResetOtpRequestSchema),
+  asyncHandler((req, res) => authController.VerifyPasswordResetOtp(req, res)),
 );
 
 /**

@@ -66,13 +66,13 @@ export const routes: readonly RouteConfig[] = [
   {
     prefix: "/api/v1/auth/logout-all",
     upstream: upstreams.user,
-    auth: "required",
+    auth: "optional",
     rateLimit: "default",
   },
   {
     prefix: "/api/v1/auth/logout",
     upstream: upstreams.user,
-    auth: "required",
+    auth: "optional",
     rateLimit: "default",
   },
   {

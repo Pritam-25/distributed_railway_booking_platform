@@ -2,7 +2,7 @@ import { Router } from "express";
 import { trustGatewayHeaders, sessionMiddleware } from "@middleware";
 import { validateSchema, asyncHandler } from "@irctc/middleware";
 import { userController } from "@container";
-import { UserUpdateSchema } from "@dto";
+import { UpdateProfileSchema } from "@dto";
 
 const router: Router = Router();
 
@@ -25,7 +25,7 @@ router.put(
   "/me",
   trustGatewayHeaders,
   sessionMiddleware,
-  validateSchema(UserUpdateSchema),
+  validateSchema(UpdateProfileSchema),
   asyncHandler((req, res) => userController.updateProfile(req, res)),
 );
 

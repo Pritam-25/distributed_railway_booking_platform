@@ -4,8 +4,11 @@ import type {
   RegisterRequestDto,
   VerifyOtpRequestDto,
   ForgotPasswordRequestDto,
-  VerifyResetOtpRequestDto,
+  VerifyPasswordResetOtpRequestDto,
   ResetPasswordRequestDto,
+  SessionSummaryDto,
+  VerifyPasswordResetOtpResponseDto,
+  ForgotPasswordResponseDto,
 } from "@dto";
 import type { UserRepository } from "@repository";
 import { logger } from "@irctc/logger";
@@ -15,13 +18,13 @@ import { createHash, randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { env, redis } from "@config";
-import { OtpService } from "./otp.service.js";
+import { OtpService, type RegistrationSessionData } from "./otp.service.js";
 import {
   OtpPurpose,
   type OTPRequestedV1Type,
   type UserLoggedInV1Type,
 } from "@irctc/contracts";
-import { generateOtp } from "@utils";
+import { generateOtp, getIpLocation } from "@utils";
 import type {
   OtpEventPublisher,
   UserLoggedInEventPublisher,
@@ -30,6 +33,10 @@ import { ERROR_CODES as COMMON_ERROR_CODES, ApiError } from "@irctc/errors";
 import { AUTH_DURATIONS, REDIS_KEYS } from "@utils/constants";
 import { AuthMapper } from "../mappers/auth.mapper.js";
 import type { RefreshTokenPayload } from "@irctc/middleware";
+
+type AuthSessionRecord = Omit<SessionSummaryDto, "sessionId"> & {
+  refreshTokenHash: string;
+};
 
 /**
  * Service handling authentication-related business logic, including registration flows,
@@ -73,6 +80,65 @@ export class AuthService {
   }
 
   /**
+   * Persists a new Redis session record and updates the user's sessions index atomically.
+   */
+  private async createAuthSession(
+    userId: string,
+    sessionId: string,
+    refreshToken: string,
+    fingerprint: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<void> {
+    const refreshTokenHash = createHash("sha256")
+      .update(refreshToken)
+      .digest("hex");
+
+    const sessionData = {
+      userId,
+      fingerprint,
+      refreshTokenHash,
+      ipAddress: ipAddress || "Unknown",
+      userAgent: userAgent || "Unknown",
+      location: getIpLocation(ipAddress),
+      createdAt: new Date().toISOString(),
+      lastUsedAt: new Date().toISOString(),
+      expiresAt: new Date(
+        Date.now() + AUTH_DURATIONS.SESSION_TTL_MS,
+      ).toISOString(),
+    };
+
+    const results = await redis
+      .multi()
+      .set(
+        REDIS_KEYS.authSession(sessionId),
+        JSON.stringify(sessionData),
+        "EX",
+        AUTH_DURATIONS.SESSION_TTL_SECONDS,
+      )
+      .sadd(REDIS_KEYS.userSessions(userId), sessionId)
+      .expire(
+        REDIS_KEYS.userSessions(userId),
+        AUTH_DURATIONS.SESSION_TTL_SECONDS,
+      )
+      .exec();
+
+    if (!results) {
+      throw new Error("Failed to persist authentication session");
+    }
+
+    const hasRedisError = results.some(([error]) => error !== null);
+    if (hasRedisError) {
+      await Promise.allSettled([
+        redis.del(REDIS_KEYS.authSession(sessionId)),
+        redis.srem(REDIS_KEYS.userSessions(userId), sessionId),
+      ]);
+
+      throw new Error("Failed to persist authentication session");
+    }
+  }
+
+  /**
    * Initiates the registration workflow.
    *
    * Workflow:
@@ -108,24 +174,53 @@ export class AuthService {
       throw new ApiError(statusCode.conflict, ERROR_CODES.USER_ALREADY_EXISTS);
     }
 
-    // 2. Generate and store OTP
-    const otp = generateOtp();
-    const sessionId = await OtpService.storeOtp(
+    // 2. Check for an existing active OTP session for this email
+    const existingSessionId = await OtpService.findExistingOtpSession(
       data.email,
-      otp,
-      env.REGISTRATION_OTP_TTL,
     );
-
-    // 3. Hash password and store registration session in Redis
+    const otp = generateOtp();
     const hashedPassword = await bcrypt.hash(data.password, 10);
-    await OtpService.storeRegistrationSession(sessionId, {
-      firstName: data.firstName,
-      lastName: data.lastName,
-      email: data.email,
-      hashedPassword,
-    });
+    let sessionId: string;
 
-    // 4. Publish OTPRequestedV1. Roll back on failure so the user can
+    if (existingSessionId) {
+      // Reuse existing session: generate new OTP, overwrite hash
+      sessionId = existingSessionId;
+      await OtpService.replaceOtp(
+        sessionId,
+        data.email,
+        otp,
+        env.REGISTRATION_OTP_TTL,
+      );
+
+      // Update registration data in case user corrected a field
+      await OtpService.storeRegistrationSession(sessionId, {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        hashedPassword,
+      });
+
+      logger.info(
+        { module: "auth", sessionId },
+        "Reusing existing OTP session with new OTP",
+      );
+    } else {
+      // New session: generate everything fresh
+      sessionId = await OtpService.storeOtp(
+        data.email,
+        otp,
+        env.REGISTRATION_OTP_TTL,
+      );
+
+      await OtpService.storeRegistrationSession(sessionId, {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        hashedPassword,
+      });
+    }
+
+    // 3. Publish OTPRequestedV1. Roll back on failure so the user can
     // safely retry without leaving a stale registration session.
     const event: OTPRequestedV1Type = {
       eventId: randomUUID(),
@@ -144,7 +239,11 @@ export class AuthService {
         { module: "auth", err, eventId: event.eventId, purpose: event.purpose },
         "OTP publish failed; rolling back Redis state",
       );
-      await OtpService.deleteRegistrationSession(sessionId);
+      // Only roll back fully if this was a new session
+      if (!existingSessionId) {
+        await OtpService.deleteRegistrationSession(sessionId);
+        await OtpService.deleteOtpSession(data.email);
+      }
       throw new ApiError(
         statusCode.badGateway,
         COMMON_ERROR_CODES.KAFKA_PUBLISH_FAILED,
@@ -154,6 +253,134 @@ export class AuthService {
     }
 
     return sessionId;
+  }
+
+  /**
+   * Creates a verified user account and issues initial JWT tokens.
+   *
+   * This method is only invoked after OTP verification has succeeded.
+   * Password hashing has already been completed during the registration
+   * initiation phase.
+   *
+   * @param data Verified registration data.
+   * @param sessionId Registration session identifier.
+   * @param fingerprint Device fingerprint.
+   * @param ipAddress User's IP address.
+   * @param userAgent User's browser User-Agent header.
+   * @returns Auth response containing issued tokens.
+   */
+  private async registerUser(
+    data: RegistrationSessionData,
+    sessionId: string,
+    fingerprint: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<AuthResponseDto> {
+    const user = await this.repo.createUser({
+      firstName: data.firstName,
+      lastName: data.lastName,
+      email: data.email,
+      password: data.hashedPassword,
+      emailVerified: true,
+    });
+
+    const accessToken = this.generateAccessToken(
+      user.id,
+      sessionId,
+      user.email,
+    );
+    const refreshToken = this.generateRefreshToken(user.id, sessionId);
+
+    try {
+      await this.createAuthSession(
+        user.id,
+        sessionId,
+        refreshToken,
+        fingerprint,
+        ipAddress,
+        userAgent,
+      );
+    } catch (err) {
+      logger.error(
+        { module: "auth", userId: user.id, err },
+        "Session creation failed after user creation; rolling back user record",
+      );
+      await this.repo.deleteUser(user.id).catch(() => {});
+      throw err;
+    }
+
+    logger.info(
+      { module: "auth", userId: user.id },
+      "User registered successfully and session created",
+    );
+
+    return AuthMapper.toAuthResponseDto(user, accessToken, refreshToken);
+  }
+
+  /**
+   * Completes registration after successful OTP verification.
+   *
+   * Workflow:
+   * 1. Verify OTP.
+   * 2. Load pre-registration data from Redis.
+   * 3. Create the user in PostgreSQL.
+   * 4. Generate authentication tokens.
+   * 5. Remove temporary registration state.
+   *
+   * Registration cleanup is best effort and does not affect a
+   * successful registration response.
+   *
+   * @param sessionId Registration session identifier.
+   * @param data OTP verification request.
+   * @param fingerprint Device fingerprint.
+   * @param ipAddress User's IP address.
+   * @param userAgent User's browser User-Agent header.
+   * @returns Auth response containing issued tokens.
+   *
+   * @throws {ApiError}
+   * - REGISTRATION_SESSION_EXPIRED
+   */
+  async verifyAndRegister(
+    sessionId: string,
+    data: VerifyOtpRequestDto,
+    fingerprint: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<AuthResponseDto> {
+    // 1. Verify OTP
+    await OtpService.verifyOtp(sessionId, data.otp);
+
+    // 2. Retrieve registration data from Redis
+    const regData = await OtpService.getRegistrationSession(sessionId);
+    if (!regData) {
+      logger.warn(
+        { module: "auth" },
+        "Registration session expired or missing",
+      );
+      throw new ApiError(
+        statusCode.notFound,
+        ERROR_CODES.REGISTRATION_SESSION_EXPIRED,
+      );
+    }
+
+    // 3. Execute registration using stored data
+    const authResponse = await this.registerUser(
+      regData,
+      sessionId,
+      fingerprint,
+      ipAddress,
+      userAgent,
+    );
+
+    // 4. Clean up sessions (best-effort; do not fail completed registration)
+    try {
+      await OtpService.deleteRegistrationSession(sessionId);
+      await OtpService.deleteOtpSession(regData.email);
+    } catch (error) {
+      logger.warn({ module: "auth", error }, "Session cleanup failed");
+    }
+
+    return authResponse;
   }
 
   /**
@@ -171,6 +398,8 @@ export class AuthService {
    *
    * @param data Login credentials.
    * @param fingerprint Device fingerprint used for session binding.
+   * @param ipAddress User's IP address.
+   * @param userAgent User's browser User-Agent header.
    * @returns Auth response containing user details and JWT tokens.
    *
    * @throws {ApiError}
@@ -179,6 +408,8 @@ export class AuthService {
   async login(
     data: LoginRequestDto,
     fingerprint: string,
+    ipAddress?: string,
+    userAgent?: string,
   ): Promise<AuthResponseDto> {
     // 1. Find user by email
     const user = await this.repo.findUserByEmail(data.email);
@@ -209,38 +440,15 @@ export class AuthService {
     );
     const refreshToken = this.generateRefreshToken(user.id, sessionId);
 
-    // 4. Hash refresh token for secure storage
-    const refreshTokenHash = createHash("sha256")
-      .update(refreshToken)
-      .digest("hex");
-
-    // 5. Store session in Redis
-    const sessionData = {
-      userId: user.id,
+    // 4. Store session in Redis
+    await this.createAuthSession(
+      user.id,
+      sessionId,
+      refreshToken,
       fingerprint,
-      refreshTokenHash,
-      createdAt: new Date().toISOString(),
-      lastUsedAt: new Date().toISOString(),
-      expiresAt: new Date(
-        Date.now() + AUTH_DURATIONS.SESSION_TTL_MS,
-      ).toISOString(), // 30 days
-    };
-
-    // Store session record and track user sessions index atomically
-    await redis
-      .multi()
-      .set(
-        REDIS_KEYS.authSession(sessionId),
-        JSON.stringify(sessionData),
-        "EX",
-        AUTH_DURATIONS.SESSION_TTL_SECONDS,
-      )
-      .sadd(REDIS_KEYS.userSessions(user.id), sessionId)
-      .expire(
-        REDIS_KEYS.userSessions(user.id),
-        AUTH_DURATIONS.SESSION_TTL_SECONDS,
-      )
-      .exec();
+      ipAddress,
+      userAgent,
+    );
 
     logger.info(
       { module: "auth", userId: user.id },
@@ -274,102 +482,6 @@ export class AuthService {
     }
 
     return AuthMapper.toAuthResponseDto(user, accessToken, refreshToken);
-  }
-
-  /**
-   * Creates a verified user account and issues initial JWT tokens.
-   *
-   * This method is only invoked after OTP verification has succeeded.
-   * Password hashing has already been completed during the registration
-   * initiation phase.
-   *
-   * @param data Verified registration data.
-   * @param sessionId Registration session identifier.
-   * @returns Auth response containing issued tokens.
-   */
-  private async registerUser(
-    data: {
-      firstName: string;
-      lastName: string;
-      email: string;
-      hashedPassword: string;
-    },
-    sessionId: string,
-  ): Promise<AuthResponseDto> {
-    const user = await this.repo.createUser({
-      firstName: data.firstName,
-      lastName: data.lastName,
-      email: data.email,
-      password: data.hashedPassword,
-      emailVerified: true,
-    });
-
-    const accessToken = this.generateAccessToken(
-      user.id,
-      sessionId,
-      user.email,
-    );
-    const refreshToken = this.generateRefreshToken(user.id, sessionId);
-
-    logger.info(
-      { module: "auth", userId: user.id },
-      "User registered successfully",
-    );
-
-    return AuthMapper.toAuthResponseDto(user, accessToken, refreshToken);
-  }
-
-  /**
-   * Completes registration after successful OTP verification.
-   *
-   * Workflow:
-   * 1. Verify OTP.
-   * 2. Load pre-registration data from Redis.
-   * 3. Create the user in PostgreSQL.
-   * 4. Generate authentication tokens.
-   * 5. Remove temporary registration state.
-   *
-   * Registration cleanup is best effort and does not affect a
-   * successful registration response.
-   *
-   * @param sessionId Registration session identifier.
-   * @param data OTP verification request.
-   * @returns Auth response containing issued tokens.
-   *
-   * @throws {ApiError}
-   * - REGISTRATION_SESSION_EXPIRED
-   */
-  async verifyAndRegister(
-    sessionId: string,
-    data: VerifyOtpRequestDto,
-  ): Promise<AuthResponseDto> {
-    // 1. Verify OTP
-    await OtpService.verifyOtp(sessionId, data.otp);
-
-    // 2. Retrieve registration data from Redis
-    const regData = await OtpService.getRegistrationSession(sessionId);
-    if (!regData) {
-      logger.warn(
-        { module: "auth" },
-        "Registration session expired or missing",
-      );
-      throw new ApiError(
-        statusCode.notFound,
-        ERROR_CODES.REGISTRATION_SESSION_EXPIRED,
-      );
-    }
-
-    // 3. Execute registration using stored data
-    const authResponse = await this.registerUser(regData, sessionId);
-
-    // 4. Clean up sessions (best-effort; do not fail completed registration)
-    try {
-      await OtpService.deleteRegistrationSession(sessionId);
-    } catch (error) {
-      logger.warn({ module: "auth", error }, "Session cleanup failed");
-    }
-
-    return authResponse;
   }
 
   /**
@@ -472,7 +584,7 @@ export class AuthService {
         .update(newRefreshToken)
         .digest("hex");
 
-      // 5. Update session in Redis
+      // 5. Update session in Redis with new refresh token and expiry time
       session.refreshTokenHash = newRefreshTokenHash;
       session.lastUsedAt = new Date().toISOString();
 
@@ -480,6 +592,11 @@ export class AuthService {
         sessionKey,
         JSON.stringify(session),
         "EX",
+        AUTH_DURATIONS.SESSION_TTL_SECONDS,
+      );
+
+      await redis.expire(
+        REDIS_KEYS.userSessions(userId),
         AUTH_DURATIONS.SESSION_TTL_SECONDS,
       );
 
@@ -503,22 +620,40 @@ export class AuthService {
    * @param userId User identifier.
    * @returns Active session metadata.
    */
-  async getSessions(userId: string): Promise<any[]> {
+  async getSessions(userId: string): Promise<SessionSummaryDto[]> {
     const sessionsKey = REDIS_KEYS.userSessions(userId);
     const sessionIds = await redis.smembers(sessionsKey);
 
     const sessions = await Promise.all(
-      sessionIds.map(async (id) => {
-        const data = await redis.get(REDIS_KEYS.authSession(id));
-        if (!data) return null;
-        const parsed = JSON.parse(data);
-        // exclude sensitive data from response (refresh token hash)
-        const { refreshTokenHash, ...safeSession } = parsed;
-        return { sessionId: id, ...safeSession };
+      sessionIds.map(async (id): Promise<SessionSummaryDto | null> => {
+        const authSessionKey = REDIS_KEYS.authSession(id);
+        const data = await redis.get(authSessionKey);
+        if (!data) {
+          // Clean up stale session ID from Redis
+          redis.srem(sessionsKey, id).catch((err) => {
+            logger.error(
+              { module: "auth", userId, sessionId: id },
+              "Failed to remove stale session ID",
+              err,
+            );
+          });
+          return null;
+        }
+        const parsed = JSON.parse(data) as AuthSessionRecord;
+        const safeSession = { ...parsed, refreshTokenHash: undefined };
+
+        return {
+          sessionId: id,
+          ...safeSession,
+          location:
+            safeSession.location || getIpLocation(safeSession.ipAddress),
+        };
       }),
     );
 
-    return sessions.filter(Boolean);
+    return sessions.filter(
+      (session): session is SessionSummaryDto => session !== null,
+    );
   }
 
   /**
@@ -619,7 +754,9 @@ export class AuthService {
    * - USER_NOT_FOUND
    * - KAFKA_PUBLISH_FAILED
    */
-  async forgotPassword(data: ForgotPasswordRequestDto): Promise<string> {
+  async forgotPassword(
+    data: ForgotPasswordRequestDto,
+  ): Promise<ForgotPasswordResponseDto> {
     const user = await this.repo.findUserByEmail(data.email);
     if (!user) {
       logger.warn(
@@ -629,20 +766,50 @@ export class AuthService {
       throw new ApiError(statusCode.notFound, ERROR_CODES.USER_NOT_FOUND);
     }
 
+    // Check for an existing active OTP session for this email
+    const existingSessionId = await OtpService.findExistingOtpSession(
+      data.email,
+    );
     const otp = generateOtp();
-    const sessionId = await OtpService.storeOtp(
-      data.email,
-      otp,
-      env.FORGOT_PASSWORD_OTP_TTL,
-    );
+    let sessionId: string;
 
-    // Save the email associated with the session in Redis
-    await redis.set(
-      REDIS_KEYS.forgotPasswordSession(sessionId),
-      data.email,
-      "EX",
-      env.FORGOT_PASSWORD_OTP_TTL,
-    );
+    if (existingSessionId) {
+      // Reuse existing session: generate new OTP, overwrite hash
+      sessionId = existingSessionId;
+      await OtpService.replaceOtp(
+        sessionId,
+        data.email,
+        otp,
+        env.FORGOT_PASSWORD_OTP_TTL,
+      );
+
+      // Refresh the forgot password session TTL
+      await redis.set(
+        REDIS_KEYS.forgotPasswordSession(sessionId),
+        data.email,
+        "EX",
+        env.FORGOT_PASSWORD_OTP_TTL,
+      );
+
+      logger.info(
+        { module: "auth", sessionId },
+        "Reusing existing OTP session for forgot password with new OTP",
+      );
+    } else {
+      // New session
+      sessionId = await OtpService.storeOtp(
+        data.email,
+        otp,
+        env.FORGOT_PASSWORD_OTP_TTL,
+      );
+
+      await redis.set(
+        REDIS_KEYS.forgotPasswordSession(sessionId),
+        data.email,
+        "EX",
+        env.FORGOT_PASSWORD_OTP_TTL,
+      );
+    }
 
     const event: OTPRequestedV1Type = {
       eventId: randomUUID(),
@@ -660,10 +827,14 @@ export class AuthService {
         { module: "auth", err, eventId: event.eventId },
         "Forgot password OTP publish failed; rolling back Redis state",
       );
-      await redis.del(
-        REDIS_KEYS.otp(sessionId),
-        REDIS_KEYS.forgotPasswordSession(sessionId),
-      );
+      // Only roll back fully if this was a new session
+      if (!existingSessionId) {
+        await redis.del(
+          REDIS_KEYS.otp(sessionId),
+          REDIS_KEYS.forgotPasswordSession(sessionId),
+        );
+        await OtpService.deleteOtpSession(data.email);
+      }
       throw new ApiError(
         statusCode.badGateway,
         COMMON_ERROR_CODES.KAFKA_PUBLISH_FAILED,
@@ -672,7 +843,7 @@ export class AuthService {
       );
     }
 
-    return sessionId;
+    return { sessionId };
   }
 
   /**
@@ -690,7 +861,9 @@ export class AuthService {
    * - OTP_SESSION_NOT_FOUND
    * - OTP_INVALID or OTP_LOCKED
    */
-  async verifyResetOtp(data: VerifyResetOtpRequestDto): Promise<string> {
+  async VerifyPasswordResetOtp(
+    data: VerifyPasswordResetOtpRequestDto,
+  ): Promise<VerifyPasswordResetOtpResponseDto> {
     const email = await redis.get(
       REDIS_KEYS.forgotPasswordSession(data.sessionId),
     );
@@ -722,13 +895,15 @@ export class AuthService {
     await redis.del(
       REDIS_KEYS.otp(data.sessionId),
       REDIS_KEYS.forgotPasswordSession(data.sessionId),
+      REDIS_KEYS.otpAttempts(data.sessionId),
     );
+    await OtpService.deleteOtpSession(email);
 
     logger.info(
       { module: "auth", sessionId: data.sessionId },
       "OTP verified, reset token issued",
     );
-    return token;
+    return { passwordResetToken: token };
   }
 
   /**

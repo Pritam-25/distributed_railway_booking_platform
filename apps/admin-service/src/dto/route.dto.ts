@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const createRouteSchema = z.object({
-  trainId: z.string().uuid("Invalid train ID format. Must be a valid UUID."),
+  trainId: z.uuid("Invalid train ID format. Must be a valid UUID."),
 });
 
 export type CreateRouteRequestDto = z.infer<typeof createRouteSchema>;
@@ -78,7 +78,7 @@ export const listRoutesQuerySchema = z.object({
 export type ListRoutesQueryDto = z.infer<typeof listRoutesQuerySchema>;
 
 export const routeIdParamSchema = z.object({
-  routeId: z.string().uuid("Invalid route ID format. Must be a valid UUID."),
+  routeId: z.uuid("Invalid route ID format. Must be a valid UUID."),
 });
 
 export type RouteIdParamDto = z.infer<typeof routeIdParamSchema>;
