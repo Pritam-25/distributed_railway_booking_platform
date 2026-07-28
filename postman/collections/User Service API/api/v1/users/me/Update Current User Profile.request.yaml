@@ -1,0 +1,57 @@
+$kind: http-request
+description: |-
+  Updates the authenticated user's profile fields using the current request schema.
+
+  **Request Body Fields:**
+  - `firstName` - Updated first name for the user profile.
+  - `lastName` - Updated last name for the user profile.
+
+  **Response:**
+  Returns the updated user profile object after the stored record and cache have been synchronized.
+
+  **Outcomes:**
+  - 200 OK - The profile was updated successfully.
+  - 400 Bad Request - The request body failed validation.
+  - 401 Unauthorized - Authentication credentials were missing or invalid.
+  - 429 Too Many Requests - Profile updates were rate-limited.
+  - 500 Internal Server Error - The service could not update the profile.
+
+  **Notes:**
+  - The current request schema requires both firstName and lastName.
+url: "{{baseUrl}}/api/v1/users/me"
+method: PUT
+headers:
+  Content-Type: application/json
+  Accept: application/json
+body:
+  type: json
+  content: |-
+    {
+      "firstName": "Jhon",
+      "lastName": "Doe"
+    }
+  $type: |-
+    {
+      "type": "object",
+      "properties": {
+        "firstName": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 50,
+          "example": "Jhon"
+        },
+        "lastName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 50,
+          "example": "Doe"
+        }
+      },
+      "required": [
+        "firstName",
+        "lastName"
+      ]
+    }
+settings: {}
+examples: ./.resources/Update Current User Profile.resources/examples
+order: 2000

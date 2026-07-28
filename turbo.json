@@ -13,6 +13,11 @@
       "dependsOn": ["build:spec"],
       "cache": false
     },
+    "//#sync:postman": {
+      "dependsOn": ["api-gateway#build:spec"],
+      "cache": false,
+      "outputs": ["postman/specs/**"]
+    },
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],

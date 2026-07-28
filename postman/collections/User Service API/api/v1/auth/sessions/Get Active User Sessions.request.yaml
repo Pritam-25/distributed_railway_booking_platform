@@ -1,0 +1,26 @@
+$kind: http-request
+description: |-
+  Retrieves the list of active sessions for the authenticated user and marks the currently requested session in the returned payload.
+
+  **Request Body Fields:**
+  - None - The authenticated user is resolved from the access token or session cookie.
+
+  **Response:**
+  Returns an array of session summaries with device metadata, IP address, location, timestamps, and an `isCurrent` flag.
+
+  **Outcomes:**
+  - 200 OK - Active sessions were retrieved successfully.
+  - 400 Bad Request - The request could not be validated.
+  - 401 Unauthorized - Authentication credentials were missing or invalid.
+  - 429 Too Many Requests - Session lookup was rate-limited.
+  - 500 Internal Server Error - The service could not load session data.
+url: "{{baseUrl}}/api/v1/auth/sessions"
+method: GET
+headers:
+  Accept: application/json
+body:
+  type: text
+  content: ""
+settings: {}
+examples: ./.resources/Get Active User Sessions.resources/examples
+order: 1000

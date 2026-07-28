@@ -6,6 +6,8 @@
     "dev": "turbo run dev",
     "start": "turbo run start",
     "codegen": "turbo run generate:api && pnpm run format",
+    "docs": "turbo run sync:postman",
+    "sync:postman": "tsx scripts/sync-postman.ts",
     "prepare": "husky",
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",

@@ -1,0 +1,72 @@
+$kind: http-request
+description: |-
+  Starts the registration flow by validating the submitted identity and password payload, then dispatching a one-time password to the provided email address.
+
+  **Request Body Fields:**
+  - `firstName` - User's given name used to personalize the account.
+  - `lastName` - User's family name used together with the first name.
+  - `email` - Unique email address that receives the registration OTP.
+  - `password` - Account password validated against the password policy.
+
+  **Response:**
+  Returns a success envelope with an empty data payload. The short-lived OTP session is stored by the service and the OTP session cookie is set separately.
+
+  **Outcomes:**
+  - 200 OK - OTP was generated and sent to the registered email address.
+  - 409 Conflict - The email is already registered.
+  - 400 Bad Request - Request validation failed or the payload is incomplete.
+  - 429 Too Many Requests - OTP delivery was rate-limited.
+  - 500 Internal Server Error - The service could not complete OTP dispatch.
+url: "{{baseUrl}}/api/v1/auth/send-otp"
+method: POST
+headers:
+  Content-Type: application/json
+  Accept: application/json
+body:
+  type: json
+  content: |-
+    {
+      "firstName": "Jhon",
+      "lastName": "Doe",
+      "email": "jhon@example.com",
+      "password": "Password@123"
+    }
+  $type: |-
+    {
+      "type": "object",
+      "properties": {
+        "firstName": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 50,
+          "example": "Jhon"
+        },
+        "lastName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 50,
+          "example": "Doe"
+        },
+        "email": {
+          "type": "string",
+          "example": "jhon@example.com",
+          "format": "email"
+        },
+        "password": {
+          "type": "string",
+          "minLength": 6,
+          "pattern": "^(?=.*[A-Z])(?=.*\\d)(?=.*[^a-zA-Z0-9]).{6,}$",
+          "example": "Password@123",
+          "description": "### Password Requirements\n\n- Minimum **6** characters\n- At least **1 uppercase** letter\n- At least **1 number**\n- At least **1 special character**"
+        }
+      },
+      "required": [
+        "firstName",
+        "lastName",
+        "email",
+        "password"
+      ]
+    }
+settings: {}
+examples: ./.resources/Send OTP for User Registration.resources/examples
+order: 1000

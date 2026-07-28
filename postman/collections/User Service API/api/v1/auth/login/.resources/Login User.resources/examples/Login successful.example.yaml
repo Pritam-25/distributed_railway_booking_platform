@@ -1,0 +1,120 @@
+$kind: http-example
+request:
+  url: "{{baseUrl}}/api/v1/auth/login"
+  method: POST
+  headers:
+    Content-Type: application/json
+    Accept: application/json
+  body:
+    type: json
+    content: |-
+      {
+        "email": "jhon@example.com",
+        "password": "Password@123"
+      }
+response:
+  statusCode: 200
+  statusText: OK
+  headers:
+    Content-Type: application/json
+  body:
+    type: json
+    content: |-
+      {
+        "success": true,
+        "message": "Login successful",
+        "data": {
+          "id": "550e8400-e29b-41d4-a716-446655440000",
+          "firstName": "Jhon",
+          "lastName": "Doe",
+          "email": "jhon@example.com",
+          "createdAt": "2026-07-24T00:00:00.000Z"
+        },
+        "meta": {
+          "requestId": "3e3c1f1a-6f7d-4a2b-9b5c-1f0e3a4b5c6d",
+          "traceId": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+          "timestamp": "2026-07-24T11:21:35.000Z"
+        }
+      }
+    $type: |-
+      {
+        "description": "Success Response Envelope",
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              true
+            ],
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "example": "Login successful"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "example": "550e8400-e29b-41d4-a716-446655440000",
+                "format": "uuid"
+              },
+              "firstName": {
+                "type": "string",
+                "example": "Jhon"
+              },
+              "lastName": {
+                "type": "string",
+                "example": "Doe"
+              },
+              "email": {
+                "type": "string",
+                "example": "jhon@example.com",
+                "format": "email"
+              },
+              "createdAt": {
+                "type": "string",
+                "example": "2026-07-24T00:00:00.000Z",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "id",
+              "firstName",
+              "lastName",
+              "email",
+              "createdAt"
+            ]
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "requestId": {
+                "type": "string",
+                "example": "3e3c1f1a-6f7d-4a2b-9b5c-1f0e3a4b5c6d"
+              },
+              "traceId": {
+                "type": "string",
+                "example": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
+              },
+              "timestamp": {
+                "type": "string",
+                "example": "2026-07-24T11:21:35.000Z"
+              }
+            },
+            "required": [
+              "requestId",
+              "traceId",
+              "timestamp"
+            ]
+          }
+        },
+        "required": [
+          "success",
+          "message",
+          "data",
+          "meta"
+        ]
+      }
+order: 1000
