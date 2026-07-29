@@ -3,6 +3,7 @@ packages:
   - "packages/*"
 
 allowBuilds:
+  "@bufbuild/buf": false
   "@confluentinc/kafka-javascript": true
   "@prisma/engines": true
   esbuild: true
