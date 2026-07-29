@@ -28,7 +28,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: irctc-redis
-    restart: always
+    restart: unless-stopped
     profiles: ["prod"]
     ports:
       - "6379:6379"
@@ -41,6 +41,36 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.1.4
+    container_name: irctc-elasticsearch
+    restart: always
+    profiles: ["dev", "prod"]
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:9200/health/live || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - irctc-network
 
   # --- Messaging Layer (KRaft Mode - Using Confluent Image for stability) ---
   # Two listeners because Kafka clients resolve advertised addresses against
@@ -89,7 +119,7 @@ services:
   kafka-ui:
     image: ghcr.io/kafbat/kafka-ui:v1.5.0
     container_name: irctc-kafka-ui
-    restart: always
+    restart: unless-stopped
     profiles: ["dev"]
     depends_on:
       kafka:
@@ -107,7 +137,7 @@ services:
   pgadmin:
     image: dpage/pgadmin4:9.15.0
     container_name: irctc-pgadmin
-    restart: always
+    restart: unless-stopped
     profiles: ["debug"]
     ports:
       - "8081:80"
@@ -120,7 +150,7 @@ services:
   redis-insight:
     image: redis/redisinsight:3.4.2
     container_name: irctc-redis-insight
-    restart: always
+    restart: unless-stopped
     profiles: ["debug"]
     ports:
       - "8001:8001"
@@ -130,7 +160,7 @@ services:
   tempo:
     image: grafana/tempo:latest
     container_name: irctc-tempo
-    restart: always
+    restart: unless-stopped
     profiles: ["dev", "prod"]
     ports:
       - "4317:4317" # OTLP gRPC
@@ -146,7 +176,7 @@ services:
   grafana:
     image: grafana/grafana:latest
     container_name: irctc-grafana
-    restart: always
+    restart: unless-stopped
     profiles: ["dev", "prod"]
     depends_on:
       - tempo
@@ -350,3 +380,4 @@ volumes:
   kafka_data:
   tempo_data:
   grafana_data:
+  elasticsearch_data:
