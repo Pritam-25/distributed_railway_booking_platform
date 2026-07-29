@@ -20,6 +20,7 @@
   "license": "ISC",
   "devDependencies": {
     "@redocly/cli": "^2.41.1",
+    "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",

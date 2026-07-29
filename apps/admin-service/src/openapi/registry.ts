@@ -8,7 +8,7 @@ import {
   registerGatewayAuth,
   z,
 } from "@irctc/openapi";
-import { ERROR_CODES, ERROR_MESSAGES } from "@irctc/errors";
+import { COMMON_ERROR_CODES, COMMON_ERROR_MESSAGES } from "@irctc/errors";
 import { adminLoginSchema } from "@dto";
 import { adminServiceOpenApiDescriptions } from "./descriptions.js";
 
@@ -82,8 +82,8 @@ registry.registerPath({
     401: createOpenApiResponse(
       "Invalid credentials",
       createErrorResponseSchema(
-        ERROR_CODES.UNAUTHORIZED,
-        ERROR_MESSAGES[ERROR_CODES.UNAUTHORIZED],
+        COMMON_ERROR_CODES.UNAUTHORIZED,
+        COMMON_ERROR_MESSAGES.UNAUTHORIZED,
       ),
     ),
   },
@@ -117,8 +117,8 @@ registry.registerPath({
     401: createOpenApiResponse(
       "Unauthorized - Admin token is missing, invalid, or expired",
       createErrorResponseSchema(
-        ERROR_CODES.UNAUTHORIZED,
-        ERROR_MESSAGES[ERROR_CODES.UNAUTHORIZED],
+        COMMON_ERROR_CODES.UNAUTHORIZED,
+        COMMON_ERROR_MESSAGES.UNAUTHORIZED,
       ),
     ),
   },

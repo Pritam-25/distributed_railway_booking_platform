@@ -9,6 +9,7 @@ import type {
   SessionSummaryDto,
   VerifyPasswordResetOtpResponseDto,
   ForgotPasswordResponseDto,
+  AuthSessionRecord,
 } from "@dto";
 import type { UserRepository } from "@repository";
 import { logger } from "@irctc/logger";
@@ -29,14 +30,10 @@ import type {
   OtpEventPublisher,
   UserLoggedInEventPublisher,
 } from "@publishers";
-import { ERROR_CODES as COMMON_ERROR_CODES, ApiError } from "@irctc/errors";
+import { COMMON_ERROR_CODES, ApiError } from "@irctc/errors";
 import { AUTH_DURATIONS, REDIS_KEYS } from "@utils/constants";
 import { AuthMapper } from "../mappers/auth.mapper.js";
 import type { RefreshTokenPayload } from "@irctc/middleware";
-
-type AuthSessionRecord = Omit<SessionSummaryDto, "sessionId"> & {
-  refreshTokenHash: string;
-};
 
 /**
  * Service handling authentication-related business logic, including registration flows,
@@ -136,6 +133,18 @@ export class AuthService {
 
       throw new Error("Failed to persist authentication session");
     }
+  }
+
+  private async requireUser(email: string) {
+    const user = await this.repo.findUserByEmail(email);
+    if (!user) {
+      logger.warn(
+        { module: "auth" },
+        "Forgot password request failed: User not found",
+      );
+      throw new ApiError(statusCode.notFound, ERROR_CODES.USER_NOT_FOUND);
+    }
+    return user;
   }
 
   /**
@@ -412,14 +421,7 @@ export class AuthService {
     userAgent?: string,
   ): Promise<AuthResponseDto> {
     // 1. Find user by email
-    const user = await this.repo.findUserByEmail(data.email);
-    if (!user) {
-      logger.warn({ module: "auth" }, "Login failed: User not found");
-      throw new ApiError(
-        statusCode.unauthorized,
-        ERROR_CODES.INVALID_CREDENTIALS,
-      );
-    }
+    const user = await this.requireUser(data.email);
 
     // 2. Verify password
     const isPasswordValid = await bcrypt.compare(data.password, user.password);
@@ -428,6 +430,7 @@ export class AuthService {
       throw new ApiError(
         statusCode.unauthorized,
         ERROR_CODES.INVALID_CREDENTIALS,
+        "Invalid email or password.",
       );
     }
 
@@ -519,7 +522,7 @@ export class AuthService {
       if (decoded.type !== "refresh") {
         throw new ApiError(
           statusCode.unauthorized,
-          ERROR_CODES.INVALID_TOKEN_TYPE,
+          ERROR_CODES.INVALID_REFRESH_TOKEN,
         );
       }
 
@@ -565,14 +568,12 @@ export class AuthService {
         await this.logoutAll(userId);
         throw new ApiError(
           statusCode.unauthorized,
-          ERROR_CODES.REFRESH_TOKEN_INVALID,
+          ERROR_CODES.INVALID_REFRESH_TOKEN,
         );
       }
 
       // 4. Generate NEW tokens (Rotation)
-      const user = await this.repo.findById(userId);
-      if (!user)
-        throw new ApiError(statusCode.notFound, ERROR_CODES.USER_NOT_FOUND);
+      const user = await this.requireUser(session.userId);
 
       const accessToken = this.generateAccessToken(
         user.id,
@@ -645,8 +646,6 @@ export class AuthService {
         return {
           sessionId: id,
           ...safeSession,
-          location:
-            safeSession.location || getIpLocation(safeSession.ipAddress),
         };
       }),
     );
@@ -757,14 +756,8 @@ export class AuthService {
   async forgotPassword(
     data: ForgotPasswordRequestDto,
   ): Promise<ForgotPasswordResponseDto> {
-    const user = await this.repo.findUserByEmail(data.email);
-    if (!user) {
-      logger.warn(
-        { module: "auth" },
-        "Forgot password request failed: User not found",
-      );
-      throw new ApiError(statusCode.notFound, ERROR_CODES.USER_NOT_FOUND);
-    }
+    // 1. Ensure the email is associated with an existing user
+    await this.requireUser(data.email);
 
     // Check for an existing active OTP session for this email
     const existingSessionId = await OtpService.findExistingOtpSession(
@@ -936,10 +929,7 @@ export class AuthService {
       );
     }
 
-    const user = await this.repo.findUserByEmail(email);
-    if (!user) {
-      throw new ApiError(statusCode.notFound, ERROR_CODES.USER_NOT_FOUND);
-    }
+    const user = await this.requireUser(email);
 
     const hashedPassword = await bcrypt.hash(data.password, 10);
     await this.repo.update(user.id, { password: hashedPassword });

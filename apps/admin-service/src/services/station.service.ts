@@ -168,7 +168,7 @@ export class StationService {
   async updateStation(stationId: string, dto: UpdateStationRequestDto) {
     try {
       const updatedData = Object.fromEntries(
-        Object.entries(dto).filter(([_, value]) => value !== undefined),
+        Object.entries(dto).filter(([, value]) => value !== undefined),
       );
 
       return await this.prisma.$transaction(async (tx) => {

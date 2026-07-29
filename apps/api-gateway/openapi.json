@@ -123,7 +123,7 @@
                         },
                         "message": {
                           "type": "string",
-                          "example": "Unauthorized."
+                          "example": "Authentication required."
                         },
                         "details": {}
                       },
@@ -249,7 +249,7 @@
                         },
                         "message": {
                           "type": "string",
-                          "example": "Unauthorized."
+                          "example": "Authentication required."
                         },
                         "details": {}
                       },
@@ -616,7 +616,7 @@
                       "properties": {
                         "code": {
                           "type": "string",
-                          "example": "UNAUTHORIZED"
+                          "example": "INVALID_CREDENTIALS"
                         },
                         "message": {
                           "type": "string",
@@ -632,7 +632,7 @@
                     }
                   },
                   "required": ["success", "error", "meta"],
-                  "description": "Error Response Envelope (UNAUTHORIZED)",
+                  "description": "Error Response Envelope (INVALID_CREDENTIALS)",
                   "x-sdk-ref": "ErrorResponse"
                 }
               }
@@ -738,7 +738,7 @@
                         },
                         "message": {
                           "type": "string",
-                          "example": "Refresh token is invalid."
+                          "example": "Invalid or expired refresh token."
                         },
                         "details": {}
                       },
@@ -1834,11 +1834,11 @@
             "properties": {
               "code": {
                 "type": "string",
-                "example": "BAD_REQUEST"
+                "example": "INVALID_INPUT"
               },
               "message": {
                 "type": "string",
-                "example": "Bad request."
+                "example": "Invalid request input."
               },
               "details": {}
             },
@@ -1850,7 +1850,7 @@
           }
         },
         "required": ["success", "error", "meta"],
-        "description": "Error Response Envelope (BAD_REQUEST)",
+        "description": "Error Response Envelope (INVALID_INPUT)",
         "x-sdk-ref": "ErrorResponse",
         "refId": "BadRequestErrorResponse"
       },
@@ -2136,11 +2136,11 @@
         "properties": {
           "code": {
             "type": "string",
-            "example": "BAD_REQUEST"
+            "example": "INVALID_INPUT"
           },
           "message": {
             "type": "string",
-            "example": "Invalid input payload"
+            "example": "Invalid Request Input."
           },
           "details": {}
         },
@@ -2173,10 +2173,14 @@
           },
           "firstName": {
             "type": "string",
+            "minLength": 3,
+            "maxLength": 50,
             "example": "Jhon"
           },
           "lastName": {
             "type": "string",
+            "minLength": 2,
+            "maxLength": 50,
             "example": "Doe"
           },
           "email": {
@@ -2209,7 +2213,7 @@
               },
               "message": {
                 "type": "string",
-                "example": "Unauthorized."
+                "example": "Authentication required."
               },
               "details": {}
             },

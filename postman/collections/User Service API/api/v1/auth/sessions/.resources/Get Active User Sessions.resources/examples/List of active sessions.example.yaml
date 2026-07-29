@@ -36,7 +36,7 @@ response:
             "expiresAt": "2026-08-23T12:00:00.000Z",
             "fingerprint": "9b32928e81333d238159cd131c9551adce20bd02b90d4a6a89d482ff4c10fba7",
             "ipAddress": "192:168:1:1",
-            "isCurrent": true,
+            "isCurrent": false,
             "lastUsedAt": "2026-07-24T12:00:00.000Z",
             "location": "New Delhi, IN",
             "sessionId": "550e8400-e29b-41d4-a716-446655440000",

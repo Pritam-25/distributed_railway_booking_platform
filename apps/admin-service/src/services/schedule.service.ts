@@ -1,5 +1,5 @@
 import { ScheduleStatus, type PrismaClient } from "@generated/prisma/client.js";
-import { ApiError, ERROR_CODES as COMMON_ERROR_CODES } from "@irctc/errors";
+import { ApiError, COMMON_ERROR_CODES } from "@irctc/errors";
 import { ERROR_CODES } from "@utils/errors";
 import { statusCode } from "@irctc/http";
 import type {

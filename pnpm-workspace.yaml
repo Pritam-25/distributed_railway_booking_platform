@@ -1,3 +1,15 @@
 packages:
   - "apps/*"
   - "packages/*"
+
+allowBuilds:
+  "@confluentinc/kafka-javascript": true
+  "@prisma/engines": true
+  esbuild: true
+  prisma: true
+  protobufjs: true
+  sharp: true
+  unrs-resolver: true
+
+minimumReleaseAgeExclude:
+  - "@redocly/cli"

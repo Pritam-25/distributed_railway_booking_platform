@@ -1,4 +1,4 @@
-import { ERROR_CODES, type ErrorCode } from "./errorCodes.js";
+import { COMMON_ERROR_CODES, type CommonErrorCode } from "./errorCodes.js";
 
 /**
  * Shape of a Prisma known request error containing a database error code.
@@ -26,22 +26,24 @@ export const isPrismaKnownError = (
  * @param error The error to normalize.
  * @returns The matched ErrorCode, or null if the error is not a Prisma error.
  */
-export const normalizePrismaError = (error: unknown): ErrorCode | null => {
+export const normalizePrismaError = (
+  error: unknown,
+): CommonErrorCode | null => {
   if (!isPrismaKnownError(error)) {
     return null;
   }
 
   switch (error.code) {
     case "P2002":
-      return ERROR_CODES.CONFLICT;
+      return COMMON_ERROR_CODES.CONFLICT;
 
     case "P2025":
-      return ERROR_CODES.NOT_FOUND;
+      return COMMON_ERROR_CODES.NOT_FOUND;
 
     case "P2003":
-      return ERROR_CODES.INVALID_INPUT;
+      return COMMON_ERROR_CODES.INVALID_INPUT;
 
     default:
-      return ERROR_CODES.INTERNAL_ERROR;
+      return COMMON_ERROR_CODES.INTERNAL_ERROR;
   }
 };

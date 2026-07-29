@@ -9,10 +9,10 @@ request:
     type: json
     content: |-
       {
-        "firstName": "Jhon",
-        "lastName": "Doe",
-        "email": "jhon@example.com",
-        "password": "Password@123"
+          "firstName": "Jhon",
+          "lastName": "Doe",
+          "email": "jhon@example.com",
+          "password": "Password@123"
       }
 response:
   statusCode: 500

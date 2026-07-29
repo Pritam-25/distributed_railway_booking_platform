@@ -13,7 +13,7 @@ export * from "./retry/index.js";
 export * from "./headers/index.js";
 export * from "./outbox/index.js";
 import { KafkaJS } from "@confluentinc/kafka-javascript";
-export interface Kafka extends KafkaJS.Kafka {}
-export interface Producer extends KafkaJS.Producer {}
-export interface Consumer extends KafkaJS.Consumer {}
-export interface EachMessagePayload extends KafkaJS.EachMessagePayload {}
+export type Kafka = KafkaJS.Kafka;
+export type Producer = KafkaJS.Producer;
+export type Consumer = KafkaJS.Consumer;
+export type EachMessagePayload = KafkaJS.EachMessagePayload;

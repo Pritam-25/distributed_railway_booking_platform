@@ -1,4 +1,5 @@
 $kind: http-request
+name: Send OTP for User Registration
 description: |-
   Starts the registration flow by validating the submitted identity and password payload, then dispatching a one-time password to the provided email address.
 
@@ -26,10 +27,28 @@ body:
   type: json
   content: |-
     {
-      "firstName": {{firstName}},
-      "lastName": {{lastName}},
-      "email": {{email}},
-      "password": {{password}}
+        "firstName": "{{firstName}}",
+        "lastName": "{{lastName}}",
+        "email": "{{email}}",
+        "password": "{{password}}"
+    }
+  $type: |-
+    {
+        "type": "object",
+        "properties": {
+            "firstName": {
+                "type": "string"
+            },
+            "lastName": {
+                "type": "string"
+            },
+            "email": {
+                "type": "string"
+            },
+            "password": {
+                "type": "string"
+            }
+        }
     }
 examples: ./.resources/Send OTP for User Registration.resources/examples
 order: 1000

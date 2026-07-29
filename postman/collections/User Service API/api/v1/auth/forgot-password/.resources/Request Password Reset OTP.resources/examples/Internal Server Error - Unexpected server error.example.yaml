@@ -9,7 +9,7 @@ request:
     type: json
     content: |-
       {
-        "email": {{email}}
+          "email": "jhon@example.com"
       }
 response:
   statusCode: 500

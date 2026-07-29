@@ -23,7 +23,7 @@ response:
       {
         "success": false,
         "error": {
-          "code": "BAD_REQUEST",
+          "code": "INVALID_INPUT",
           "message": "Bad request.",
           "details": ""
         },

@@ -11,8 +11,8 @@ import { MetaSchema } from "./meta.js";
  */
 export const ErrorDetailSchema = z
   .object({
-    code: z.string().openapi({ example: "BAD_REQUEST" }),
-    message: z.string().openapi({ example: "Invalid input payload" }),
+    code: z.string().openapi({ example: "INVALID_INPUT" }),
+    message: z.string().openapi({ example: "Invalid Request Input." }),
     details: z.unknown().optional(),
   })
   .openapi("ErrorDetail");

@@ -9,8 +9,8 @@ request:
     type: json
     content: |-
       {
-        "email": {{email}},
-        "password": {{password}}
+        "email": "Jhon",
+        "password": "jhon@example.com"
       }
 response:
   statusCode: 429

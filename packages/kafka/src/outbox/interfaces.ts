@@ -28,10 +28,11 @@ export enum OutboxStatus {
  * Minimally defined interface for the database client, matching the Prisma operations
  * required by the outbox repository.
  */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export interface OutboxPrismaClient {
   outboxEvent: {
-    create(args: { data: any }): Promise<any>;
-    updateMany(args: { where: any; data: any }): Promise<{ count: number }>;
+    create(args: any): Promise<any>;
+    updateMany(args: any): Promise<{ count: number }>;
     groupBy(args: any): Promise<any[]>;
   };
   $queryRaw<T = any>(query: TemplateStringsArray, ...values: any[]): Promise<T>;
@@ -70,7 +71,7 @@ export interface OutboxRepository {
    * @param data - The outbox message payload and routing details.
    */
   insert(
-    tx: any,
+    tx: OutboxPrismaClient,
     data: {
       aggregateType: string;
       aggregateId: string;

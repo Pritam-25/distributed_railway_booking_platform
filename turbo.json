@@ -10,7 +10,7 @@
       "cache": false
     },
     "generate:api": {
-      "dependsOn": ["build:spec"],
+      "dependsOn": ["api-gateway#build:spec"],
       "cache": false
     },
     "//#sync:postman": {

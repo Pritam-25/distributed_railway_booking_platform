@@ -12,7 +12,7 @@ import {
   ErrorDetailSchema,
   z,
 } from "@irctc/openapi";
-import { ERROR_CODES } from "@irctc/errors";
+import { COMMON_ERROR_CODES } from "@irctc/errors";
 import {
   RegisterSchema,
   LoginSchema,
@@ -28,7 +28,7 @@ import {
   VerifyPasswordResetOtpResponseSchema,
   SessionParamSchema,
 } from "@dto";
-import { ERROR_MESSAGES, ERROR_CODES as USER_ERROR } from "@utils/errors";
+import { ERROR_MESSAGES, ERROR_CODES } from "@utils/errors";
 import { userServiceOpenApiDescriptions } from "./descriptions.js";
 
 export const registry = new OpenAPIRegistry();
@@ -84,7 +84,7 @@ registry.registerPath({
     409: createOpenApiResponse(
       "User already exists",
       createErrorResponseSchema(
-        USER_ERROR.USER_ALREADY_EXISTS,
+        ERROR_CODES.USER_ALREADY_EXISTS,
         ERROR_MESSAGES.USER_ALREADY_EXISTS,
       ),
     ),
@@ -116,7 +116,7 @@ registry.registerPath({
     400: createOpenApiResponse(
       "Invalid or expired OTP",
       createErrorResponseSchema(
-        ERROR_CODES.INVALID_INPUT,
+        COMMON_ERROR_CODES.INVALID_INPUT,
         "Invalid or expired OTP code",
       ),
     ),
@@ -148,7 +148,7 @@ registry.registerPath({
     401: createOpenApiResponse(
       "Invalid credentials",
       createErrorResponseSchema(
-        ERROR_CODES.UNAUTHORIZED,
+        ERROR_CODES.INVALID_CREDENTIALS,
         ERROR_MESSAGES.INVALID_CREDENTIALS,
       ),
     ),
@@ -171,8 +171,8 @@ registry.registerPath({
     401: createOpenApiResponse(
       "Unauthorized - Refresh token is missing, invalid, or expired",
       createErrorResponseSchema(
-        ERROR_CODES.UNAUTHORIZED,
-        ERROR_MESSAGES.REFRESH_TOKEN_INVALID,
+        COMMON_ERROR_CODES.UNAUTHORIZED,
+        ERROR_MESSAGES.INVALID_REFRESH_TOKEN,
       ),
     ),
   },
@@ -220,7 +220,7 @@ registry.registerPath({
     404: createOpenApiResponse(
       "Session Not Found",
       createErrorResponseSchema(
-        ERROR_CODES.NOT_FOUND,
+        COMMON_ERROR_CODES.NOT_FOUND,
         "Active session not found",
       ),
     ),
@@ -287,7 +287,7 @@ registry.registerPath({
     404: createOpenApiResponse(
       "User Not Found",
       createErrorResponseSchema(
-        ERROR_CODES.NOT_FOUND,
+        COMMON_ERROR_CODES.NOT_FOUND,
         ERROR_MESSAGES.USER_NOT_FOUND,
       ),
     ),
@@ -322,7 +322,7 @@ registry.registerPath({
     400: createOpenApiResponse(
       "Invalid or expired OTP",
       createErrorResponseSchema(
-        ERROR_CODES.INVALID_INPUT,
+        COMMON_ERROR_CODES.INVALID_INPUT,
         "Invalid or expired reset OTP",
       ),
     ),
@@ -382,7 +382,7 @@ registry.registerPath({
     404: createOpenApiResponse(
       "User Profile Not Found",
       createErrorResponseSchema(
-        ERROR_CODES.NOT_FOUND,
+        COMMON_ERROR_CODES.NOT_FOUND,
         ERROR_MESSAGES.USER_NOT_FOUND,
       ),
     ),

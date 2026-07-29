@@ -46,8 +46,8 @@ export const requestIdMiddleware = (
     : randomUUID();
 
   runWithRequestContext({ requestId }, () => {
-    (req as any).requestId = requestId;
-    (req as any).logger = logger.child({ requestId });
+    req.requestId = requestId;
+    req.logger = logger.child({ requestId });
     res.setHeader("X-Request-Id", requestId);
     // Write back to incoming headers so proxy and other middleware
     // can read req.headers["x-request-id"] consistently.

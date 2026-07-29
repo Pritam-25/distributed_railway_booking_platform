@@ -1,6 +1,6 @@
 import type { ZodType } from "zod";
 import type { Request, Response, NextFunction } from "express";
-import { ApiError, ERROR_CODES } from "@irctc/errors";
+import { ApiError, COMMON_ERROR_CODES } from "@irctc/errors";
 import { statusCode } from "@irctc/http";
 
 /**
@@ -15,7 +15,7 @@ export const validateSchema =
     if (!req.body) {
       throw new ApiError(
         statusCode.badRequest,
-        ERROR_CODES.INVALID_INPUT,
+        COMMON_ERROR_CODES.INVALID_INPUT,
         "Request body is required.",
       );
     }
@@ -34,7 +34,7 @@ export const validateSchema =
 
       throw new ApiError(
         statusCode.badRequest,
-        ERROR_CODES.INVALID_INPUT,
+        COMMON_ERROR_CODES.INVALID_INPUT,
         "Invalid request body.",
         errors,
       );

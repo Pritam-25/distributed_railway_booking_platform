@@ -2,8 +2,8 @@ import { REDIS_KEYS } from "@utils/constants";
 import { env, redis } from "@config";
 import { logger } from "@irctc/logger";
 import { statusCode } from "@irctc/http";
-import { ERROR_CODES as COMMON_ERROR_CODES, ApiError } from "@irctc/errors";
-import { ERROR_CODES as AUTH_ERROR_CODES } from "@utils/errors";
+import { COMMON_ERROR_CODES, ApiError } from "@irctc/errors";
+import { ERROR_CODES } from "@utils/errors";
 import { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 
@@ -222,7 +222,7 @@ export class OtpService {
 
     if (!hashedOtp) {
       logger.warn({ module: "otp" }, "OTP session not found or expired");
-      throw new ApiError(statusCode.notFound, AUTH_ERROR_CODES.OTP_EXPIRED);
+      throw new ApiError(statusCode.notFound, ERROR_CODES.OTP_EXPIRED);
     }
 
     // 1. Track and limit OTP attempts to prevent brute-force
@@ -243,17 +243,14 @@ export class OtpService {
       );
       // Delete OTP session to block further attempts
       await redis.del(REDIS_KEYS.otp(sessionId));
-      throw new ApiError(
-        statusCode.tooManyRequests,
-        AUTH_ERROR_CODES.OTP_LOCKED,
-      );
+      throw new ApiError(statusCode.tooManyRequests, ERROR_CODES.OTP_LOCKED);
     }
 
     const isValid = await bcrypt.compare(otp, hashedOtp);
 
     if (!isValid) {
       logger.warn({ module: "otp", attempt: attempts }, "Invalid OTP provided");
-      throw new ApiError(statusCode.badRequest, AUTH_ERROR_CODES.OTP_INVALID);
+      throw new ApiError(statusCode.badRequest, ERROR_CODES.OTP_INVALID);
     }
 
     // Clear attempts on success

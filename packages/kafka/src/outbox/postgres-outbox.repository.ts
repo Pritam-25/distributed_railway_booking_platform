@@ -43,7 +43,7 @@ export class PostgresOutboxRepository implements OutboxRepository {
    * @returns A promise resolving when the record is saved.
    */
   async insert(
-    tx: any,
+    tx: OutboxPrismaClient,
     data: {
       aggregateType: string;
       aggregateId: string;
@@ -286,10 +286,13 @@ export class PostgresOutboxRepository implements OutboxRepository {
    * @returns A promise resolving to a status-to-count mapping object.
    */
   async getStatusCounts(): Promise<Record<OutboxStatus, number>> {
-    const counts = await this.prisma.outboxEvent.groupBy({
+    const counts = (await this.prisma.outboxEvent.groupBy({
       by: ["status"],
       _count: { status: true },
-    });
+    })) as unknown as Array<{
+      status: OutboxStatus;
+      _count: { status: number };
+    }>;
 
     return counts.reduce(
       (acc, curr) => {

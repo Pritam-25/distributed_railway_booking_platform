@@ -1,6 +1,5 @@
 workspace:
   id: 0d20fd01-735f-4d22-9539-c2b9bd0ff563
-
 localResources:
   specs:
     - ../postman/specs/Railway Booking Platform API/openapi.yaml
@@ -8,9 +7,6 @@ localResources:
     - ../postman/specs/Admin Service API/openapi.yaml
   documents:
     - ../README.md
-
-# Each entry here maps a local resource to one or more corresponding objects in Postman Cloud
-
 cloudResources:
   collections:
     ../postman/collections/User Service API: 28871900-5a2003b8-ea03-48bf-a6b4-fe1f07b7f67e

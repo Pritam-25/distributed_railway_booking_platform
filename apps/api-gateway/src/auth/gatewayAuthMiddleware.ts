@@ -1,11 +1,11 @@
 import type { Request, Response, NextFunction, RequestHandler } from "express";
 import jwt from "jsonwebtoken";
-import { ApiError, ERROR_CODES } from "@irctc/errors";
+import { ApiError, COMMON_ERROR_CODES } from "@irctc/errors";
 import { statusCode } from "@irctc/http";
 import { env } from "@config";
 import { verifyAccessToken } from "./jwtVerifier.js";
 import { COOKIE_NAMES } from "./cookieNames.js";
-import { ERROR_MESSAGES, GATEWAY_ERROR_CODES } from "@utils";
+import { ERROR_MESSAGES, ERROR_CODES } from "@utils";
 
 /**
  * Headers injected by the gateway from a verified JWT.
@@ -70,7 +70,7 @@ export const gatewayAuthMiddleware: RequestHandler = (
   if (!token) {
     throw new ApiError(
       statusCode.unauthorized,
-      GATEWAY_ERROR_CODES.AUTH_REQUIRED,
+      ERROR_CODES.AUTH_REQUIRED,
       ERROR_MESSAGES.ACCESS_TOKEN_MISSING,
     );
   }
@@ -79,7 +79,7 @@ export const gatewayAuthMiddleware: RequestHandler = (
   if (!user) {
     throw new ApiError(
       statusCode.unauthorized,
-      GATEWAY_ERROR_CODES.AUTH_REQUIRED,
+      ERROR_CODES.AUTH_REQUIRED,
       ERROR_MESSAGES.ACCESS_TOKEN_MISSING,
     );
   }
@@ -172,7 +172,7 @@ export const gatewayAdminAuthMiddleware: RequestHandler = (
   if (!token) {
     throw new ApiError(
       statusCode.unauthorized,
-      ERROR_CODES.UNAUTHORIZED,
+      COMMON_ERROR_CODES.UNAUTHORIZED,
       ERROR_MESSAGES.ACCESS_TOKEN_MISSING,
     );
   }
@@ -184,7 +184,7 @@ export const gatewayAdminAuthMiddleware: RequestHandler = (
   if (token?.split(".").length !== 3) {
     throw new ApiError(
       statusCode.unauthorized,
-      ERROR_CODES.UNAUTHORIZED,
+      COMMON_ERROR_CODES.UNAUTHORIZED,
       ERROR_MESSAGES.ACCESS_TOKEN_MISSING,
     );
   }
@@ -198,7 +198,7 @@ export const gatewayAdminAuthMiddleware: RequestHandler = (
     if (decoded.type !== "admin" || !decoded.sub) {
       throw new ApiError(
         statusCode.unauthorized,
-        ERROR_CODES.UNAUTHORIZED,
+        COMMON_ERROR_CODES.UNAUTHORIZED,
         ERROR_MESSAGES.ACCESS_TOKEN_MISSING,
       );
     }
@@ -211,7 +211,7 @@ export const gatewayAdminAuthMiddleware: RequestHandler = (
     if (error instanceof ApiError) throw error;
     throw new ApiError(
       statusCode.unauthorized,
-      ERROR_CODES.UNAUTHORIZED,
+      COMMON_ERROR_CODES.UNAUTHORIZED,
       ERROR_MESSAGES.ACCESS_TOKEN_MISSING,
     );
   }

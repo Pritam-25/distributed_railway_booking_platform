@@ -12,7 +12,7 @@ import {
 import { getBreaker } from "@resilience";
 import { ApiError } from "@irctc/errors";
 import { statusCode } from "@irctc/http";
-import { GATEWAY_ERROR_CODES } from "@utils";
+import { ERROR_CODES } from "@utils";
 import type { RouteConfig } from "@config";
 
 /**
@@ -33,8 +33,9 @@ const getOrCreateProxy = (
     target: baseUrl,
     changeOrigin: true,
     pathRewrite: (_path, req) => {
-      // Reconstruct path from originalUrl (since Express app.use strips baseUrl from req.url)
-      return (req as any).originalUrl.replace(/^\/api\/v1/, "");
+      const originalUrl = (req as unknown as { originalUrl?: string })
+        .originalUrl;
+      return String(originalUrl ?? req.url ?? "").replace(/^\/api\/v1/, "");
     },
     on: {
       error: (err, _req, res) => {
@@ -46,7 +47,11 @@ const getOrCreateProxy = (
           `Proxy error for upstream "${upstreamName}"`,
         );
         // Emit the error so the per-request promise in runProxy can reject.
-        (res as any).emit?.("proxyError", err);
+        (
+          res as unknown as {
+            emit?: (event: string, ...args: unknown[]) => void;
+          }
+        ).emit?.("proxyError", err);
       },
     },
   };
@@ -117,7 +122,7 @@ export const createProxyHandler = (route: RouteConfig): RequestHandler => {
       next(
         new ApiError(
           statusCode.methodNotAllowed,
-          GATEWAY_ERROR_CODES.METHOD_NOT_ALLOWED,
+          ERROR_CODES.METHOD_NOT_ALLOWED,
           `Method ${req.method} not allowed for ${route.prefix}`,
         ),
       );
@@ -194,7 +199,7 @@ export const createProxyHandler = (route: RouteConfig): RequestHandler => {
         next(
           new ApiError(
             statusCode.serviceUnavailable,
-            GATEWAY_ERROR_CODES.GATEWAY_UPSTREAM_CIRCUIT_OPEN,
+            ERROR_CODES.GATEWAY_UPSTREAM_CIRCUIT_OPEN,
             `Service is temporarily unavailable (circuit breaker "${circuitName}" is OPEN)`,
           ),
         );
@@ -204,7 +209,7 @@ export const createProxyHandler = (route: RouteConfig): RequestHandler => {
         next(
           new ApiError(
             statusCode.gatewayTimeout,
-            GATEWAY_ERROR_CODES.GATEWAY_UPSTREAM_ERROR,
+            ERROR_CODES.GATEWAY_UPSTREAM_ERROR,
             "Upstream request timed out",
           ),
         );
@@ -215,7 +220,7 @@ export const createProxyHandler = (route: RouteConfig): RequestHandler => {
       next(
         new ApiError(
           statusCode.badGateway,
-          GATEWAY_ERROR_CODES.GATEWAY_UPSTREAM_ERROR,
+          ERROR_CODES.GATEWAY_UPSTREAM_ERROR,
           "Upstream service is unavailable",
         ),
       );

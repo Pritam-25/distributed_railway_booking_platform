@@ -1,85 +1,86 @@
-// sync-postman.ts
-//
-// Mirrors generated OpenAPI specifications from apps/<id>/openapi.yaml into
-// Postman's Native Git workspace under postman/specs/<displayName>/openapi.yaml.
-//
-// ─── Direction of synchronization ────────────────────────────────────────────
-//
-//   Application source                 Postman workspace
-//   ─────────────────                  ─────────────────
-//   apps/<id>/openapi.yaml      →      postman/specs/<displayName>/openapi.yaml
-//                                       │
-//                                       │ postman workspace push
-//                                       ▼
-//                                    Postman Cloud
-//
-//   apps/<id>/openapi.yaml is the source of truth. postman/specs/ is the
-//   local mirror managed by this script. Postman's Native Git treats the
-//   postman/ directory as its local workspace representation; this script
-//   keeps that representation in sync with the generated application specs.
-//
-// ─── Why this script ─────────────────────────────────────────────────────────
-//
-//   In a microservice monorepo, every service generates its own OpenAPI spec
-//   from a Zod registry. The combined system is exposed via the API gateway,
-//   whose build:spec task already aggregates upstream service specs. The
-//   Postman workspace, however, expects one spec per directory under
-//   postman/specs/. This script bridges that gap by mirroring each generated
-//   spec into its own Postman directory.
-//
-// ─── Behavior ────────────────────────────────────────────────────────────────
-//
-//   - In-place content replacement: each run writes the latest spec bytes into
-//     the existing destination file (openapi.yaml) at the same relative path.
-//     Files are NEVER deleted-and-recreated; the path is stable across runs so
-//     Postman's Native Git watcher sees content modifications rather than
-//     delete+add events. A delete+add cycle causes Postman to re-detect the
-//     "new" file and append an absolute-path entry alongside the relative one
-//     in `.postman/resources.yaml`, which is what we want to avoid.
-//
-//   - Stale-directory pruning: directories under `postman/specs/` whose name
-//     no longer matches a current `publish: true` service are removed after
-//     the live mirrors have been written. This still cleans up renamed or
-//     removed services, but does so AFTER the live files are stable so the
-//     watcher never sees a moment of empty postman/specs/.
-//
-//   - Discovery: scans apps/<id>/openapi.yaml for every workspace app. This
-//     is glob-style discovery so adding a new service app automatically
-//     participates in the report (visible in CI logs) without editing a list.
-//
-//   - Metadata: each discovered service is enriched from
-//     scripts/services.config.ts. Services absent from that map are treated
-//     as publish: false — their specs are NOT mirrored, but they DO appear
-//     in the summary so the omission is visible.
-//
-//   - Mirroring is idempotent and unconditional. If the destination file does
-//     not match the source (e.g. a stale copy from a previous deployment), it
-//     is overwritten. Manual edits to postman/specs/... are discarded; that
-//     directory is a managed mirror, not an editable workspace.
-//
-//   - Line endings are preserved from the source file. The user-service spec
-//     generator currently emits CRLF; the gateway spec is regenerated on every
-//     build:spec. We do not re-encode — the mirror is byte-faithful.
-//
-// ─── Out of scope for this script ────────────────────────────────────────────
-//
-//   - .postman/resources.yaml — managed by Postman; do not edit here.
-//   - .postman/workflows.yaml — managed by Postman; do not edit here.
-//   - Multi-spec OpenAPI merge — that's handled by api-gateway's own
-//     build:spec task; this script only mirrors already-merged outputs.
-//
-// ─── Invocation ──────────────────────────────────────────────────────────────
-//
-//   Direct:    pnpm exec tsx scripts/sync-postman.ts
-//   Pipeline:  pnpm docs          # runs turbo run sync:postman
-//
-//   The Turbo task sync:postman declares dependsOn: [api-gateway#build:spec],
-//   and the gateway build:spec task transitively depends on each upstream
-//   service's build:spec. When new services are added to the public API
-//   surface, the gateway's dependsOn list must be extended in turbo.json so
-//   this script's run remains ordered correctly. The gateway task is the
-//   single source of truth for the build graph — this script does not
-//   independently attempt to schedule upstream service builds.
+/**
+ * Mirrors generated OpenAPI specifications into the Postman Native Git workspace.
+ *
+ * In a microservice monorepo, every service generates its own OpenAPI spec from
+ * a Zod registry. The combined system is exposed via the API gateway, whose
+ * `build:spec` task already aggregates upstream service specs. The Postman
+ * workspace, however, expects one spec per directory under `postman/specs/`.
+ * This script bridges that gap by mirroring each generated spec into its own
+ * Postman directory.
+ *
+ * ```
+ *   Application source                 Postman workspace
+ *   ─────────────────                  ─────────────────
+ *   apps/<id>/openapi.yaml      →      postman/specs/<displayName>/openapi.yaml
+ *                                       │
+ *                                       │ postman workspace push
+ *                                       ▼
+ *                                    Postman Cloud
+ * ```
+ *
+ * `apps/<id>/openapi.yaml` is the source of truth. `postman/specs/` is the
+ * local mirror managed by this script. Postman's Native Git treats the
+ * `postman/` directory as its local workspace representation; this script
+ * keeps that representation in sync with the generated application specs.
+ *
+ * **Behaviour**
+ *
+ * - **In-place content replacement.** Each run writes the latest spec bytes
+ *   into the existing destination file (`openapi.yaml`) at the same relative
+ *   path. Files are NEVER deleted-and-recreated; the path is stable across
+ *   runs so Postman's Native Git watcher sees content modifications rather
+ *   than delete+add events. A delete+add cycle causes Postman to re-detect
+ *   the "new" file and append an absolute-path entry alongside the relative
+ *   one in `.postman/resources.yaml`, which is what we want to avoid.
+ *
+ * - **Stale-directory pruning.** Directories under `postman/specs/` whose
+ *   name no longer matches a current `publish: true` service are removed
+ *   after the live mirrors have been written. This still cleans up renamed
+ *   or removed services, but does so AFTER the live files are stable so the
+ *   watcher never sees a moment of empty `postman/specs/`.
+ *
+ * - **Glob-style discovery.** Scans each app's generated openapi.yaml for
+ *   every workspace app. Adding a new service app automatically participates
+ *   in the report (visible in CI logs) without editing a list.
+ *
+ * - **Metadata enrichment.** Each discovered service is enriched from
+ *   `scripts/services.config.ts`. Services absent from that map are treated
+ *   as `publish: false` — their specs are NOT mirrored, but they DO appear
+ *   in the summary so the omission is visible.
+ *
+ * - **Idempotent, unconditional mirroring.** If the destination file does not
+ *   match the source (e.g. a stale copy from a previous deployment), it is
+ *   overwritten. Manual edits to `postman/specs/...` are discarded; that
+ *   directory is a managed mirror, not an editable workspace.
+ *
+ * - **Line endings preserved.** The user-service spec generator emits CRLF;
+ *   the gateway spec is regenerated on every `build:spec`. We do not re-encode
+ *   — the mirror is byte-faithful.
+ *
+ * **Out of scope**
+ *
+ * - `.postman/resources.yaml` — managed by Postman; do not edit here.
+ * - `.postman/workflows.yaml` — managed by Postman; do not edit here.
+ * - Multi-spec OpenAPI merge — handled by `api-gateway`'s own `build:spec`
+ *   task; this script only mirrors already-merged outputs.
+ *
+ * **Invocation**
+ *
+ * ```
+ *   Direct:    pnpm exec tsx scripts/sync-postman.ts
+ *   Pipeline:  pnpm docs          # runs turbo run sync:postman
+ * ```
+ *
+ * The Turbo task `sync:postman` declares `dependsOn: [api-gateway#build:spec]`,
+ * and the gateway `build:spec` task transitively depends on each upstream
+ * service's `build:spec`. When new services are added to the public API
+ * surface, the gateway's `dependsOn` list must be extended in `turbo.json` so
+ * this script's run remains ordered correctly. The gateway task is the single
+ * source of truth for the build graph — this script does not independently
+ * attempt to schedule upstream service builds.
+ *
+ * @module scripts/sync-postman
+ */
 
 import fs from "node:fs";
 import path from "node:path";
@@ -89,16 +90,40 @@ import { SERVICES } from "./services.config";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Repository root is the parent of scripts/. This script does its own path
-// resolution rather than relying on process.cwd() so it can be invoked from
-// any directory.
+/**
+ * Repository root resolved relative to this script. We do our own path
+ * relolution rather than relying on `process.cwd()` so the script can be
+ * invoked from any working directory.
+ */
 const REPO_ROOT = path.resolve(__dirname, "..");
+
+/**
+ * Directory containing every workspace app (e.g. `user-service`,
+ * `admin-service`, `api-gateway`).
+ */
 const APPS_DIR = path.join(REPO_ROOT, "apps");
+
+/**
+ * Postman Native Git mirror directory. Each published service's
+ * `openapi.yaml` is written here under `<displayName>/openapi.yaml`.
+ *
+ * The parent `postman/` directory (which also holds `collections/`,
+ * `environments/`, `mocks/`, etc.) is never touched by this script.
+ */
 const POSTMAN_SPECS_DIR = path.join(REPO_ROOT, "postman", "specs");
 
-// Stable display name when no metadata entry exists for a discovered service.
-// We derive a Title-Case form from the workspace id so that, even on
-// publish: false services, the summary log reads cleanly.
+/**
+ * Derives a stable, human-readable display name from a workspace service id
+ * when no `displayName` is registered in `services.config.ts`.
+ *
+ * `user-service` becomes `User Service`, `api-gateway` becomes `Api Gateway`.
+ * The result is only used for summary log lines and CI output for services
+ * that have no metadata entry; published services always use the explicit
+ * `displayName` from `services.config.ts`.
+ *
+ * @param serviceId - Workspace service id (e.g. `user-service`).
+ * @returns Title-Case form of the service id with hyphens replaced by spaces.
+ */
 const deriveDefaultDisplayName = (serviceId: string): string => {
   return serviceId
     .split("-")
@@ -110,22 +135,46 @@ const deriveDefaultDisplayName = (serviceId: string): string => {
     .join(" ");
 };
 
+/**
+ * Metadata describing a service discovered in the workspace, after
+ * enrichment with `services.config.ts`.
+ */
 type DiscoveredService = {
-  // Workspace id, e.g. user-service
+  /** Workspace id (e.g. `user-service`). */
   id: string;
-  // Resolved display name, e.g. User Service API
+  /** Resolved display name (e.g. `User Service API`). */
   displayName: string;
-  // Whether this service's spec should be mirrored
+  /**
+   * Whether this service's spec should be mirrored. Only `true` when
+   * `publish: true` in `services.config.ts` AND a generated
+   * `openapi.yaml` exists at `apps/<id>/openapi.yaml`.
+   */
   publish: boolean;
-  // Absolute path to apps/<id>/openapi.yaml, or null when missing
+  /**
+   * Absolute path to `apps/<id>/openapi.yaml`, or `null` when no
+   * generated spec exists at that location.
+   */
   sourceSpecPath: string | null;
-  // Reason for skipping (only set when not published)
+  /**
+   * Reason the service was skipped (only set when `publish` is `false`).
+   * Used for the summary log line; absent for published services.
+   */
   skipReason: string | null;
 };
 
-// Walk apps/* and return one record per app directory, regardless of
-// whether it has a generated spec yet. Services are matched against the
-// SERVICES metadata map; missing entries get safe defaults.
+/**
+ * Walks `apps/*` and returns one record per app directory, regardless of
+ * whether a generated spec exists yet.
+ *
+ * Services are matched against the `SERVICES` metadata map; missing entries
+ * get safe defaults (`publish: false`, derived `displayName`). The returned
+ * list is sorted with published services first (alphabetical by display
+ * name) followed by unpublished ones — CI logs scan easier when the order
+ * is deterministic.
+ *
+ * @returns Ordered collection of discovered services with metadata
+ *   resolved.
+ */
 const discoverServices = (): DiscoveredService[] => {
   if (!fs.existsSync(APPS_DIR)) {
     return [];
@@ -171,24 +220,45 @@ const discoverServices = (): DiscoveredService[] => {
   return discovered;
 };
 
-// Mirror a single source spec to its destination. Preserves the source
-// encoding (we use Buffer round-trip rather than readFileSync as UTF-8
-// string + writeFileSync as UTF-8 string, which can re-encode line endings
-// inconsistently across Node versions on Windows).
+/**
+ * Mirrors a single source spec to its destination path, preserving source
+ * byte-for-byte (including line endings).
+ *
+ * Uses a `Buffer` round-trip rather than `readFileSync` (UTF-8 string) +
+ * `writeFileSync` (UTF-8 string) because the latter can re-encode line
+ * endings inconsistently across Node versions on Windows. The user-service
+ * spec generator currently emits CRLF; the gateway spec is regenerated on
+ * every `build:spec`. We do not re-encode — the mirror is byte-faithful.
+ *
+ * Side effect: creates the destination directory tree on demand, so the
+ * caller does not need to mkdir first.
+ *
+ * @param sourcePath - Absolute path to the generated source spec
+ *   (`apps/<id>/openapi.yaml`).
+ * @param destinationPath - Absolute path to write the mirror to
+ *   (`postman/specs/<displayName>/openapi.yaml`).
+ */
 const mirrorSpec = (sourcePath: string, destinationPath: string): void => {
   const bytes = fs.readFileSync(sourcePath);
   fs.mkdirSync(path.dirname(destinationPath), { recursive: true });
   fs.writeFileSync(destinationPath, bytes);
 };
 
-// Remove directories under POSTMAN_SPECS_DIR whose names don't match any
-// currently-published service. This is the cleanup pass that replaces the
-// previous "wipe everything first" behaviour: we now write the live mirrors
-// first so Postman's git watcher never sees an empty directory, then prune
-// only the directories that are truly stale (renamed or removed services).
-//
-// The parent postman/ directory (which holds collections/, environments/,
-// mocks/, etc.) is never touched.
+/**
+ * Removes directories under `POSTMAN_SPECS_DIR` whose names don't match any
+ * currently-published service.
+ *
+ * This is the cleanup pass that replaces the previous "wipe everything
+ * first" behaviour: `main()` writes the live mirrors first so Postman's git
+ * watcher never sees an empty directory, then this function prunes only the
+ * directories that are truly stale (renamed or removed services).
+ *
+ * The parent `postman/` directory (which holds `collections/`,
+ * `environments/`, `mocks/`, etc.) is never touched.
+ *
+ * @param liveDisplayNames - Display names that correspond to currently
+ *   published services. Directories matching any of these names are kept.
+ */
 const pruneStaleSpecDirs = (liveDisplayNames: Set<string>): void => {
   if (!fs.existsSync(POSTMAN_SPECS_DIR)) return;
 
@@ -201,19 +271,30 @@ const pruneStaleSpecDirs = (liveDisplayNames: Set<string>): void => {
   }
 };
 
-// Render the summary block in the agreed shape:
-//
-//   ──────────────────────────────────
-//   OpenAPI → Postman Sync
-//
-//   ✓ User Service API
-//   ✓ API Gateway
-//   ○ Booking Service API   (no openapi.yaml)
-//   ○ Payment Service API   (publish=false)
-//
-//   Updated: 2
-//   Skipped : 3
-//   ──────────────────────────────────
+/**
+ * Renders the human-readable summary block emitted at the end of each run.
+ *
+ * Output shape:
+ *
+ * ```
+ *   ──────────────────────────────────
+ *   OpenAPI → Postman Sync
+ *
+ *   ✓ User Service API
+ *   ✓ API Gateway
+ *   ○ Booking Service API   (no openapi.yaml)
+ *   ○ Payment Service API   (publish=false)
+ *
+ *   Updated: 2
+ *   Skipped : 3
+ *   ──────────────────────────────────
+ * ```
+ *
+ * @param services - Every service discovered in the workspace.
+ * @param updatedNames - Display names of services that were actually
+ *   mirrored during this run.
+ * @returns A multi-line string ready to be written to stdout.
+ */
 const renderSummary = (
   services: DiscoveredService[],
   updatedNames: string[],
@@ -246,13 +327,24 @@ const renderSummary = (
   return lines.join("\n");
 };
 
+/**
+ * Sync entry point.
+ *
+ * Order of operations matters for Postman's Native Git watcher:
+ *
+ * 1. Ensure `postman/specs/` exists (mkdir -p) so the watcher sees the
+ *    directory as a stable path.
+ * 2. Mirror every published service's `openapi.yaml` into its existing
+ *    `<displayName>/openapi.yaml` path. If the file already exists, it is
+ *    overwritten in place; the watcher sees a content modification of a
+ *    tracked resource and leaves `.postman/resources.yaml` alone.
+ * 3. Prune any `<displayName>/` directories that no longer correspond to a
+ *    published service. Renamed or removed services are cleaned up, but
+ *    only after step 2 has stabilised the live files.
+ * 4. Emit the summary block via a single `process.stdout.write` so CI
+ *    parsers don't interleave lines with other tasks' output.
+ */
 const main = (): void => {
-  // In-place mirror: write the live specs into their existing destinations
-  // first. Each run touches the same relative path the Postman workspace
-  // already tracks, so the watcher sees a content modification rather than a
-  // delete+add event. Files at the destination may not exist yet (first
-  // run, or a new service was added) — `mirrorSpec` creates the directory
-  // tree on demand.
   fs.mkdirSync(POSTMAN_SPECS_DIR, { recursive: true });
 
   const services = discoverServices();
@@ -276,10 +368,6 @@ const main = (): void => {
     mirrorSpec(source, destinationPath);
   }
 
-  // After the live mirrors are in place, prune any directories under
-  // postman/specs/ that no longer correspond to a published service. This
-  // preserves the clean-mirror invariant for renamed/removed services while
-  // keeping the existing display-name directories untouched on every run.
   const liveDisplayNames = new Set(
     mirrorPlan.map(({ displayName }) => displayName),
   );
@@ -287,9 +375,6 @@ const main = (): void => {
 
   const updatedNames = mirrorPlan.map(({ displayName }) => displayName);
 
-  // Print summary. We deliberately use process.stdout.write (rather than
-  // console.log) so the entire block is one write and CI parsers don't
-  // interleave lines with other tasks' output.
   process.stdout.write(renderSummary(services, updatedNames) + "\n");
 };
 

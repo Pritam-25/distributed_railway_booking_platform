@@ -5,7 +5,7 @@ import {
 } from "@irctc/resilience";
 import { redis } from "@config";
 import { logger } from "@irctc/logger";
-import { ApiError, ERROR_CODES } from "@irctc/errors";
+import { ApiError, COMMON_ERROR_CODES } from "@irctc/errors";
 import { statusCode, errorResponse } from "@irctc/http";
 import { RATELIMIT_PRESETS, type RateLimitPresetName } from "./presets.js";
 import type { AuthUser } from "@irctc/middleware";
@@ -86,7 +86,7 @@ export const getRateLimitMiddleware = (
 
     const apiError = new ApiError(
       statusCode.tooManyRequests,
-      ERROR_CODES.RATE_LIMIT_EXCEEDED,
+      COMMON_ERROR_CODES.RATE_LIMIT_EXCEEDED,
       "Too many requests. Please try again later.",
     );
     res.status(apiError.statusCode).json(errorResponse(apiError));

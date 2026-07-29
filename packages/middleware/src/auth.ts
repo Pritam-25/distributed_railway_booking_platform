@@ -13,21 +13,6 @@ export interface RefreshTokenPayload {
   type: "refresh";
 }
 
-export interface AuthUser {
-  userId: string;
-  email?: string;
-  sessionId: string;
-}
-
-declare global {
-  namespace Express {
-    interface Request {
-      user?: AuthUser;
-      admin?: { adminId: string };
-    }
-  }
-}
-
 /**
  * Middleware that extracts user identity from trusted gateway headers
  * instead of performing JWT verification.

@@ -2,11 +2,11 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { env } from "@config";
 import { statusCode } from "@irctc/http";
-import { ApiError } from "@irctc/errors";
 import type { AdminAuthRepository } from "@repository";
 import type { AdminLoginRequestDto, AdminAuthResponseDto } from "@dto";
 import { logger } from "@irctc/logger";
 import { ERROR_CODES } from "@utils/errors";
+import { ApiError, COMMON_ERROR_CODES } from "@irctc/errors";
 
 /**
  * Service class for Admin authentication processes.
@@ -30,7 +30,7 @@ export class AdminAuthService {
       );
       throw new ApiError(
         statusCode.unauthorized,
-        ERROR_CODES.INVALID_CREDENTIALS,
+        COMMON_ERROR_CODES.UNAUTHORIZED,
       );
     }
 

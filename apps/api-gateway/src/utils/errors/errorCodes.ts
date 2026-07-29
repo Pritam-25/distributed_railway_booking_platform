@@ -4,9 +4,8 @@
  * gateway itself produces (auth, header-injection, upstream mapping).
  * Domain errors belong in the upstream services, not here.
  */
-export { ERROR_CODES } from "@irctc/errors";
 
-export const GATEWAY_ERROR_CODES = {
+export const ERROR_CODES = {
   /** Protected route requires authentication — client should attempt silent refresh. */
   AUTH_REQUIRED: "AUTH_REQUIRED",
   /** Proxy could not reach the upstream (502). */
@@ -17,5 +16,4 @@ export const GATEWAY_ERROR_CODES = {
   METHOD_NOT_ALLOWED: "METHOD_NOT_ALLOWED",
 } as const;
 
-export type GatewayErrorCode =
-  (typeof GATEWAY_ERROR_CODES)[keyof typeof GATEWAY_ERROR_CODES];
+export type GatewayErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];

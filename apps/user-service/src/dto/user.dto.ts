@@ -7,9 +7,9 @@ import { z } from "zod";
  */
 export const UserResponseSchema = z
   .object({
-    id: uuidSchema,
-    firstName: z.string().openapi({ example: "Jhon" }),
-    lastName: z.string().openapi({ example: "Doe" }),
+    id: uuidSchema("User ID must be a valid UUID"),
+    firstName: firstNameSchema,
+    lastName: lastNameSchema,
     email: emailSchema,
     createdAt: z.date().openapi({ example: "2026-07-24T00:00:00.000Z" }),
   })

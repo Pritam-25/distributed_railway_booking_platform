@@ -1,6 +1,6 @@
 $kind: http-example
 request:
-  url: "{{baseUrl}}/api/v1/auth/refresh"
+  url: "{{apiUrl}}{a/auth/refresh"
   method: POST
   headers:
     Accept: application/json
@@ -18,7 +18,7 @@ response:
       {
         "success": false,
         "error": {
-          "code": "BAD_REQUEST",
+          "code": "INVALID_INPUT",
           "message": "Bad request.",
           "details": ""
         },

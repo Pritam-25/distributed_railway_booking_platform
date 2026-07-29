@@ -9,7 +9,7 @@ request:
     type: json
     content: |-
       {
-        "email": {{email}}
+        "email": "jhon@example.com"
       }
 response:
   statusCode: 400
@@ -22,7 +22,7 @@ response:
       {
         "success": false,
         "error": {
-          "code": "BAD_REQUEST",
+          "code": "INVALID_INPUT",
           "message": "Bad request.",
           "details": ""
         },

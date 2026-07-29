@@ -1,11 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
-import { ApiError, ERROR_CODES } from "@irctc/errors";
+import { ApiError, COMMON_ERROR_CODES } from "@irctc/errors";
 import { statusCode } from "@irctc/http";
 import { logger } from "@irctc/logger";
-
-export interface AuthAdmin {
-  adminId: string;
-}
+import { type AuthAdmin } from "@irctc/middleware";
 
 export const readAdminFromHeaders = (
   headers: Record<string, string | string[] | undefined>,
@@ -19,14 +16,6 @@ export const readAdminFromHeaders = (
 
   return { adminId: normalizedAdminId };
 };
-
-declare global {
-  namespace Express {
-    interface Request {
-      admin?: AuthAdmin;
-    }
-  }
-}
 
 /**
  * Middleware to require a trusted admin context propagated from the API Gateway.
@@ -48,7 +37,7 @@ export const requireAdmin = (
     );
     throw new ApiError(
       statusCode.unauthorized,
-      ERROR_CODES.UNAUTHORIZED,
+      COMMON_ERROR_CODES.UNAUTHORIZED,
       "Administrator authentication required",
     );
   }

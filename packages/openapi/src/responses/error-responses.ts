@@ -1,6 +1,10 @@
 import "../extend-zod.js";
 import { z } from "zod";
-import { ERROR_CODES, ERROR_MESSAGES, type ErrorCode } from "@irctc/errors";
+import {
+  COMMON_ERROR_CODES,
+  COMMON_ERROR_MESSAGES,
+  type CommonErrorCode,
+} from "@irctc/errors";
 import { MetaSchema } from "../schemas/meta.js";
 import { createOpenApiResponse } from "./create-response.js";
 
@@ -19,7 +23,7 @@ import { createOpenApiResponse } from "./create-response.js";
  * reference the React Query client expects.
  */
 export const createErrorResponseSchema = (
-  code: ErrorCode | (string & {}),
+  code: CommonErrorCode | (string & {}),
   message: string,
   schemaName?: string,
 ) => {
@@ -60,64 +64,64 @@ export const ErrorResponses = {
   400: createOpenApiResponse(
     "Bad Request - Validation or invalid input error",
     createErrorResponseSchema(
-      ERROR_CODES.BAD_REQUEST,
-      ERROR_MESSAGES[ERROR_CODES.BAD_REQUEST],
+      COMMON_ERROR_CODES.INVALID_INPUT,
+      COMMON_ERROR_MESSAGES.INVALID_INPUT,
       "BadRequestErrorResponse",
     ),
   ),
   401: createOpenApiResponse(
     "Unauthorized - Authentication credentials missing or invalid",
     createErrorResponseSchema(
-      ERROR_CODES.UNAUTHORIZED,
-      ERROR_MESSAGES[ERROR_CODES.UNAUTHORIZED],
+      COMMON_ERROR_CODES.UNAUTHORIZED,
+      COMMON_ERROR_MESSAGES.UNAUTHORIZED,
       "UnauthorizedErrorResponse",
     ),
   ),
   403: createOpenApiResponse(
     "Forbidden - Access denied",
     createErrorResponseSchema(
-      ERROR_CODES.FORBIDDEN,
-      ERROR_MESSAGES[ERROR_CODES.FORBIDDEN],
+      COMMON_ERROR_CODES.FORBIDDEN,
+      COMMON_ERROR_MESSAGES.FORBIDDEN,
       "ForbiddenErrorResponse",
     ),
   ),
   404: createOpenApiResponse(
     "Not Found - Requested resource was not found",
     createErrorResponseSchema(
-      ERROR_CODES.NOT_FOUND,
-      ERROR_MESSAGES[ERROR_CODES.NOT_FOUND],
+      COMMON_ERROR_CODES.NOT_FOUND,
+      COMMON_ERROR_MESSAGES.NOT_FOUND,
       "NotFoundErrorResponse",
     ),
   ),
   409: createOpenApiResponse(
     "Conflict - Resource already exists or state conflict",
     createErrorResponseSchema(
-      ERROR_CODES.CONFLICT,
-      ERROR_MESSAGES[ERROR_CODES.CONFLICT],
+      COMMON_ERROR_CODES.CONFLICT,
+      COMMON_ERROR_MESSAGES.CONFLICT,
       "ConflictErrorResponse",
     ),
   ),
   429: createOpenApiResponse(
     "Too Many Requests - Rate limit exceeded",
     createErrorResponseSchema(
-      ERROR_CODES.RATE_LIMIT_EXCEEDED,
-      ERROR_MESSAGES[ERROR_CODES.RATE_LIMIT_EXCEEDED],
+      COMMON_ERROR_CODES.RATE_LIMIT_EXCEEDED,
+      COMMON_ERROR_MESSAGES.RATE_LIMIT_EXCEEDED,
       "RateLimitErrorResponse",
     ),
   ),
   500: createOpenApiResponse(
     "Internal Server Error - Unexpected server error",
     createErrorResponseSchema(
-      ERROR_CODES.INTERNAL_ERROR,
-      ERROR_MESSAGES[ERROR_CODES.INTERNAL_ERROR],
+      COMMON_ERROR_CODES.INTERNAL_ERROR,
+      COMMON_ERROR_MESSAGES.INTERNAL_ERROR,
       "InternalServerErrorResponse",
     ),
   ),
   503: createOpenApiResponse(
     "Service Unavailable - Service temporarily unavailable",
     createErrorResponseSchema(
-      ERROR_CODES.SERVICE_UNAVAILABLE,
-      ERROR_MESSAGES[ERROR_CODES.SERVICE_UNAVAILABLE],
+      COMMON_ERROR_CODES.SERVICE_UNAVAILABLE,
+      COMMON_ERROR_MESSAGES.SERVICE_UNAVAILABLE,
       "ServiceUnavailableErrorResponse",
     ),
   ),
