@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-namespace */
 // Side-effect file: augments Express's global `Request`/`Response` types
 // so consumers don't need `as any` casts when reading fields attached by
 // our own middleware (request-id, structured logger, trace id).
