@@ -22,7 +22,9 @@ export const createConsumer = (
     { module: "kafka-consumer" },
     `Creating consumer for group: ${groupId}`,
   );
-  const { factor, multiplier, ...cleanRetry } = (retry || {}) as any;
+  const cleanRetry = { ...(retry || {}) } as Record<string, unknown>;
+  delete cleanRetry.factor;
+  delete cleanRetry.multiplier;
   return kafka.consumer({
     kafkaJS: {
       groupId,

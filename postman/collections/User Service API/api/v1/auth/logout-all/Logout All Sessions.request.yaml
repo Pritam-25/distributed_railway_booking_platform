@@ -1,0 +1,25 @@
+$kind: http-request
+description: |-
+  Invalidates every active session for the authenticated user so all devices are signed out at once.
+
+  **Request Body Fields:**
+  - None - All sessions are derived from the authenticated user context.
+
+  **Response:**
+  Returns a success envelope with an empty data payload after all session cookies are cleared.
+
+  **Outcomes:**
+  - 200 OK - All sessions were logged out successfully.
+  - 400 Bad Request - The request could not be processed.
+  - 401 Unauthorized - The user was not authenticated.
+  - 429 Too Many Requests - Logout-all was rate-limited.
+  - 500 Internal Server Error - The service could not revoke every session.
+url: "{{apiUrl}}/auth/logout-all"
+method: POST
+headers:
+  Accept: application/json
+body:
+  type: text
+  content: ""
+examples: ./.resources/Logout All Sessions.resources/examples
+order: 1000

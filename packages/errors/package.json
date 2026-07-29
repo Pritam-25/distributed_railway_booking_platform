@@ -18,6 +18,7 @@
   },
   "dependencies": {},
   "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*"
   }
 }

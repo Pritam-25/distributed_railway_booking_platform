@@ -19,7 +19,9 @@ try {
 } catch (e) {
   // In production/Docker containers, dotenv might not be installed;
   // we gracefully fall back to pre-injected OS environment variables.
-  if (!(e instanceof Error && (e as any).code === "MODULE_NOT_FOUND")) {
+  if (!(
+    e instanceof Error && (e as { code?: string }).code === "MODULE_NOT_FOUND"
+  )) {
     throw e;
   }
 }

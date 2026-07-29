@@ -41,7 +41,7 @@ let isRedirecting = false
  * (e.g. `access_token` and `refresh_token`) to and from the backend.
  */
 export const AXIOS_INSTANCE = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000",
+  baseURL: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1",
   timeout: 15000,
   withCredentials: true,
   headers: {
@@ -57,11 +57,11 @@ export const AXIOS_INSTANCE = axios.create({
  */
 AXIOS_INSTANCE.interceptors.request.use(
   (config) => {
-    if (config.url?.includes("/api/v1/auth/logout")) {
+    if (config.url?.includes("/auth/logout")) {
       isLoggingOut = true
     } else if (
-      config.url?.includes("/api/v1/auth/login") ||
-      config.url?.includes("/api/v1/auth/verify-otp")
+      config.url?.includes("/auth/login") ||
+      config.url?.includes("/auth/verify-otp")
     ) {
       isLoggingOut = false
       isRedirecting = false
@@ -102,11 +102,11 @@ const handleTokenRefresh = async (
   originalRequest._retry = true
 
   // Initialize the refresh request only if there isn't one already running.
-  refreshPromise ??= AXIOS_INSTANCE.post<unknown>(
-    "/api/v1/auth/refresh"
-  ).finally(() => {
-    refreshPromise = null
-  })
+  refreshPromise ??= AXIOS_INSTANCE.post<unknown>("/auth/refresh").finally(
+    () => {
+      refreshPromise = null
+    }
+  )
 
   try {
     // Await the active refresh request (concurrency queueing)
@@ -146,9 +146,7 @@ AXIOS_INSTANCE.interceptors.response.use(
     }
 
     const errorCode = error.response?.data?.error?.code
-    const isRefreshRequest = originalRequest.url?.includes(
-      "/api/v1/auth/refresh"
-    )
+    const isRefreshRequest = originalRequest.url?.includes("/auth/refresh")
     const status = error.response?.status
 
     // Silent refresh triggers when status is 401 AND backend explicitly returns AUTH_REQUIRED

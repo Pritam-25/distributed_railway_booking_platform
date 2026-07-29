@@ -1,0 +1,54 @@
+$kind: http-request
+name: Send OTP for User Registration
+description: |-
+  Starts the registration flow by validating the submitted identity and password payload, then dispatching a one-time password to the provided email address.
+
+  **Request Body Fields:**
+  - `firstName` - User's given name used to personalize the account.
+  - `lastName` - User's family name used together with the first name.
+  - `email` - Unique email address that receives the registration OTP.
+  - `password` - Account password validated against the password policy.
+
+  **Response:**
+  Returns a success envelope with an empty data payload. The short-lived OTP session is stored by the service and the OTP session cookie is set separately.
+
+  **Outcomes:**
+  - 200 OK - OTP was generated and sent to the registered email address.
+  - 409 Conflict - The email is already registered.
+  - 400 Bad Request - Request validation failed or the payload is incomplete.
+  - 429 Too Many Requests - OTP delivery was rate-limited.
+  - 500 Internal Server Error - The service could not complete OTP dispatch.
+url: "{{apiUrl}}/auth/send-otp"
+method: POST
+headers:
+  Content-Type: application/json
+  Accept: application/json
+body:
+  type: json
+  content: |-
+    {
+        "firstName": "{{firstName}}",
+        "lastName": "{{lastName}}",
+        "email": "{{email}}",
+        "password": "{{password}}"
+    }
+  $type: |-
+    {
+        "type": "object",
+        "properties": {
+            "firstName": {
+                "type": "string"
+            },
+            "lastName": {
+                "type": "string"
+            },
+            "email": {
+                "type": "string"
+            },
+            "password": {
+                "type": "string"
+            }
+        }
+    }
+examples: ./.resources/Send OTP for User Registration.resources/examples
+order: 1000

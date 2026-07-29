@@ -1,0 +1,25 @@
+$kind: http-request
+description: |-
+  Ends the current authenticated session by clearing the refresh token state and removing the session cookies from the client.
+
+  **Request Body Fields:**
+  - None - The current session is identified from the refresh token cookie.
+
+  **Response:**
+  Returns a success envelope with an empty data payload after the session cookies are cleared.
+
+  **Outcomes:**
+  - 200 OK - The current session was logged out successfully.
+  - 400 Bad Request - The request could not be processed.
+  - 401 Unauthorized - The session could not be authenticated.
+  - 429 Too Many Requests - Logout was rate-limited.
+  - 500 Internal Server Error - The service could not complete logout.
+url: "{{apiUrl}}/auth/logout"
+method: POST
+headers:
+  Accept: application/json
+body:
+  type: text
+  content: ""
+examples: ./.resources/Logout Current Session.resources/examples
+order: 1000

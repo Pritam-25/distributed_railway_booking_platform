@@ -175,7 +175,11 @@ docsRouter.use("/docs", (req, res, next) => {
     nonce,
   });
 
-  scalarMiddleware(req as any, res as any, next);
+  scalarMiddleware(
+    req as unknown as Parameters<typeof scalarMiddleware>[0],
+    res as unknown as Parameters<typeof scalarMiddleware>[1],
+    next,
+  );
 });
 
 export { docsRouter };

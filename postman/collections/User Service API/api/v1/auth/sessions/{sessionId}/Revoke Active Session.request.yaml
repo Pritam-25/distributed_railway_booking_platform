@@ -1,0 +1,28 @@
+$kind: http-request
+description: |-
+  Revokes a single active session by session ID so a user can sign out one device without affecting the others.
+
+  **Request Body Fields:**
+  - `sessionId` - Path parameter that identifies the session to revoke.
+
+  **Response:**
+  Returns a success envelope with an empty data payload after the session key has been removed.
+
+  **Outcomes:**
+  - 200 OK - The selected session was revoked.
+  - 400 Bad Request - The session ID was missing or invalid.
+  - 401 Unauthorized - The user was not authenticated.
+  - 404 Not Found - No active session matched the provided session ID.
+  - 429 Too Many Requests - Session revocation was rate-limited.
+  - 500 Internal Server Error - The service could not revoke the session.
+url: "{{apiUrl}}/auth/sessions/:sessionId"
+method: DELETE
+headers:
+  Accept: application/json
+pathVariables:
+  sessionId: 550e8400-e29b-41d4-a716-446655440000
+body:
+  type: text
+  content: ""
+examples: ./.resources/Revoke Active Session.resources/examples
+order: 1000

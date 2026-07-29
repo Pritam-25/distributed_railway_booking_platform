@@ -1,6 +1,6 @@
 import type { ZodType } from "zod";
 import type { Request, Response, NextFunction } from "express";
-import { ApiError, ERROR_CODES } from "@irctc/errors";
+import { ApiError, COMMON_ERROR_CODES } from "@irctc/errors";
 import { statusCode } from "@irctc/http";
 
 /**
@@ -23,7 +23,7 @@ export const validateParams =
 
       throw new ApiError(
         statusCode.badRequest,
-        ERROR_CODES.INVALID_INPUT,
+        COMMON_ERROR_CODES.INVALID_INPUT,
         "Invalid request parameters.",
         errors,
       );

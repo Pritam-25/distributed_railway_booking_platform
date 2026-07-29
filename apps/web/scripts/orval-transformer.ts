@@ -1,3 +1,60 @@
+/**
+ * Orval Input Transformer
+ *
+ * Performs two passes over the merged gateway spec consumed by orval:
+ *
+ *   1. **Error component deduplication.** Collapses every error response in
+ *      the spec into a single shared `ErrorResponse` reference so that orval
+ *      produces one `ErrorResponse` TypeScript type rather than one duplicate
+ *      file per endpoint and per status code (`login401.ts`, `sendOtp409Error.ts`).
+ *
+ *      Detection has two paths:
+ *
+ *        a. Named components (`BadRequestErrorResponse`,
+ *           `RateLimitErrorResponse`, …) registered as
+ *           `x-sdk-ref: "ErrorResponse"` in `components.schemas`. The
+ *           `processResponseMediaType` helper matches these by `$ref` and
+ *           rewrites them to `ErrorResponse`. After rewriting, the named
+ *           components are removed from `components.schemas` so orval does
+ *           not emit a TypeScript file per variant.
+ *
+ *        b. Inline error envelopes (anonymous schemas with
+ *           `properties.success (false) + properties.error + properties.meta`).
+ *           These occur in `registry.ts` where `createErrorResponseSchema(...)`
+ *           is called without a `schemaName` argument. The transformer's
+ *           `processResponseMediaType` matches these structurally and rewrites
+ *           them to `ErrorResponse` as well.
+ *
+ *      Per-endpoint examples are extracted from both paths and attached to
+ *      the media type so the generated SDK and the rendered spec still
+ *      surface them.
+ *
+ *   2. **Per-service SDK gating.** Reads `scripts/services.config.ts` and
+ *      drops every operation whose tags belong to a service with
+ *      `generateSdk: false`. The flag is a per-service switch: a service can
+ *      appear in the merged gateway contract and Postman mirror while its
+ *      frontend client code is deferred. Today this means admin-service is
+ *      part of the platform API but no admin client is generated for `apps/web`.
+ *
+ *      Dropping a path automatically drops its referenced schemas too
+ *      because the second pass prunes `components.schemas` of every schema
+ *      with no surviving `$ref` (or `x-sdk-ref`) target. Shared components
+ *      like `ErrorResponse`, `EmptyResponse`, `ResponseMeta` survive because
+ *      other paths still reference them.
+ *
+ * Why this transformer is the right place for both passes:
+ *   - `ErrorResponse` deduplication is an orval-specific concern (orval does
+ *     not understand the `x-sdk-ref` marker) and so belongs here.
+ *   - Per-service SDK gating is also an orval-specific concern: the merged
+ *     gateway spec is the public contract, and the filtering is a
+ *     frontend-codegen convenience. Doing it in the orval transformer keeps
+ *     the public spec untouched and avoids a separate preprocessing script.
+ */
+
+import { readFileSync } from "node:fs"
+import { dirname, resolve } from "node:path"
+import { fileURLToPath } from "node:url"
+
 type HttpMethod =
   "get" | "post" | "put" | "patch" | "delete" | "options" | "head"
 
@@ -5,13 +62,10 @@ type OpenApiSchema = {
   properties?: Record<string, OpenApiSchema>
   example?: unknown
   enum?: readonly unknown[]
-  type?: string
   $ref?: string
-  allOf?: OpenApiSchema[]
+  type?: string
   [key: string]: unknown
 }
-
-type JsonObject = Record<string, unknown>
 
 type MediaTypeObject = {
   schema?: OpenApiSchema
@@ -29,6 +83,7 @@ type ResponseObject = {
 
 type OperationObject = {
   responses?: Record<string, ResponseObject>
+  tags?: string[]
   [key: string]: unknown
 }
 
@@ -38,26 +93,14 @@ type PathItemObject = Partial<Record<HttpMethod, OperationObject>> &
 type OpenAPIObject = {
   components?: {
     schemas?: Record<string, OpenApiSchema>
+    [key: string]: unknown
   }
   paths?: Record<string, PathItemObject>
 }
 
-/**
- * Orval Input Transformer — Error Schema Deduplication
- *
- * Replaces all error response schemas with a shared `$ref` to `#/components/schemas/ErrorResponse`,
- * using `allOf` composition to preserve endpoint-specific examples in documentation.
- *
- * Identifies error schemas by:
- * 1. Explicit `x-sdk-ref: "ErrorResponse"` vendor tag if present
- * 2. Structural detection: `properties.success` (false) + `properties.error` + `properties.meta`
- *
- * This eliminates duplicate model files like `Login401.ts`, `SendOtp409Error.ts`,
- * `BadRequestErrorResponse.ts`, etc. — all structurally identical to `ErrorResponse`.
- */
-
 const ERROR_RESPONSE_REF = "#/components/schemas/ErrorResponse"
-const RESPONSE_META_REF = "#/components/schemas/ResponseMeta"
+const SCHEMA_REF_PREFIX = "#/components/schemas/"
+const SDK_REF_MARKER = "x-sdk-ref"
 const HTTP_METHODS: readonly HttpMethod[] = [
   "get",
   "post",
@@ -68,6 +111,74 @@ const HTTP_METHODS: readonly HttpMethod[] = [
   "head",
 ] as const
 
+/**
+ * Names of components that should be preserved in `components.schemas` even
+ * after deduplication. `ErrorResponse` is the target that the rewrite points
+ * at; `ErrorDetail` is the nested type carried by every error envelope.
+ */
+const PRESERVED_COMPONENT_NAMES = new Set(["ErrorResponse", "ErrorDetail"])
+
+// ─── Service metadata loader ──────────────────────────────────────────────────
+
+/**
+ * Read `scripts/services.config.ts` synchronously and extract every tag
+ * emitted by a service with `generateSdk: false`. The transformer lives in
+ * `apps/web/scripts/orval-transformer.ts`; the config sits three directories
+ * up at the repo root.
+ *
+ * We do a minimal parse of the TypeScript source because the file exports a
+ * plain object literal. The compiler isn't available inside orval's
+ * transformer (it runs through tsx), and importing the module would pull in
+ * `@irctc/openapi` and `zod` for no benefit. The tag extraction is a pure
+ * string search, which is sufficient because the config file is a stable
+ * shape we control.
+ */
+const loadExcludedTags = (): Set<string> => {
+  const here = dirname(fileURLToPath(import.meta.url))
+  const configPath = resolve(
+    here,
+    "..",
+    "..",
+    "..",
+    "scripts",
+    "services.config.ts"
+  )
+  const source = readFileSync(configPath, "utf-8")
+
+  const excluded = new Set<string>()
+  // Match each service entry block and decide whether to harvest its tags.
+  // The regex is intentionally permissive — the config file is hand-written
+  // and the structure is `id: { ... "generateSdk": false, "tags": [...] }`.
+  // We walk the file once and track brace depth so each block's tags are
+  // attributed to the right service.
+  const blocks = source.split(/\n\s*"\w[\w-]*":\s*\{/g).slice(1)
+
+  for (const block of blocks) {
+    // Extract everything up to the matching closing brace at this depth.
+    let depth = 1
+    let end = 0
+    for (; end < block.length && depth > 0; end++) {
+      const ch = block[end]
+      if (ch === "{") depth += 1
+      else if (ch === "}") depth -= 1
+    }
+    const entry = block.slice(0, end - 1)
+
+    const hasGenerateSdkFalse = /generateSdk:\s*false\b/.test(entry)
+    if (!hasGenerateSdkFalse) continue
+
+    const tagsMatch = entry.match(/tags:\s*\[([^\]]*)\]/)
+    if (!tagsMatch) continue
+    const tagList = tagsMatch[1]
+    for (const raw of tagList.split(",")) {
+      const tag = raw.replace(/["'\s]/g, "").trim()
+      if (tag.length > 0) excluded.add(tag)
+    }
+  }
+
+  return excluded
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
@@ -76,18 +187,16 @@ const HTTP_METHODS: readonly HttpMethod[] = [
  */
 function extractExampleFromSchema(
   schema: OpenApiSchema
-): JsonObject | undefined {
-  if (!schema.properties) return undefined
+): Record<string, unknown> | undefined {
+  const properties = schema.properties
+  if (!properties) return undefined
 
-  const example: JsonObject = {}
+  const example: Record<string, unknown> = {}
   let hasAny = false
 
-  for (const [key, prop] of Object.entries(schema.properties)) {
+  for (const [key, prop] of Object.entries(properties)) {
     if (prop.example !== undefined) {
       example[key] = prop.example
-      hasAny = true
-    } else if (prop.enum?.length === 1) {
-      example[key] = prop.enum[0]
       hasAny = true
     } else if (prop.properties) {
       const nested = extractExampleFromSchema(prop)
@@ -95,13 +204,6 @@ function extractExampleFromSchema(
         example[key] = nested
         hasAny = true
       }
-    } else if (prop.$ref === RESPONSE_META_REF) {
-      example[key] = {
-        requestId: "3e3c1f1a-6f7d-4a2b-9b5c-1f0e3a4b5c6d",
-        traceId: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
-        timestamp: new Date().toISOString(),
-      }
-      hasAny = true
     }
   }
 
@@ -109,93 +211,65 @@ function extractExampleFromSchema(
 }
 
 /**
- * Check whether a schema (inline or named component) is an error response envelope.
- * Matches if `x-sdk-ref === "ErrorResponse"` OR matches structural pattern:
- * `{ properties: { success (false), error, meta } }`.
+ * Check whether an inline schema matches the error envelope shape:
+ * `{ properties: { success (false), error, meta } }`. The `x-sdk-ref` shortcut
+ * is not used here because inline envelopes don't carry it.
  */
-function isErrorEnvelopeSchema(schema: OpenApiSchema): boolean {
-  if (!schema || typeof schema !== "object" || !schema.properties) return false
+function isInlineErrorEnvelope(schema: OpenApiSchema): boolean {
+  const properties = schema.properties
+  if (!properties) return false
 
-  if (schema["x-sdk-ref"] === "ErrorResponse") return true
-
-  const props = schema.properties
+  const successProp = properties.success
   const isSuccessFalse =
-    props.success?.enum?.includes(false) ||
-    props.success?.example === false ||
-    props.success?.type === "boolean" // when enum is false
+    successProp?.enum?.includes(false) || successProp?.example === false
 
-  const hasErrorProp = Boolean(props.error)
-  const hasMetaProp = Boolean(props.meta)
-
-  return Boolean(isSuccessFalse && hasErrorProp && hasMetaProp)
+  return Boolean(isSuccessFalse && properties.error && properties.meta)
 }
 
 /**
- * Phase 1: Collect error response component schemas to be deduplicated.
- */
-function collectErrorComponents(schemas: Record<string, OpenApiSchema>): {
-  taggedComponentNames: Set<string>
-  componentExamples: Map<string, JsonObject>
-} {
-  const taggedComponentNames = new Set<string>()
-  const componentExamples = new Map<string, JsonObject>()
-
-  for (const [name, schema] of Object.entries(schemas)) {
-    if (name === "ErrorResponse" || name === "ErrorDetail") continue
-
-    if (isErrorEnvelopeSchema(schema)) {
-      taggedComponentNames.add(name)
-      const example = extractExampleFromSchema(schema)
-      if (example) {
-        componentExamples.set(name, example)
-      }
-    }
-  }
-
-  return { taggedComponentNames, componentExamples }
-}
-
-/**
- * Process a single response media type object to rewrite error schemas.
+ * Rewrite a single response media type to point at `ErrorResponse`. Returns
+ * `true` if the rewrite happened so the caller can short-circuit.
  */
 function processResponseMediaType(
   mediaType: MediaTypeObject,
-  taggedComponentNames: Set<string>,
-  componentExamples: Map<string, JsonObject>
-): void {
+  componentExamples: Map<string, Record<string, unknown>>
+): boolean {
   const schema = mediaType?.schema
-  if (!schema) return
+  if (!schema) return false
 
-  // Case A: Schema is a $ref to a tagged/error named component
+  // Case A: $ref to a named error component.
   if (schema.$ref) {
-    const refName = schema.$ref.replace("#/components/schemas/", "")
-    if (taggedComponentNames.has(refName)) {
-      mediaType.schema = { allOf: [{ $ref: ERROR_RESPONSE_REF }] }
-      const example = componentExamples.get(refName)
-      if (example && !mediaType.example) {
-        mediaType.example = example
-      }
-    }
-    return
-  }
+    const refName = schema.$ref.replace(SCHEMA_REF_PREFIX, "")
+    if (PRESERVED_COMPONENT_NAMES.has(refName)) return false
+    if (!componentExamples.has(refName)) return false
 
-  // Case B: Schema is an inline error schema
-  if (isErrorEnvelopeSchema(schema)) {
-    const example = extractExampleFromSchema(schema)
-    mediaType.schema = { allOf: [{ $ref: ERROR_RESPONSE_REF }] }
+    const example = componentExamples.get(refName)
     if (example && !mediaType.example) {
       mediaType.example = example
     }
+    mediaType.schema = { $ref: ERROR_RESPONSE_REF }
+    return true
   }
+
+  // Case B: inline error envelope.
+  if (isInlineErrorEnvelope(schema)) {
+    const example = extractExampleFromSchema(schema)
+    if (example && !mediaType.example) {
+      mediaType.example = example
+    }
+    mediaType.schema = { $ref: ERROR_RESPONSE_REF }
+    return true
+  }
+
+  return false
 }
 
 /**
- * Phase 2: Rewrite all path response schemas in the OpenAPI specification.
+ * Walk every path response and rewrite error schemas to `ErrorResponse`.
  */
-function rewritePathResponses(
+function rewriteErrorResponses(
   paths: Record<string, PathItemObject>,
-  taggedComponentNames: Set<string>,
-  componentExamples: Map<string, JsonObject>
+  componentExamples: Map<string, Record<string, unknown>>
 ): void {
   for (const pathItem of Object.values(paths)) {
     for (const method of HTTP_METHODS) {
@@ -205,27 +279,134 @@ function rewritePathResponses(
       for (const response of Object.values(operation.responses)) {
         const mediaType = response?.content?.["application/json"]
         if (mediaType) {
-          processResponseMediaType(
-            mediaType,
-            taggedComponentNames,
-            componentExamples
-          )
+          processResponseMediaType(mediaType, componentExamples)
         }
       }
     }
   }
 }
 
+// ─── Tag-based path filtering ─────────────────────────────────────────────────
+
 /**
- * Phase 3: Delete component schemas that were deduplicated into ErrorResponse.
+ * Walk a path item and return true if any operation on the path carries an
+ * excluded tag. Per-operation tagging is the granular rule; in practice every
+ * path carries one tag today, but the function is written for the general
+ * case so future multi-operation paths behave correctly.
  */
-function removeDeduplicatedComponents(
-  schemas: Record<string, OpenApiSchema>,
-  componentNames: Set<string>
-): void {
-  for (const name of componentNames) {
-    delete schemas[name]
+function pathHasExcludedTag(
+  pathItem: PathItemObject,
+  excludedTags: Set<string>
+): boolean {
+  for (const operation of Object.values(pathItem)) {
+    if (!operation || typeof operation !== "object") continue
+    const tags = (operation as { tags?: string[] }).tags
+    if (!tags) continue
+    if (tags.some((tag) => excludedTags.has(tag))) {
+      return true
+    }
   }
+  return false
+}
+
+/**
+ * Drop every path whose operations have an excluded tag. Returns the count of
+ * removed paths.
+ */
+function dropExcludedPaths(
+  paths: Record<string, PathItemObject>,
+  excludedTags: Set<string>
+): number {
+  let removed = 0
+  for (const [pathKey, pathItem] of Object.entries(paths)) {
+    if (pathHasExcludedTag(pathItem, excludedTags)) {
+      delete paths[pathKey]
+      removed += 1
+    }
+  }
+  return removed
+}
+
+// ─── Component pruning ────────────────────────────────────────────────────────
+
+/**
+ * Collect every `#/components/schemas/<name>` reference target reachable from
+ * `root`, plus any `x-sdk-ref: "<SchemaName>"` markers. The latter is the
+ * shortcut emitted by `createErrorResponseSchema` so per-status variants
+ * like `BadRequestErrorResponse` can point at the shared `ErrorResponse`
+ * without a `$ref` cycle.
+ */
+function collectSchemaRefs(root: unknown): Set<string> {
+  const refs = new Set<string>()
+  const visit = (node: unknown): void => {
+    if (!node || typeof node !== "object") return
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item)
+      return
+    }
+    const record = node as Record<string, unknown>
+    if (typeof record.$ref === "string") {
+      const ref = record.$ref
+      if (ref.startsWith(SCHEMA_REF_PREFIX)) {
+        refs.add(ref.slice(SCHEMA_REF_PREFIX.length))
+      }
+    }
+    if (typeof record[SDK_REF_MARKER] === "string") {
+      refs.add(record[SDK_REF_MARKER] as string)
+    }
+    for (const [key, value] of Object.entries(record)) {
+      // Skip the schemas map itself — references inside the map are the
+      // definition site, not a use-site, and recursing would mark every
+      // schema as referenced via its own keys.
+      if (key === "schemas") continue
+      visit(value)
+    }
+  }
+  visit(root)
+  return refs
+}
+
+/**
+ * Remove schemas from `components.schemas` whose names are not reachable
+ * from anything outside the schemas map. A schema is reachable if it is
+ * referenced by a surviving path, by another surviving top-level field
+ * (e.g. webhooks, parameters), or by another surviving schema.
+ */
+function pruneOrphanSchemas(spec: OpenAPIObject): number {
+  const schemas = spec.components?.schemas
+  if (!schemas) return 0
+
+  // Seed reachability from everything OUTSIDE `components.schemas`. We pass
+  // the spec with `components` replaced by an empty object so the visitor
+  // never descends into the schemas map at this step.
+  const seedRoot: OpenAPIObject = { ...spec, components: {} }
+  const reachability = collectSchemaRefs(seedRoot)
+
+  // Close over `components.schemas`: a reachable schema can rescue another
+  // schema it references. Iterate the frontier until it stops growing.
+  let frontier = [...reachability]
+  while (frontier.length > 0) {
+    const next: string[] = []
+    for (const name of frontier) {
+      const schema = schemas[name]
+      if (!schema || typeof schema !== "object") continue
+      for (const ref of collectSchemaRefs(schema)) {
+        if (!reachability.has(ref)) {
+          reachability.add(ref)
+          next.push(ref)
+        }
+      }
+    }
+    frontier = next
+  }
+
+  let removed = 0
+  for (const name of Object.keys(schemas)) {
+    if (reachability.has(name)) continue
+    delete schemas[name]
+    removed += 1
+  }
+  return removed
 }
 
 // ─── Core Transformer ─────────────────────────────────────────────────────────
@@ -237,18 +418,50 @@ export default function transformOpenApiSpec(
   inputSpec: OpenAPIObject
 ): OpenAPIObject {
   const spec = structuredClone(inputSpec)
-  const schemas = spec.components?.schemas
 
-  if (!schemas) return spec
-
-  const { taggedComponentNames, componentExamples } =
-    collectErrorComponents(schemas)
-
-  if (spec.paths) {
-    rewritePathResponses(spec.paths, taggedComponentNames, componentExamples)
+  // Pass 1: per-service SDK gating. Drop paths whose tags are excluded
+  // before orval sees them, so the generated client doesn't import them.
+  const excludedTags = loadExcludedTags()
+  if (spec.paths && excludedTags.size > 0) {
+    const dropped = dropExcludedPaths(spec.paths, excludedTags)
+    if (dropped > 0) {
+      // After dropping paths, prune the schemas that lose their only
+      // references (e.g. admin models that nothing else referenced).
+      pruneOrphanSchemas(spec)
+    }
   }
 
-  removeDeduplicatedComponents(schemas, taggedComponentNames)
+  // Pass 2: error component deduplication. The existing logic is unchanged;
+  // it runs after the gating pass so it sees the same shape as before.
+  const schemas = spec.components?.schemas
+  if (schemas) {
+    const componentExamples = new Map<string, Record<string, unknown>>()
+    const deduplicatedNames: string[] = []
+
+    for (const [name, schema] of Object.entries(schemas)) {
+      if (PRESERVED_COMPONENT_NAMES.has(name)) continue
+
+      // Authoritative marker: error variants are tagged with
+      // `x-sdk-ref: "ErrorResponse"` by `createErrorResponseSchema`.
+      if (schema[SDK_REF_MARKER] !== "ErrorResponse") continue
+
+      const example = extractExampleFromSchema(schema)
+      if (example) {
+        componentExamples.set(name, example)
+      }
+      deduplicatedNames.push(name)
+    }
+
+    if (spec.paths) {
+      rewriteErrorResponses(spec.paths, componentExamples)
+    }
+
+    // Remove the deduplicated variants from `components.schemas` so that
+    // orval does not emit a TypeScript file per error variant.
+    for (const name of deduplicatedNames) {
+      delete schemas[name]
+    }
+  }
 
   return spec
 }

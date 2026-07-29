@@ -1,6 +1,6 @@
 import { ApiError } from "./apiError.js";
-import { ERROR_CODES, type ErrorCode } from "./errorCodes.js";
-import { ERROR_MESSAGES } from "./errorMessages.js";
+import { COMMON_ERROR_CODES, type CommonErrorCode } from "./errorCodes.js";
+import { COMMON_ERROR_MESSAGES } from "./errorMessages.js";
 import { normalizePrismaError } from "./normalizePrismaError.js";
 import { getMessageFromRegistry } from "./registry.js";
 
@@ -14,18 +14,16 @@ type NormalizedError = {
   details?: unknown;
 };
 
-const ERROR_STATUS_MAP: Record<ErrorCode, number> = {
-  [ERROR_CODES.INTERNAL_ERROR]: 500,
-  [ERROR_CODES.CONFLICT]: 409,
-  [ERROR_CODES.NOT_FOUND]: 404,
-  [ERROR_CODES.BAD_REQUEST]: 400,
-  [ERROR_CODES.UNAUTHORIZED]: 401,
-  [ERROR_CODES.FORBIDDEN]: 403,
-  [ERROR_CODES.VALIDATION_ERROR]: 400,
-  [ERROR_CODES.INVALID_INPUT]: 400,
-  [ERROR_CODES.RATE_LIMIT_EXCEEDED]: 429,
-  [ERROR_CODES.SERVICE_UNAVAILABLE]: 503,
-  [ERROR_CODES.KAFKA_PUBLISH_FAILED]: 500,
+const ERROR_STATUS_MAP: Record<CommonErrorCode, number> = {
+  [COMMON_ERROR_CODES.INTERNAL_ERROR]: 500,
+  [COMMON_ERROR_CODES.CONFLICT]: 409,
+  [COMMON_ERROR_CODES.NOT_FOUND]: 404,
+  [COMMON_ERROR_CODES.UNAUTHORIZED]: 401,
+  [COMMON_ERROR_CODES.FORBIDDEN]: 403,
+  [COMMON_ERROR_CODES.INVALID_INPUT]: 400,
+  [COMMON_ERROR_CODES.RATE_LIMIT_EXCEEDED]: 429,
+  [COMMON_ERROR_CODES.SERVICE_UNAVAILABLE]: 503,
+  [COMMON_ERROR_CODES.KAFKA_PUBLISH_FAILED]: 500,
 };
 
 /**
@@ -46,8 +44,8 @@ const normalizeFromCode = (
     overrideStatus ?? (ERROR_STATUS_MAP as Record<string, number>)[code] ?? 500;
   const fallbackMessage =
     getMessageFromRegistry(code) ??
-    ERROR_MESSAGES[code as ErrorCode] ??
-    ERROR_MESSAGES[ERROR_CODES.INTERNAL_ERROR];
+    COMMON_ERROR_MESSAGES[code as CommonErrorCode] ??
+    COMMON_ERROR_MESSAGES[COMMON_ERROR_CODES.INTERNAL_ERROR];
 
   const resolvedMessage =
     !message || message === code ? fallbackMessage : message;
@@ -80,5 +78,5 @@ export const normalizeError = (error: unknown): NormalizedError => {
     return normalizeFromCode(prismaCode);
   }
 
-  return normalizeFromCode(ERROR_CODES.INTERNAL_ERROR);
+  return normalizeFromCode(COMMON_ERROR_CODES.INTERNAL_ERROR);
 };

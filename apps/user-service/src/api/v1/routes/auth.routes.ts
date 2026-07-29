@@ -6,8 +6,13 @@ import {
   ForgotPasswordRequestSchema,
   VerifyPasswordResetOtpRequestSchema,
   ResetPasswordRequestSchema,
+  SessionParamSchema,
 } from "@dto";
-import { validateSchema, asyncHandler } from "@irctc/middleware";
+import {
+  validateSchema,
+  asyncHandler,
+  validateParams,
+} from "@irctc/middleware";
 import { Router } from "express";
 import { sessionMiddleware, trustGatewayHeaders } from "@middleware";
 
@@ -73,6 +78,7 @@ router.get(
  */
 router.delete(
   "/sessions/:sessionId",
+  validateParams(SessionParamSchema),
   trustGatewayHeaders,
   sessionMiddleware,
   asyncHandler((req, res) => authController.revokeSession(req, res)),

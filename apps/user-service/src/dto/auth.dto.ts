@@ -13,9 +13,10 @@ export const emailSchema = z
 /**
  * Reusable uuid schema
  */
-export const uuidSchema = z.uuid("Invalid UUID format").openapi({
-  example: "550e8400-e29b-41d4-a716-446655440000",
-});
+export const uuidSchema = (message = "Invalid UUID format") =>
+  z.uuid(message).openapi({
+    example: "550e8400-e29b-41d4-a716-446655440000",
+  });
 
 /**
  * Reusable first name schema
@@ -117,8 +118,8 @@ export interface AuthResponseDto {
  */
 export const SessionSummarySchema = z
   .object({
-    sessionId: uuidSchema,
-    userId: uuidSchema,
+    sessionId: uuidSchema("Session ID must be a valid UUID"),
+    userId: uuidSchema("User ID must be a valid UUID"),
     fingerprint: z.string().openapi({
       example:
         "9b32928e81333d238159cd131c9551adce20bd02b90d4a6a89d482ff4c10fba7",
@@ -155,7 +156,7 @@ export type ForgotPasswordRequestDto = z.infer<
  */
 export const VerifyPasswordResetOtpRequestSchema = z
   .object({
-    sessionId: uuidSchema,
+    sessionId: uuidSchema("Session ID must be a valid UUID"),
     otp: otpSchema,
   })
   .openapi("VerifyPasswordResetOtpRequest");
@@ -169,7 +170,7 @@ export type VerifyPasswordResetOtpRequestDto = z.infer<
  */
 export const ResetPasswordRequestSchema = z
   .object({
-    passwordResetToken: uuidSchema,
+    passwordResetToken: uuidSchema("Password reset token must be a valid UUID"),
     password: passwordSchema,
     confirmPassword: passwordSchema,
   })
@@ -193,11 +194,18 @@ export const ActiveSessionSchema = SessionSummarySchema.extend({
 export type ActiveSessionDto = z.infer<typeof ActiveSessionSchema>;
 
 /**
+ * Auth Session Record used internally for session management.
+ */
+export type AuthSessionRecord = Omit<SessionSummaryDto, "sessionId"> & {
+  refreshTokenHash: string;
+};
+
+/**
  * Forgot Password Response Schema
  */
 export const ForgotPasswordResponseSchema = z
   .object({
-    sessionId: uuidSchema,
+    sessionId: uuidSchema("Session ID must be a valid UUID"),
   })
   .openapi("ForgotPasswordResponse");
 
@@ -210,10 +218,20 @@ export type ForgotPasswordResponseDto = z.infer<
  */
 export const VerifyPasswordResetOtpResponseSchema = z
   .object({
-    passwordResetToken: uuidSchema,
+    passwordResetToken: uuidSchema("Password reset token must be a valid UUID"),
   })
   .openapi("VerifyPasswordResetOtpResponse");
 
 export type VerifyPasswordResetOtpResponseDto = z.infer<
   typeof VerifyPasswordResetOtpResponseSchema
 >;
+
+/**
+ * Session Param Schema
+ */
+
+export const SessionParamSchema = z
+  .object({
+    sessionId: uuidSchema("Session ID must be a valid UUID"),
+  })
+  .openapi("SessionParam");

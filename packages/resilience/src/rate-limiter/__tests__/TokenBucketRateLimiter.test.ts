@@ -14,7 +14,7 @@ class MockRedis {
   public scriptLoadCount = 0;
   public shouldFail = false;
 
-  async script(op: string, _scriptText?: string): Promise<string> {
+  async script(op: string): Promise<string> {
     if (this.shouldFail) {
       throw new Error("Redis connection lost");
     }

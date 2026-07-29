@@ -12,7 +12,7 @@ import {
   ErrorDetailSchema,
   z,
 } from "@irctc/openapi";
-import { ERROR_CODES } from "@irctc/errors";
+import { COMMON_ERROR_CODES } from "@irctc/errors";
 import {
   RegisterSchema,
   LoginSchema,
@@ -26,8 +26,10 @@ import {
   ActiveSessionSchema,
   ForgotPasswordResponseSchema,
   VerifyPasswordResetOtpResponseSchema,
+  SessionParamSchema,
 } from "@dto";
-import { ERROR_MESSAGES, ERROR_CODES as USER_ERROR } from "@utils/errors";
+import { ERROR_MESSAGES, ERROR_CODES } from "@utils/errors";
+import { userServiceOpenApiDescriptions } from "./descriptions.js";
 
 export const registry = new OpenAPIRegistry();
 
@@ -62,7 +64,8 @@ registry.registerPath({
   path: "/api/v1/auth/send-otp",
   operationId: "sendOtp",
   tags: ["Authentication"],
-  summary: "Send OTP for User Registration",
+  summary: userServiceOpenApiDescriptions.auth.sendOtp.summary,
+  description: userServiceOpenApiDescriptions.auth.sendOtp.description,
   request: {
     body: {
       content: {
@@ -81,7 +84,7 @@ registry.registerPath({
     409: createOpenApiResponse(
       "User already exists",
       createErrorResponseSchema(
-        USER_ERROR.USER_ALREADY_EXISTS,
+        ERROR_CODES.USER_ALREADY_EXISTS,
         ERROR_MESSAGES.USER_ALREADY_EXISTS,
       ),
     ),
@@ -93,7 +96,8 @@ registry.registerPath({
   path: "/api/v1/auth/verify-otp",
   operationId: "verifyOtp",
   tags: ["Authentication"],
-  summary: "Verify OTP & Complete Registration",
+  summary: userServiceOpenApiDescriptions.auth.verifyOtp.summary,
+  description: userServiceOpenApiDescriptions.auth.verifyOtp.description,
   request: {
     body: {
       content: {
@@ -112,7 +116,7 @@ registry.registerPath({
     400: createOpenApiResponse(
       "Invalid or expired OTP",
       createErrorResponseSchema(
-        ERROR_CODES.INVALID_INPUT,
+        COMMON_ERROR_CODES.INVALID_INPUT,
         "Invalid or expired OTP code",
       ),
     ),
@@ -124,7 +128,8 @@ registry.registerPath({
   path: "/api/v1/auth/login",
   operationId: "login",
   tags: ["Authentication"],
-  summary: "Login User",
+  summary: userServiceOpenApiDescriptions.auth.login.summary,
+  description: userServiceOpenApiDescriptions.auth.login.description,
   request: {
     body: {
       content: {
@@ -143,7 +148,7 @@ registry.registerPath({
     401: createOpenApiResponse(
       "Invalid credentials",
       createErrorResponseSchema(
-        ERROR_CODES.UNAUTHORIZED,
+        ERROR_CODES.INVALID_CREDENTIALS,
         ERROR_MESSAGES.INVALID_CREDENTIALS,
       ),
     ),
@@ -155,7 +160,8 @@ registry.registerPath({
   path: "/api/v1/auth/refresh",
   operationId: "refreshToken",
   tags: ["Authentication"],
-  summary: "Refresh Access Token",
+  summary: userServiceOpenApiDescriptions.auth.refreshToken.summary,
+  description: userServiceOpenApiDescriptions.auth.refreshToken.description,
   responses: {
     200: createOpenApiResponse(
       "Token refreshed successfully",
@@ -165,8 +171,8 @@ registry.registerPath({
     401: createOpenApiResponse(
       "Unauthorized - Refresh token is missing, invalid, or expired",
       createErrorResponseSchema(
-        ERROR_CODES.UNAUTHORIZED,
-        ERROR_MESSAGES.REFRESH_TOKEN_INVALID,
+        COMMON_ERROR_CODES.UNAUTHORIZED,
+        ERROR_MESSAGES.INVALID_REFRESH_TOKEN,
       ),
     ),
   },
@@ -177,7 +183,8 @@ registry.registerPath({
   path: "/api/v1/auth/sessions",
   operationId: "getSessions",
   tags: ["Authentication"],
-  summary: "Get Active User Sessions",
+  summary: userServiceOpenApiDescriptions.auth.getSessions.summary,
+  description: userServiceOpenApiDescriptions.auth.getSessions.description,
   security: GatewayAuthSecurity,
   responses: {
     200: createOpenApiResponse(
@@ -197,14 +204,11 @@ registry.registerPath({
   path: "/api/v1/auth/sessions/{sessionId}",
   operationId: "revokeSession",
   tags: ["Authentication"],
-  summary: "Revoke Active Session",
+  summary: userServiceOpenApiDescriptions.auth.revokeSession.summary,
+  description: userServiceOpenApiDescriptions.auth.revokeSession.description,
   security: GatewayAuthSecurity,
   request: {
-    params: z.object({
-      sessionId: z
-        .uuid()
-        .openapi({ example: "550e8400-e29b-41d4-a716-446655440000" }),
-    }),
+    params: SessionParamSchema,
   },
   responses: {
     200: createOpenApiResponse(
@@ -216,7 +220,7 @@ registry.registerPath({
     404: createOpenApiResponse(
       "Session Not Found",
       createErrorResponseSchema(
-        ERROR_CODES.NOT_FOUND,
+        COMMON_ERROR_CODES.NOT_FOUND,
         "Active session not found",
       ),
     ),
@@ -228,7 +232,8 @@ registry.registerPath({
   path: "/api/v1/auth/logout",
   operationId: "logout",
   tags: ["Authentication"],
-  summary: "Logout Current Session",
+  summary: userServiceOpenApiDescriptions.auth.logout.summary,
+  description: userServiceOpenApiDescriptions.auth.logout.description,
   responses: {
     200: createOpenApiResponse(
       "Logged out successfully",
@@ -243,7 +248,8 @@ registry.registerPath({
   path: "/api/v1/auth/logout-all",
   operationId: "logoutAll",
   tags: ["Authentication"],
-  summary: "Logout All Sessions",
+  summary: userServiceOpenApiDescriptions.auth.logoutAll.summary,
+  description: userServiceOpenApiDescriptions.auth.logoutAll.description,
   responses: {
     200: createOpenApiResponse(
       "Logged out from all sessions",
@@ -258,7 +264,8 @@ registry.registerPath({
   path: "/api/v1/auth/forgot-password",
   operationId: "forgotPassword",
   tags: ["Authentication"],
-  summary: "Request Password Reset OTP",
+  summary: userServiceOpenApiDescriptions.auth.forgotPassword.summary,
+  description: userServiceOpenApiDescriptions.auth.forgotPassword.description,
   request: {
     body: {
       content: {
@@ -280,7 +287,7 @@ registry.registerPath({
     404: createOpenApiResponse(
       "User Not Found",
       createErrorResponseSchema(
-        ERROR_CODES.NOT_FOUND,
+        COMMON_ERROR_CODES.NOT_FOUND,
         ERROR_MESSAGES.USER_NOT_FOUND,
       ),
     ),
@@ -292,7 +299,8 @@ registry.registerPath({
   path: "/api/v1/auth/verify-reset-otp",
   operationId: "VerifyPasswordResetOtp",
   tags: ["Authentication"],
-  summary: "Verify Password Reset OTP",
+  summary: userServiceOpenApiDescriptions.auth.verifyResetOtp.summary,
+  description: userServiceOpenApiDescriptions.auth.verifyResetOtp.description,
   request: {
     body: {
       content: {
@@ -314,7 +322,7 @@ registry.registerPath({
     400: createOpenApiResponse(
       "Invalid or expired OTP",
       createErrorResponseSchema(
-        ERROR_CODES.INVALID_INPUT,
+        COMMON_ERROR_CODES.INVALID_INPUT,
         "Invalid or expired reset OTP",
       ),
     ),
@@ -326,7 +334,8 @@ registry.registerPath({
   path: "/api/v1/auth/reset-password",
   operationId: "resetPassword",
   tags: ["Authentication"],
-  summary: "Reset Password",
+  summary: userServiceOpenApiDescriptions.auth.resetPassword.summary,
+  description: userServiceOpenApiDescriptions.auth.resetPassword.description,
   request: {
     body: {
       content: {
@@ -355,8 +364,10 @@ registry.registerPath({
   method: "get",
   path: "/api/v1/users/me",
   operationId: "getProfile",
-  tags: ["User Profile"],
-  summary: "Get Current User Profile",
+  tags: ["Users"],
+  summary: userServiceOpenApiDescriptions.userProfile.getProfile.summary,
+  description:
+    userServiceOpenApiDescriptions.userProfile.getProfile.description,
   security: GatewayAuthSecurity,
   responses: {
     200: createOpenApiResponse(
@@ -371,7 +382,7 @@ registry.registerPath({
     404: createOpenApiResponse(
       "User Profile Not Found",
       createErrorResponseSchema(
-        ERROR_CODES.NOT_FOUND,
+        COMMON_ERROR_CODES.NOT_FOUND,
         ERROR_MESSAGES.USER_NOT_FOUND,
       ),
     ),
@@ -382,8 +393,10 @@ registry.registerPath({
   method: "put",
   path: "/api/v1/users/me",
   operationId: "updateProfile",
-  tags: ["User Profile"],
-  summary: "Update Current User Profile",
+  tags: ["Users"],
+  summary: userServiceOpenApiDescriptions.userProfile.updateProfile.summary,
+  description:
+    userServiceOpenApiDescriptions.userProfile.updateProfile.description,
   security: GatewayAuthSecurity,
   request: {
     body: {

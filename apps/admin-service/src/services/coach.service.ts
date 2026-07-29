@@ -1,5 +1,5 @@
 import { Prisma, type PrismaClient } from "@generated/prisma/client.js";
-import { ApiError, ERROR_CODES as COMMON_ERROR_CODES } from "@irctc/errors";
+import { ApiError, COMMON_ERROR_CODES } from "@irctc/errors";
 import { ERROR_CODES } from "@utils/errors";
 import { statusCode } from "@irctc/http";
 import type {
@@ -202,7 +202,7 @@ export class CoachService {
         }
 
         const updatedData = Object.fromEntries(
-          Object.entries(dto).filter(([_, value]) => value !== undefined),
+          Object.entries(dto).filter(([, value]) => value !== undefined),
         );
 
         return this.coachRepository.update(coachId, updatedData, tx);

@@ -1,3 +1,3 @@
 export * from "./endpoints/authentication/authentication"
-export * from "./endpoints/user-profile/user-profile"
+export * from "./endpoints/users/users"
 export * from "./model/index"

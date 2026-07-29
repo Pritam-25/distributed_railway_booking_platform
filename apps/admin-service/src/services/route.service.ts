@@ -284,7 +284,7 @@ export class RouteService {
       }
 
       const updatedData = Object.fromEntries(
-        Object.entries(dto).filter(([_, value]) => value !== undefined),
+        Object.entries(dto).filter(([, value]) => value !== undefined),
       );
 
       const updatedStop = await this.routeRepository.updateRouteStation(

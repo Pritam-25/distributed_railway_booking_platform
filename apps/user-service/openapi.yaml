@@ -1,0 +1,1766 @@
+openapi: 3.1.0
+info:
+  title: User Service API
+  version: 1.0.0
+  description: >+
+
+    # Pritam's User Service API
+
+
+    The **User Service API** provides authentication, identity, and profile management for the IRCTC Railway Booking
+    Platform. It enables secure user registration, login, session management, password recovery, and profile operations
+    through a RESTful API.
+
+
+    ## Core Capabilities
+
+
+    ### Authentication
+
+
+    The authentication module supports the complete user lifecycle:
+
+
+    - **OTP Registration** — Register new users through email OTP verification.
+
+    - **Login & Logout** — Authenticate users and terminate the current session or all active sessions.
+
+    - **JWT Authentication** — Secure access using short-lived Access Tokens with Refresh Token rotation.
+
+    - **Token Refresh** — Obtain a new access token using a valid refresh token.
+
+    - **Session Management** — List active sessions and revoke individual sessions by ID.
+
+    - **Password Reset** — Reset passwords through a secure email OTP verification flow.
+
+
+    ### User Profile
+
+
+    Authenticated users can manage their own account information using:
+
+
+    - `GET /api/v1/users/me` — Retrieve the authenticated user's profile.
+
+    - `PUT /api/v1/users/me` — Update the authenticated user's profile.
+
+servers:
+  - url: http://localhost:4000
+    description: API Gateway Proxy URL
+  - url: http://localhost:4001
+    description: Local Direct User Service URL
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Enter JWT Access Token
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: access_token
+      description: Access token stored in HTTP-only cookie for browser clients
+  schemas:
+    RegisterRequest:
+      type: object
+      properties:
+        firstName:
+          type: string
+          minLength: 3
+          maxLength: 50
+          example: Jhon
+        lastName:
+          type: string
+          minLength: 2
+          maxLength: 50
+          example: Doe
+        email:
+          type: string
+          format: email
+          example: jhon@example.com
+        password:
+          type: string
+          minLength: 6
+          pattern: ^(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z0-9]).{6,}$
+          example: Password@123
+          description: |-
+            ### Password Requirements
+
+            - Minimum **6** characters
+            - At least **1 uppercase** letter
+            - At least **1 number**
+            - At least **1 special character**
+      required:
+        - firstName
+        - lastName
+        - email
+        - password
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          example: jhon@example.com
+        password:
+          type: string
+          minLength: 6
+          pattern: ^(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z0-9]).{6,}$
+          example: Password@123
+          description: |-
+            ### Password Requirements
+
+            - Minimum **6** characters
+            - At least **1 uppercase** letter
+            - At least **1 number**
+            - At least **1 special character**
+      required:
+        - email
+        - password
+    VerifyOtpRequest:
+      type: object
+      properties:
+        otp:
+          type: string
+          minLength: 6
+          maxLength: 6
+          pattern: ^\d{6}$
+          example: "123456"
+      required:
+        - otp
+    ForgotPasswordRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          example: jhon@example.com
+      required:
+        - email
+    VerifyPasswordResetOtpRequest:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        otp:
+          type: string
+          minLength: 6
+          maxLength: 6
+          pattern: ^\d{6}$
+          example: "123456"
+      required:
+        - sessionId
+        - otp
+    ResetPasswordRequest:
+      type: object
+      properties:
+        passwordResetToken:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        password:
+          type: string
+          minLength: 6
+          pattern: ^(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z0-9]).{6,}$
+          example: Password@123
+          description: |-
+            ### Password Requirements
+
+            - Minimum **6** characters
+            - At least **1 uppercase** letter
+            - At least **1 number**
+            - At least **1 special character**
+        confirmPassword:
+          type: string
+          minLength: 6
+          pattern: ^(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z0-9]).{6,}$
+          example: Password@123
+          description: |-
+            ### Password Requirements
+
+            - Minimum **6** characters
+            - At least **1 uppercase** letter
+            - At least **1 number**
+            - At least **1 special character**
+      required:
+        - passwordResetToken
+        - password
+        - confirmPassword
+    UpdateProfileRequest:
+      type: object
+      properties:
+        firstName:
+          type: string
+          minLength: 3
+          maxLength: 50
+          example: Jhon
+        lastName:
+          type: string
+          minLength: 2
+          maxLength: 50
+          example: Doe
+      required:
+        - firstName
+        - lastName
+    SessionSummary:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        userId:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        fingerprint:
+          type: string
+          example: 9b32928e81333d238159cd131c9551adce20bd02b90d4a6a89d482ff4c10fba7
+        ipAddress:
+          type: string
+          example: "192:168:1:1"
+        userAgent:
+          type: string
+          example: >-
+            Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0
+            Safari/537.36
+        location:
+          type: string
+          example: New Delhi, IN
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-07-24T00:00:00.000Z"
+        lastUsedAt:
+          type: string
+          format: date-time
+          example: "2026-07-24T12:00:00.000Z"
+        expiresAt:
+          type: string
+          format: date-time
+          example: "2026-08-23T12:00:00.000Z"
+      required:
+        - sessionId
+        - userId
+        - fingerprint
+        - ipAddress
+        - userAgent
+        - location
+        - createdAt
+        - lastUsedAt
+        - expiresAt
+    ActiveSession:
+      allOf:
+        - $ref: "#/components/schemas/SessionSummary"
+        - type: object
+          properties:
+            isCurrent:
+              type: boolean
+              example: true
+          required:
+            - isCurrent
+    ErrorDetail:
+      type: object
+      properties:
+        code:
+          type: string
+          example: INVALID_INPUT
+        message:
+          type: string
+          example: Invalid Request Input.
+        details: {}
+      required:
+        - code
+        - message
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          enum:
+            - false
+          example: false
+        error:
+          $ref: "#/components/schemas/ErrorDetail"
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+      required:
+        - success
+        - error
+        - meta
+    ResponseMeta:
+      type: object
+      properties:
+        requestId:
+          type: string
+          example: 3e3c1f1a-6f7d-4a2b-9b5c-1f0e3a4b5c6d
+        traceId:
+          type: string
+          example: a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4
+        timestamp:
+          type: string
+          example: "2026-07-24T11:21:35.000Z"
+      required:
+        - requestId
+        - traceId
+        - timestamp
+    EmptyResponse:
+      type: object
+      properties: {}
+    BadRequestErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          enum:
+            - false
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: INVALID_INPUT
+            message:
+              type: string
+              example: Invalid request input.
+            details: {}
+          required:
+            - code
+            - message
+          description: Error Detail Payload
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+      required:
+        - success
+        - error
+        - meta
+      description: Error Response Envelope (INVALID_INPUT)
+      x-sdk-ref: ErrorResponse
+      refId: BadRequestErrorResponse
+    RateLimitErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          enum:
+            - false
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: RATE_LIMIT_EXCEEDED
+            message:
+              type: string
+              example: Rate limit exceeded.
+            details: {}
+          required:
+            - code
+            - message
+          description: Error Detail Payload
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+      required:
+        - success
+        - error
+        - meta
+      description: Error Response Envelope (RATE_LIMIT_EXCEEDED)
+      x-sdk-ref: ErrorResponse
+      refId: RateLimitErrorResponse
+    InternalServerErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          enum:
+            - false
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: INTERNAL_ERROR
+            message:
+              type: string
+              example: Internal server error.
+            details: {}
+          required:
+            - code
+            - message
+          description: Error Detail Payload
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+      required:
+        - success
+        - error
+        - meta
+      description: Error Response Envelope (INTERNAL_ERROR)
+      x-sdk-ref: ErrorResponse
+      refId: InternalServerErrorResponse
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        firstName:
+          type: string
+          minLength: 3
+          maxLength: 50
+          example: Jhon
+        lastName:
+          type: string
+          minLength: 2
+          maxLength: 50
+          example: Doe
+        email:
+          type: string
+          format: email
+          example: jhon@example.com
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-07-24T00:00:00.000Z"
+      required:
+        - id
+        - firstName
+        - lastName
+        - email
+        - createdAt
+    UnauthorizedErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          enum:
+            - false
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: UNAUTHORIZED
+            message:
+              type: string
+              example: Authentication required.
+            details: {}
+          required:
+            - code
+            - message
+          description: Error Detail Payload
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+      required:
+        - success
+        - error
+        - meta
+      description: Error Response Envelope (UNAUTHORIZED)
+      x-sdk-ref: ErrorResponse
+      refId: UnauthorizedErrorResponse
+    ForgotPasswordResponse:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+      required:
+        - sessionId
+    VerifyPasswordResetOtpResponse:
+      type: object
+      properties:
+        passwordResetToken:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+      required:
+        - passwordResetToken
+  parameters: {}
+paths:
+  /api/v1/auth/send-otp:
+    post:
+      operationId: sendOtp
+      tags:
+        - Authentication
+      summary: Send OTP for User Registration
+      description: >-
+        Starts the registration flow by validating the submitted identity and password payload, then dispatching a
+        one-time password to the provided email address.
+
+
+        **Request Body Fields:**
+
+        - `firstName` - User's given name used to personalize the account.
+
+        - `lastName` - User's family name used together with the first name.
+
+        - `email` - Unique email address that receives the registration OTP.
+
+        - `password` - Account password validated against the password policy.
+
+
+        **Response:**
+
+        Returns a success envelope with an empty data payload. The short-lived OTP session is stored by the service and
+        the OTP session cookie is set separately.
+
+
+        **Outcomes:**
+
+        - 200 OK - OTP was generated and sent to the registered email address.
+
+        - 409 Conflict - The email is already registered.
+
+        - 400 Bad Request - Request validation failed or the payload is incomplete.
+
+        - 429 Too Many Requests - OTP delivery was rate-limited.
+
+        - 500 Internal Server Error - The service could not complete OTP dispatch.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "200":
+          description: OTP sent successfully to email
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                    example: true
+                  message:
+                    type: string
+                    example: OTP sent to your email successfully
+                  data:
+                    $ref: "#/components/schemas/EmptyResponse"
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - message
+                  - data
+                  - meta
+                description: Success Response Envelope
+        "400":
+          description: Bad Request - Validation or invalid input error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "409":
+          description: User already exists
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: USER_ALREADY_EXISTS
+                      message:
+                        type: string
+                        example: User already exists.
+                      details: {}
+                    required:
+                      - code
+                      - message
+                    description: Error Detail Payload
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - error
+                  - meta
+                description: Error Response Envelope (USER_ALREADY_EXISTS)
+                x-sdk-ref: ErrorResponse
+        "429":
+          description: Too Many Requests - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitErrorResponse"
+        "500":
+          description: Internal Server Error - Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponse"
+  /api/v1/auth/verify-otp:
+    post:
+      operationId: verifyOtp
+      tags:
+        - Authentication
+      summary: Verify OTP & Complete Registration
+      description: >-
+        Validates the registration OTP, creates the user account, and completes the sign-up flow for the current OTP
+        session.
+
+
+        **Request Body Fields:**
+
+        - `otp` - The 6-digit one-time password sent to the user's email address.
+
+
+        **Response:**
+
+        Returns the created user in the response body and sets the access and refresh token cookies for immediate
+        authentication.
+
+
+        **Outcomes:**
+
+        - 200 OK - Registration succeeded and the user is authenticated.
+
+        - 400 Bad Request - The OTP session is missing or the OTP is invalid or expired.
+
+        - 429 Too Many Requests - OTP verification was rate-limited.
+
+        - 500 Internal Server Error - The service could not complete registration.
+
+
+        **Notes:**
+
+        - The response body contains the user profile; authentication tokens are delivered through cookies.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyOtpRequest"
+      responses:
+        "200":
+          description: User verified and authenticated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                    example: true
+                  message:
+                    type: string
+                    example: Registration successful
+                  data:
+                    $ref: "#/components/schemas/UserResponse"
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - message
+                  - data
+                  - meta
+                description: Success Response Envelope
+        "400":
+          description: Invalid or expired OTP
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: INVALID_INPUT
+                      message:
+                        type: string
+                        example: Invalid or expired OTP code
+                      details: {}
+                    required:
+                      - code
+                      - message
+                    description: Error Detail Payload
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - error
+                  - meta
+                description: Error Response Envelope (INVALID_INPUT)
+                x-sdk-ref: ErrorResponse
+        "429":
+          description: Too Many Requests - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitErrorResponse"
+        "500":
+          description: Internal Server Error - Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponse"
+  /api/v1/auth/login:
+    post:
+      operationId: login
+      tags:
+        - Authentication
+      summary: Login User
+      description: >-
+        Authenticates an existing user with email and password credentials, then rotates the active session cookies on
+        success.
+
+
+        **Request Body Fields:**
+
+        - `email` - Registered email address used to locate the account.
+
+        - `password` - Account password that must satisfy the password policy.
+
+
+        **Response:**
+
+        Returns the user profile in the response body and sets fresh access and refresh token cookies for subsequent
+        authenticated requests.
+
+
+        **Outcomes:**
+
+        - 200 OK - Credentials were accepted and a new authenticated session was created.
+
+        - 400 Bad Request - The request body failed validation.
+
+        - 401 Unauthorized - The credentials were invalid.
+
+        - 429 Too Many Requests - Login attempts were rate-limited.
+
+        - 500 Internal Server Error - The service could not complete authentication.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                    example: true
+                  message:
+                    type: string
+                    example: Login successful
+                  data:
+                    $ref: "#/components/schemas/UserResponse"
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - message
+                  - data
+                  - meta
+                description: Success Response Envelope
+        "400":
+          description: Bad Request - Validation or invalid input error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: INVALID_CREDENTIALS
+                      message:
+                        type: string
+                        example: Invalid email or password.
+                      details: {}
+                    required:
+                      - code
+                      - message
+                    description: Error Detail Payload
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - error
+                  - meta
+                description: Error Response Envelope (INVALID_CREDENTIALS)
+                x-sdk-ref: ErrorResponse
+        "429":
+          description: Too Many Requests - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitErrorResponse"
+        "500":
+          description: Internal Server Error - Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponse"
+  /api/v1/auth/refresh:
+    post:
+      operationId: refreshToken
+      tags:
+        - Authentication
+      summary: Refresh Access Token
+      description: |-
+        Uses the refresh token from the current session to rotate credentials and issue a new access token pair.
+
+        **Request Body Fields:**
+        - None - The refresh token is read from the HTTP-only refresh cookie.
+
+        **Response:**
+        Returns the refreshed user profile in the response body while issuing new access and refresh token cookies.
+
+        **Outcomes:**
+        - 200 OK - The session was refreshed successfully.
+        - 400 Bad Request - The request could not be processed.
+        - 401 Unauthorized - The refresh token was missing, invalid, or expired.
+        - 429 Too Many Requests - Token refresh was rate-limited.
+        - 500 Internal Server Error - The service could not rotate the session.
+
+        **Notes:**
+        - The endpoint does not accept a request body.
+      responses:
+        "200":
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                    example: true
+                  message:
+                    type: string
+                    example: Token refreshed successfully
+                  data:
+                    $ref: "#/components/schemas/UserResponse"
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - message
+                  - data
+                  - meta
+                description: Success Response Envelope
+        "400":
+          description: Bad Request - Validation or invalid input error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "401":
+          description: Unauthorized - Refresh token is missing, invalid, or expired
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: UNAUTHORIZED
+                      message:
+                        type: string
+                        example: Invalid or expired refresh token.
+                      details: {}
+                    required:
+                      - code
+                      - message
+                    description: Error Detail Payload
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - error
+                  - meta
+                description: Error Response Envelope (UNAUTHORIZED)
+                x-sdk-ref: ErrorResponse
+        "429":
+          description: Too Many Requests - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitErrorResponse"
+        "500":
+          description: Internal Server Error - Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponse"
+  /api/v1/auth/sessions:
+    get:
+      operationId: getSessions
+      tags:
+        - Authentication
+      summary: Get Active User Sessions
+      description: >-
+        Retrieves the list of active sessions for the authenticated user and marks the currently requested session in
+        the returned payload.
+
+
+        **Request Body Fields:**
+
+        - None - The authenticated user is resolved from the access token or session cookie.
+
+
+        **Response:**
+
+        Returns an array of session summaries with device metadata, IP address, location, timestamps, and an `isCurrent`
+        flag.
+
+
+        **Outcomes:**
+
+        - 200 OK - Active sessions were retrieved successfully.
+
+        - 400 Bad Request - The request could not be validated.
+
+        - 401 Unauthorized - Authentication credentials were missing or invalid.
+
+        - 429 Too Many Requests - Session lookup was rate-limited.
+
+        - 500 Internal Server Error - The service could not load session data.
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: List of active sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                    example: true
+                  message:
+                    type: string
+                    example: Active sessions retrieved successfully
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ActiveSession"
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - message
+                  - data
+                  - meta
+                description: Success Response Envelope
+        "400":
+          description: Bad Request - Validation or invalid input error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "401":
+          description: Unauthorized - Authentication credentials missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnauthorizedErrorResponse"
+        "429":
+          description: Too Many Requests - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitErrorResponse"
+        "500":
+          description: Internal Server Error - Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponse"
+  /api/v1/auth/sessions/{sessionId}:
+    delete:
+      operationId: revokeSession
+      tags:
+        - Authentication
+      summary: Revoke Active Session
+      description: |-
+        Revokes a single active session by session ID so a user can sign out one device without affecting the others.
+
+        **Request Body Fields:**
+        - `sessionId` - Path parameter that identifies the session to revoke.
+
+        **Response:**
+        Returns a success envelope with an empty data payload after the session key has been removed.
+
+        **Outcomes:**
+        - 200 OK - The selected session was revoked.
+        - 400 Bad Request - The session ID was missing or invalid.
+        - 401 Unauthorized - The user was not authenticated.
+        - 404 Not Found - No active session matched the provided session ID.
+        - 429 Too Many Requests - Session revocation was rate-limited.
+        - 500 Internal Server Error - The service could not revoke the session.
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            example: 550e8400-e29b-41d4-a716-446655440000
+          required: true
+          name: sessionId
+          in: path
+      responses:
+        "200":
+          description: Session revoked successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                    example: true
+                  message:
+                    type: string
+                    example: Session revoked successfully
+                  data:
+                    $ref: "#/components/schemas/EmptyResponse"
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - message
+                  - data
+                  - meta
+                description: Success Response Envelope
+        "400":
+          description: Bad Request - Validation or invalid input error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "401":
+          description: Unauthorized - Authentication credentials missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnauthorizedErrorResponse"
+        "404":
+          description: Session Not Found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: NOT_FOUND
+                      message:
+                        type: string
+                        example: Active session not found
+                      details: {}
+                    required:
+                      - code
+                      - message
+                    description: Error Detail Payload
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - error
+                  - meta
+                description: Error Response Envelope (NOT_FOUND)
+                x-sdk-ref: ErrorResponse
+        "429":
+          description: Too Many Requests - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitErrorResponse"
+        "500":
+          description: Internal Server Error - Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponse"
+  /api/v1/auth/logout:
+    post:
+      operationId: logout
+      tags:
+        - Authentication
+      summary: Logout Current Session
+      description: >-
+        Ends the current authenticated session by clearing the refresh token state and removing the session cookies from
+        the client.
+
+
+        **Request Body Fields:**
+
+        - None - The current session is identified from the refresh token cookie.
+
+
+        **Response:**
+
+        Returns a success envelope with an empty data payload after the session cookies are cleared.
+
+
+        **Outcomes:**
+
+        - 200 OK - The current session was logged out successfully.
+
+        - 400 Bad Request - The request could not be processed.
+
+        - 401 Unauthorized - The session could not be authenticated.
+
+        - 429 Too Many Requests - Logout was rate-limited.
+
+        - 500 Internal Server Error - The service could not complete logout.
+      responses:
+        "200":
+          description: Logged out successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                    example: true
+                  message:
+                    type: string
+                    example: Logged out successfully
+                  data:
+                    $ref: "#/components/schemas/EmptyResponse"
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - message
+                  - data
+                  - meta
+                description: Success Response Envelope
+        "400":
+          description: Bad Request - Validation or invalid input error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "429":
+          description: Too Many Requests - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitErrorResponse"
+        "500":
+          description: Internal Server Error - Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponse"
+  /api/v1/auth/logout-all:
+    post:
+      operationId: logoutAll
+      tags:
+        - Authentication
+      summary: Logout All Sessions
+      description: |-
+        Invalidates every active session for the authenticated user so all devices are signed out at once.
+
+        **Request Body Fields:**
+        - None - All sessions are derived from the authenticated user context.
+
+        **Response:**
+        Returns a success envelope with an empty data payload after all session cookies are cleared.
+
+        **Outcomes:**
+        - 200 OK - All sessions were logged out successfully.
+        - 400 Bad Request - The request could not be processed.
+        - 401 Unauthorized - The user was not authenticated.
+        - 429 Too Many Requests - Logout-all was rate-limited.
+        - 500 Internal Server Error - The service could not revoke every session.
+      responses:
+        "200":
+          description: Logged out from all sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                    example: true
+                  message:
+                    type: string
+                    example: Logged out from all devices
+                  data:
+                    $ref: "#/components/schemas/EmptyResponse"
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - message
+                  - data
+                  - meta
+                description: Success Response Envelope
+        "400":
+          description: Bad Request - Validation or invalid input error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "429":
+          description: Too Many Requests - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitErrorResponse"
+        "500":
+          description: Internal Server Error - Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponse"
+  /api/v1/auth/forgot-password:
+    post:
+      operationId: forgotPassword
+      tags:
+        - Authentication
+      summary: Request Password Reset OTP
+      description: |-
+        Starts the password reset flow by sending a reset OTP to the registered email address for the account.
+
+        **Request Body Fields:**
+        - `email` - Registered email address that should receive the reset OTP.
+
+        **Response:**
+        Returns a reset session identifier that is used in the OTP verification step.
+
+        **Outcomes:**
+        - 200 OK - The reset OTP was sent and a reset session ID was created.
+        - 400 Bad Request - The email field failed validation.
+        - 404 Not Found - No user exists for the provided email address.
+        - 429 Too Many Requests - Password reset requests were rate-limited.
+        - 500 Internal Server Error - The service could not start the reset flow.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordRequest"
+      responses:
+        "200":
+          description: Password reset OTP sent to email
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                    example: true
+                  message:
+                    type: string
+                    example: OTP sent successfully to your registered email
+                  data:
+                    $ref: "#/components/schemas/ForgotPasswordResponse"
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - message
+                  - data
+                  - meta
+                description: Success Response Envelope
+        "400":
+          description: Bad Request - Validation or invalid input error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "404":
+          description: User Not Found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: NOT_FOUND
+                      message:
+                        type: string
+                        example: User not found.
+                      details: {}
+                    required:
+                      - code
+                      - message
+                    description: Error Detail Payload
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - error
+                  - meta
+                description: Error Response Envelope (NOT_FOUND)
+                x-sdk-ref: ErrorResponse
+        "429":
+          description: Too Many Requests - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitErrorResponse"
+        "500":
+          description: Internal Server Error - Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponse"
+  /api/v1/auth/verify-reset-otp:
+    post:
+      operationId: VerifyPasswordResetOtp
+      tags:
+        - Authentication
+      summary: Verify Password Reset OTP
+      description: |-
+        Validates the reset OTP for the current reset session and issues a short-lived password reset token.
+
+        **Request Body Fields:**
+        - `sessionId` - Reset session identifier returned by the forgot-password step.
+        - `otp` - The 6-digit reset code sent to the user's email address.
+
+        **Response:**
+        Returns a password reset token that must be supplied to the reset-password endpoint.
+
+        **Outcomes:**
+        - 200 OK - The reset OTP was verified successfully.
+        - 400 Bad Request - The OTP was invalid or expired.
+        - 429 Too Many Requests - OTP verification was rate-limited.
+        - 500 Internal Server Error - The service could not complete OTP verification.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyPasswordResetOtpRequest"
+      responses:
+        "200":
+          description: OTP verified, returns password reset token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                    example: true
+                  message:
+                    type: string
+                    example: OTP verified successfully
+                  data:
+                    $ref: "#/components/schemas/VerifyPasswordResetOtpResponse"
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - message
+                  - data
+                  - meta
+                description: Success Response Envelope
+        "400":
+          description: Invalid or expired OTP
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: INVALID_INPUT
+                      message:
+                        type: string
+                        example: Invalid or expired reset OTP
+                      details: {}
+                    required:
+                      - code
+                      - message
+                    description: Error Detail Payload
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - error
+                  - meta
+                description: Error Response Envelope (INVALID_INPUT)
+                x-sdk-ref: ErrorResponse
+        "429":
+          description: Too Many Requests - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitErrorResponse"
+        "500":
+          description: Internal Server Error - Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponse"
+  /api/v1/auth/reset-password:
+    post:
+      operationId: resetPassword
+      tags:
+        - Authentication
+      summary: Reset Password
+      description: >-
+        Completes the password reset flow by validating the password reset token and writing the new password to the
+        account.
+
+
+        **Request Body Fields:**
+
+        - `passwordResetToken` - Short-lived reset token issued by the OTP verification step.
+
+        - `password` - New account password that must satisfy the password policy.
+
+        - `confirmPassword` - Confirmation value that must match the new password.
+
+
+        **Response:**
+
+        Returns a success envelope with an empty data payload after the password is updated and existing session cookies
+        are cleared.
+
+
+        **Outcomes:**
+
+        - 200 OK - The password was updated successfully.
+
+        - 400 Bad Request - The token was invalid, expired, or the passwords did not match.
+
+        - 429 Too Many Requests - Password reset was rate-limited.
+
+        - 500 Internal Server Error - The service could not complete the password reset.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+      responses:
+        "200":
+          description: Password reset successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                    example: true
+                  message:
+                    type: string
+                    example: Password reset successfully. Please login with your new credentials.
+                  data:
+                    $ref: "#/components/schemas/EmptyResponse"
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - message
+                  - data
+                  - meta
+                description: Success Response Envelope
+        "400":
+          description: Bad Request - Validation or invalid input error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "429":
+          description: Too Many Requests - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitErrorResponse"
+        "500":
+          description: Internal Server Error - Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponse"
+  /api/v1/users/me:
+    get:
+      operationId: getProfile
+      tags:
+        - Users
+      summary: Get Current User Profile
+      description: |-
+        Returns the profile information for the currently authenticated user.
+
+        **Request Body Fields:**
+        - None - The user is resolved from the active authentication context.
+
+        **Response:**
+        Returns the user profile object with id, firstName, lastName, email, and createdAt.
+
+        **Outcomes:**
+        - 200 OK - The profile was retrieved successfully.
+        - 400 Bad Request - The request could not be processed.
+        - 401 Unauthorized - Authentication credentials were missing or invalid.
+        - 404 Not Found - No profile exists for the authenticated user.
+        - 429 Too Many Requests - Profile lookup was rate-limited.
+        - 500 Internal Server Error - The service could not load the profile.
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      responses:
+        "200":
+          description: User profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                    example: true
+                  message:
+                    type: string
+                    example: Profile retrieved successfully
+                  data:
+                    $ref: "#/components/schemas/UserResponse"
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - message
+                  - data
+                  - meta
+                description: Success Response Envelope
+        "400":
+          description: Bad Request - Validation or invalid input error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "401":
+          description: Unauthorized - Authentication credentials missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnauthorizedErrorResponse"
+        "404":
+          description: User Profile Not Found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: NOT_FOUND
+                      message:
+                        type: string
+                        example: User not found.
+                      details: {}
+                    required:
+                      - code
+                      - message
+                    description: Error Detail Payload
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - error
+                  - meta
+                description: Error Response Envelope (NOT_FOUND)
+                x-sdk-ref: ErrorResponse
+        "429":
+          description: Too Many Requests - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitErrorResponse"
+        "500":
+          description: Internal Server Error - Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponse"
+    put:
+      operationId: updateProfile
+      tags:
+        - Users
+      summary: Update Current User Profile
+      description: |-
+        Updates the authenticated user's profile fields using the current request schema.
+
+        **Request Body Fields:**
+        - `firstName` - Updated first name for the user profile.
+        - `lastName` - Updated last name for the user profile.
+
+        **Response:**
+        Returns the updated user profile object after the stored record and cache have been synchronized.
+
+        **Outcomes:**
+        - 200 OK - The profile was updated successfully.
+        - 400 Bad Request - The request body failed validation.
+        - 401 Unauthorized - Authentication credentials were missing or invalid.
+        - 429 Too Many Requests - Profile updates were rate-limited.
+        - 500 Internal Server Error - The service could not update the profile.
+
+        **Notes:**
+        - The current request schema requires both firstName and lastName.
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+      responses:
+        "200":
+          description: Profile updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                    example: true
+                  message:
+                    type: string
+                    example: Profile updated successfully
+                  data:
+                    $ref: "#/components/schemas/UserResponse"
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - message
+                  - data
+                  - meta
+                description: Success Response Envelope
+        "400":
+          description: Bad Request - Validation or invalid input error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "401":
+          description: Unauthorized - Authentication credentials missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnauthorizedErrorResponse"
+        "429":
+          description: Too Many Requests - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitErrorResponse"
+        "500":
+          description: Internal Server Error - Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponse"
+webhooks: {}

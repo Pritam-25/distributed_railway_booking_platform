@@ -1,14 +1,15 @@
 import type { AuthService } from "@services";
 import type { RefreshTokenPayload } from "@irctc/middleware";
-import type {
-  LoginRequestDto,
-  RegisterRequestDto,
-  VerifyOtpRequestDto,
-  ForgotPasswordRequestDto,
-  VerifyPasswordResetOtpRequestDto,
-  ResetPasswordRequestDto,
-  SessionSummaryDto,
-  ActiveSessionDto,
+import {
+  type LoginRequestDto,
+  type RegisterRequestDto,
+  type VerifyOtpRequestDto,
+  type ForgotPasswordRequestDto,
+  type VerifyPasswordResetOtpRequestDto,
+  type ResetPasswordRequestDto,
+  type SessionSummaryDto,
+  type ActiveSessionDto,
+  SessionParamSchema,
 } from "@dto";
 import { logger } from "@irctc/logger";
 import { env } from "@config";
@@ -19,6 +20,7 @@ import { getDeviceFingerprint } from "@utils";
 import { ApiError } from "@irctc/errors";
 import { ERROR_CODES } from "@utils/errors";
 import jwt from "jsonwebtoken";
+import { z } from "zod";
 
 /**
  * Controller handling authentication, session management, and password recovery HTTP requests.
@@ -265,15 +267,9 @@ export class AuthController {
    * @throws {ApiError} - If `sessionId` param is missing or session does not belong to requesting user.
    */
   async revokeSession(req: Request, res: Response): Promise<void> {
-    const { sessionId } = req.params;
+    // Validate and parse the `sessionId` parameter using Zod schema
+    const { sessionId } = z.parse(SessionParamSchema, req.params);
     const userId = req.user!.userId;
-
-    if (!sessionId) {
-      throw new ApiError(
-        statusCode.badRequest,
-        ERROR_CODES.SESSION_ID_REQUIRED,
-      );
-    }
 
     await this.service.revokeSession(sessionId, userId);
 

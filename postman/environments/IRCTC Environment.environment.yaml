@@ -1,0 +1,15 @@
+name: IRCTC Environment
+values:
+  - key: baseUrl
+    value: "http://localhost:4000"
+  - key: apiUrl
+    value: "http://localhost:4000/api/v1"
+  - key: firstName
+    value: Jhon
+  - key: lastName
+    value: Doe
+  - key: email
+    value: jhon@example.com
+  - key: password
+    value: Password@123
+color: 120

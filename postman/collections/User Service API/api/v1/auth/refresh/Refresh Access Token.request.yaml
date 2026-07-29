@@ -1,0 +1,28 @@
+$kind: http-request
+description: |-
+  Uses the refresh token from the current session to rotate credentials and issue a new access token pair.
+
+  **Request Body Fields:**
+  - None - The refresh token is read from the HTTP-only refresh cookie.
+
+  **Response:**
+  Returns the refreshed user profile in the response body while issuing new access and refresh token cookies.
+
+  **Outcomes:**
+  - 200 OK - The session was refreshed successfully.
+  - 400 Bad Request - The request could not be processed.
+  - 401 Unauthorized - The refresh token was missing, invalid, or expired.
+  - 429 Too Many Requests - Token refresh was rate-limited.
+  - 500 Internal Server Error - The service could not rotate the session.
+
+  **Notes:**
+  - The endpoint does not accept a request body.
+url: "{{apiUrl}}/auth/refresh"
+method: POST
+headers:
+  Accept: application/json
+body:
+  type: text
+  content: ""
+examples: ./.resources/Refresh Access Token.resources/examples
+order: 1000

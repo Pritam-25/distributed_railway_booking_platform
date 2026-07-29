@@ -1,0 +1,53 @@
+$kind: http-example
+request:
+  url: "{{apiUrl}}/auth/sessions"
+  method: GET
+  headers:
+    Accept: application/json
+  body:
+    type: text
+    content: ""
+response:
+  statusCode: 200
+  statusText: OK
+  headers:
+    Content-Type: application/json
+  body:
+    type: json
+    content: |-
+      {
+        "success": true,
+        "message": "Active sessions retrieved successfully",
+        "data": [
+          {
+            "createdAt": "2026-07-24T00:00:00.000Z",
+            "expiresAt": "2026-08-23T12:00:00.000Z",
+            "fingerprint": "9b32928e81333d238159cd131c9551adce20bd02b90d4a6a89d482ff4c10fba7",
+            "ipAddress": "192:168:1:1",
+            "isCurrent": true,
+            "lastUsedAt": "2026-07-24T12:00:00.000Z",
+            "location": "New Delhi, IN",
+            "sessionId": "550e8400-e29b-41d4-a716-446655440000",
+            "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
+            "userId": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          {
+            "createdAt": "2026-07-24T00:00:00.000Z",
+            "expiresAt": "2026-08-23T12:00:00.000Z",
+            "fingerprint": "9b32928e81333d238159cd131c9551adce20bd02b90d4a6a89d482ff4c10fba7",
+            "ipAddress": "192:168:1:1",
+            "isCurrent": false,
+            "lastUsedAt": "2026-07-24T12:00:00.000Z",
+            "location": "New Delhi, IN",
+            "sessionId": "550e8400-e29b-41d4-a716-446655440000",
+            "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
+            "userId": "550e8400-e29b-41d4-a716-446655440000"
+          }
+        ],
+        "meta": {
+          "requestId": "3e3c1f1a-6f7d-4a2b-9b5c-1f0e3a4b5c6d",
+          "traceId": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+          "timestamp": "2026-07-24T11:21:35.000Z"
+        }
+      }
+order: 1000

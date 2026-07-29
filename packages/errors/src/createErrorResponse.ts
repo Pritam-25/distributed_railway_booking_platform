@@ -1,8 +1,8 @@
 import type { ApiError } from "./apiError.js";
-import { ERROR_MESSAGES } from "./errorMessages.js";
+import { COMMON_ERROR_MESSAGES } from "./errorMessages.js";
 import { getMessageFromRegistry } from "./registry.js";
 import type { ErrorContract } from "./errorContract.js";
-import type { ErrorCode } from "./errorCodes.js";
+import type { CommonErrorCode } from "./errorCodes.js";
 
 type ErrorInput = {
   code: string;
@@ -23,7 +23,7 @@ export const createErrorResponse = (
     "message" in input && input.message && input.message !== input.code
       ? input.message
       : (getMessageFromRegistry(code) ??
-        ERROR_MESSAGES[code as ErrorCode] ??
+        COMMON_ERROR_MESSAGES[code as CommonErrorCode] ??
         code);
   const details = "details" in input ? input.details : undefined;
 

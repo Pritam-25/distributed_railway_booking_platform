@@ -1,0 +1,31 @@
+$kind: http-request
+description: |-
+  Authenticates an existing user with email and password credentials, then rotates the active session cookies on success.
+
+  **Request Body Fields:**
+  - `email` - Registered email address used to locate the account.
+  - `password` - Account password that must satisfy the password policy.
+
+  **Response:**
+  Returns the user profile in the response body and sets fresh access and refresh token cookies for subsequent authenticated requests.
+
+  **Outcomes:**
+  - 200 OK - Credentials were accepted and a new authenticated session was created.
+  - 400 Bad Request - The request body failed validation.
+  - 401 Unauthorized - The credentials were invalid.
+  - 429 Too Many Requests - Login attempts were rate-limited.
+  - 500 Internal Server Error - The service could not complete authentication.
+url: "{{apiUrl}}/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+  Accept: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": {{email}},
+      "password": {{password}}
+    }
+examples: ./.resources/Login User.resources/examples
+order: 1000

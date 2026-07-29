@@ -1,4 +1,4 @@
-import { GATEWAY_ERROR_CODES, type GatewayErrorCode } from "./errorCodes.js";
+import { ERROR_CODES, type GatewayErrorCode } from "./errorCodes.js";
 
 /**
  * Gateway-specific error messages, merged with the shared registry
@@ -16,11 +16,10 @@ export const ERROR_MESSAGES: Record<GatewayErrorCode, string> & {
   // Shared / Auth
   ACCESS_TOKEN_MISSING: "Token is invalid or expired",
   // Gateway-specific
-  [GATEWAY_ERROR_CODES.AUTH_REQUIRED]: "Authentication required.",
-  [GATEWAY_ERROR_CODES.GATEWAY_UPSTREAM_ERROR]:
+  [ERROR_CODES.AUTH_REQUIRED]: "Authentication required.",
+  [ERROR_CODES.GATEWAY_UPSTREAM_ERROR]:
     "Upstream service is unavailable. Please try again shortly.",
-  [GATEWAY_ERROR_CODES.GATEWAY_UPSTREAM_CIRCUIT_OPEN]:
+  [ERROR_CODES.GATEWAY_UPSTREAM_CIRCUIT_OPEN]:
     "Upstream service is temporarily unavailable. Please try again later.",
-  [GATEWAY_ERROR_CODES.METHOD_NOT_ALLOWED]:
-    "HTTP method not allowed for this route.",
+  [ERROR_CODES.METHOD_NOT_ALLOWED]: "HTTP method not allowed for this route.",
 };

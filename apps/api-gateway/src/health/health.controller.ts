@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { statusCode, successResponse, errorResponse } from "@irctc/http";
-import { ApiError, ERROR_CODES } from "@irctc/errors";
+import { ApiError, COMMON_ERROR_CODES } from "@irctc/errors";
 import { HealthService } from "./health.service.js";
 import { logger } from "@irctc/logger";
 
@@ -35,7 +35,7 @@ export const readyCheck = async (
         errorResponse(
           new ApiError(
             statusCode.serviceUnavailable,
-            ERROR_CODES.SERVICE_UNAVAILABLE,
+            COMMON_ERROR_CODES.SERVICE_UNAVAILABLE,
             "Gateway is unhealthy",
           ),
           {
@@ -62,7 +62,7 @@ export const readyCheck = async (
       errorResponse(
         new ApiError(
           statusCode.serviceUnavailable,
-          ERROR_CODES.INTERNAL_ERROR,
+          COMMON_ERROR_CODES.INTERNAL_ERROR,
           "Gateway health check failed",
         ),
         {

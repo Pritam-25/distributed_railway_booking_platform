@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { OpenApiGeneratorV31 } from "@asteasolutions/zod-to-openapi";
 
 export interface OpenApiDocConfig {
@@ -16,7 +17,7 @@ export function createOpenApiDocument(
   definitions: any[],
   config: OpenApiDocConfig,
 ): any {
-  const generator = new OpenApiGeneratorV31(definitions);
+  const generator = new OpenApiGeneratorV31(definitions as any);
   return generator.generateDocument({
     openapi: "3.1.0",
     info: config.info,

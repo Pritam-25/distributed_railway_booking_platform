@@ -15,7 +15,9 @@ type KafkaConfig = KafkaJS.KafkaConfig;
  * @returns An initialized Kafka client instance.
  */
 export const createKafkaClient = (config: Partial<KafkaConfig> = {}): Kafka => {
-  const { factor, multiplier, ...cleanRetry } = (config.retry || {}) as any;
+  const cleanRetry = { ...(config.retry || {}) } as Record<string, unknown>;
+  delete cleanRetry.factor;
+  delete cleanRetry.multiplier;
   // Merge user config, providing default values for standard fields
   const kafkaJSConfig: KafkaConfig = {
     ...config,

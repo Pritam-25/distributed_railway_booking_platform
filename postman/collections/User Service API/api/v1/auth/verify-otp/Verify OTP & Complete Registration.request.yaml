@@ -1,0 +1,31 @@
+$kind: http-request
+description: |-
+  Validates the registration OTP, creates the user account, and completes the sign-up flow for the current OTP session.
+
+  **Request Body Fields:**
+  - `otp` - The 6-digit one-time password sent to the user's email address.
+
+  **Response:**
+  Returns the created user in the response body and sets the access and refresh token cookies for immediate authentication.
+
+  **Outcomes:**
+  - 200 OK - Registration succeeded and the user is authenticated.
+  - 400 Bad Request - The OTP session is missing or the OTP is invalid or expired.
+  - 429 Too Many Requests - OTP verification was rate-limited.
+  - 500 Internal Server Error - The service could not complete registration.
+
+  **Notes:**
+  - The response body contains the user profile; authentication tokens are delivered through cookies.
+url: "{{apiUrl}}/auth/verify-otp"
+method: POST
+headers:
+  Content-Type: application/json
+  Accept: application/json
+body:
+  type: json
+  content: |-
+    {
+      "otp": "123456"
+    }
+examples: ./.resources/Verify OTP & Complete Registration.resources/examples
+order: 1000
