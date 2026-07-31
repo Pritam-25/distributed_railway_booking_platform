@@ -4,12 +4,31 @@ import { validateSchema, asyncHandler } from "@irctc/middleware";
 import { userController } from "@container";
 import { UpdateProfileSchema } from "@dto";
 
+/**
+ * Authenticated user profile routes.
+ *
+ * Registers HTTP endpoints under `/api/v1/users` for managing the
+ * currently authenticated user's profile.
+ *
+ * ### Responsibilities
+ * - Map profile read and update endpoints to {@link UserController} handlers.
+ * - Enforce authentication on every endpoint via the standard session
+ *   middleware pipeline.
+ * - Validate the update payload against {@link UpdateProfileSchema}.
+ *
+ * ### Middleware Pipeline
+ * - {@link trustGatewayHeaders} — Extracts identity claims from
+ *   gateway-injected headers and attaches them to `req.user`.
+ * - {@link sessionMiddleware} — Verifies the active session in Redis and
+ *   extends the session TTL.
+ * - {@link validateSchema} — Zod-validates the request body before delegating
+ *   to the controller.
+ * - {@link asyncHandler} — Routes async controller exceptions to the global
+ *   error handler.
+ */
 const router: Router = Router();
 
-/**
- * GET /api/v1/users/me
- * Get current logged in user
- */
+// Get profile of the authenticated user
 router.get(
   "/me",
   trustGatewayHeaders,
@@ -17,10 +36,7 @@ router.get(
   asyncHandler((req, res) => userController.getProfile(req, res)),
 );
 
-/**
- * PUT /api/v1/users/me
- * Update current logged in user's profile
- */
+// Update profile of the authenticated user
 router.put(
   "/me",
   trustGatewayHeaders,

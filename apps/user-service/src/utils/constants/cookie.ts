@@ -21,4 +21,4 @@ export const COOKIE_MAX_AGE = {
     DURATION_TO_MS[env.JWT_ACCESS_EXPIRES_IN as keyof typeof DURATION_TO_MS],
   REFRESH_TOKEN:
     DURATION_TO_MS[env.JWT_REFRESH_EXPIRES_IN as keyof typeof DURATION_TO_MS],
-} as const;
+};

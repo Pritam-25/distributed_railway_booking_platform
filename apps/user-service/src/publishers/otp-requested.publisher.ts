@@ -7,21 +7,38 @@ import { injectTraceContextToKafkaHeaders } from "@irctc/telemetry";
 const SCHEMA_VERSION = "1" as const;
 
 /**
- * Publisher class responsible for producing OTP-related events to Kafka topics.
+ * ## OtpEventPublisher
+ *
+ * Publishes `OTPRequestedV1` events to the user-service Kafka topic.
+ *
+ * @remarks
+ * ### Responsibilities
+ * - Serializes typed {@link OTPRequestedV1Type} payloads to JSON.
+ * - Injects schema version, event ID, and trace context into Kafka headers.
+ * - Logs publish success and failure outcomes.
+ *
+ * ### Side Effects
+ * - **Kafka**: Produces a single message to `KAFKA_TOPICS.USER_OTP_REQUESTED`.
+ *
+ * ### Failure Guarantees
+ * - Publish errors are logged and re-thrown; the caller (e.g.
+ *   {@link AuthService.sendOtp}) is responsible for rolling back Redis state
+ *   when the publish fails.
  */
 export class OtpEventPublisher {
   /**
    * Creates an instance of OtpEventPublisher.
+   *
    * @param producer - The Kafka Producer instance.
    */
   constructor(private readonly producer: Producer) {}
 
   /**
-   * Publishes a USER_OTP_REQUESTED event to the Kafka topic.
+   * Serializes and publishes an `OTPRequestedV1` event payload to Kafka.
    *
-   * @param input - The OTP event payload to publish.
-   * @returns A promise that resolves when the event is successfully published.
-   * @throws {Error} - If the Kafka send operation fails.
+   * @param input - Validated {@link OTPRequestedV1Type} payload.
+   * @returns Resolves once the Kafka producer acknowledges the send.
+   * @throws {Error} When the underlying `producer.send` operation fails.
    */
   async publishOtpRequested(input: OTPRequestedV1Type): Promise<void> {
     try {

@@ -25,4 +25,4 @@ export const REDIS_KEYS = {
   otpSession: (email: string) => `auth:otp_session:${email}`,
   userSessions: (userId: string) => `auth:user:${userId}:sessions`,
   userProfile: (userId: string) => `user:profile:${userId}`,
-} as const;
+};

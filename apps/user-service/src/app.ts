@@ -1,56 +1,39 @@
-import express from "express";
-import type { Request, Response, Application } from "express";
-import helmet from "helmet";
-import cookieParser from "cookie-parser";
+/**
+ * ## module/app
+ *
+ * Express app composition for `user-service`. Delegates the canonical
+ * middleware stack to `createApp` from `@irctc/http`. The framework owns
+ * helmet, body parsers, cookie parser, request id, request logger, health
+ * router, and error handler. The service owns the root banner and any
+ * service-specific routes mounted after `createApp`.
+ *
+ * @packageDocumentation
+ */
+
+import type { Request, Response } from "express";
+import { successResponse, statusCode, createApp } from "@irctc/http";
 import {
   requestIdMiddleware,
   requestLoggerMiddleware,
   errorHandler,
   notFoundHandler,
 } from "@irctc/middleware";
-import { successResponse, statusCode } from "@irctc/http";
 import router, { healthRoutes } from "@routes";
 
-const app: Application = express();
+const app = createApp({
+  serviceName: "user-service",
+  router,
+  healthRouter: healthRoutes,
+  middleware: {
+    requestId: requestIdMiddleware,
+    requestLogger: requestLoggerMiddleware,
+    notFoundHandler,
+    errorHandler,
+  },
+});
 
 /**
- * Security headers (Defense-in-depth: protects service if accessed directly)
- */
-app.use(
-  helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'none'"],
-        frameAncestors: ["'none'"],
-      },
-    },
-  }),
-);
-
-/**
- * Request body parsers
- */
-app.use(express.json({ limit: "1mb" }));
-app.use(express.urlencoded({ extended: true }));
-
-/**
- * Cookie parser (needed to read JWT from cookies)
- */
-app.use(cookieParser());
-
-/**
- * Request ID + structured logging
- */
-app.use(requestIdMiddleware);
-app.use(requestLoggerMiddleware);
-
-/**
- * Health probes (before routes so k8s always sees them)
- */
-app.use("/health", healthRoutes);
-
-/**
- * Root endpoint
+ * Root endpoint — service banner.
  */
 app.get("/", (_req: Request, res: Response) => {
   res.status(statusCode.success).json(
@@ -63,16 +46,5 @@ app.get("/", (_req: Request, res: Response) => {
     }),
   );
 });
-
-/**
- * API routes
- */
-app.use("/", router);
-
-/**
- * 404 + central error handler (always last)
- */
-app.use(notFoundHandler);
-app.use(errorHandler);
 
 export default app;
