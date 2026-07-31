@@ -12,7 +12,7 @@ COPY scripts ./scripts
 RUN corepack enable && pnpm install --frozen-lockfile
 
 # Build contracts and kafka packages
-RUN npx turbo run build --filter=@irctc/contracts --filter=@irctc/kafka
+RUN pnpm exec turbo run build --filter=@irctc/contracts --filter=@irctc/kafka
 
 # runtime stage
 FROM node:22-alpine AS runtime
@@ -24,4 +24,4 @@ COPY --from=build /repo/packages ./packages
 COPY --from=build /repo/scripts ./scripts
 COPY --from=build /repo/package.json ./package.json
 
-CMD ["npx", "tsx", "scripts/create-kafka-topics.mts"]
+CMD ["pnpm", "exec", "tsx", "scripts/create-kafka-topics.mts"]

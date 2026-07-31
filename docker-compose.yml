@@ -51,17 +51,15 @@ services:
       - "9200:9200"
     environment:
       - discovery.type=single-node
-      - xpack.security.enabled=false
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=false
+      - ELASTIC_PASSWORD=${ELASTICSEARCH_PASSWORD:-password}
       - ES_JAVA_OPTS=-Xms512m -Xmx512m
     healthcheck:
       test:
         [
-          "CMD",
-          "wget",
-          "--quiet",
-          "--tries=1",
-          "--spider",
-          "http://localhost:9200/health/live || exit 1",
+          "CMD-SHELL",
+          "wget --quiet --tries=1 --spider http://elastic:$${ELASTICSEARCH_PASSWORD:-password}@localhost:9200/_cluster/health || exit 1",
         ]
       interval: 10s
       timeout: 5s
@@ -321,6 +319,49 @@ services:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+
+  search-service:
+    build:
+      context: .
+      dockerfile: apps/search service/Dockerfile
+    container_name: irctc-search-service
+    profiles: ["prod"]
+    restart: always
+    environment:
+      PORT: 4004
+      REDIS_URL: redis://irctc-redis:6379
+      ELASTICSEARCH_NODE: http://irctc-elasticsearch:9200
+      ELASTICSEARCH_USERNAME: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-password}
+      KAFKA_BROKERS: irctc-kafka:29092
+      SERVICE_NAME: search-service
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
+    expose:
+      - "4004"
+    networks:
+      - irctc-network
+    depends_on:
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --quiet --tries=1 --spider http://localhost:4004/health/live || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     deploy:
       resources:
         limits:

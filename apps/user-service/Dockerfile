@@ -10,21 +10,21 @@ COPY apps ./apps
 COPY packages ./packages
 
 RUN corepack enable \
- && npm install -g turbo@2.9.18 \
+ && npm install -g turbo@2.9.18 --ignore-scripts \
  && pnpm exec turbo prune user-service --docker
 
 # --- Installer + builder + deploy ---
 FROM pruner AS build
 WORKDIR /repo
 
-# Install workspace dependencies (no-frozen-lockfile is required for pruned lockfile)
+# Install workspace dependencies using frozen lockfile
 COPY --from=pruner /repo/out/json ./
-RUN pnpm install --no-frozen-lockfile --ignore-scripts
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # Copy full pruned source and build
 COPY --from=pruner /repo/out/full ./
 RUN pnpm --filter user-service exec prisma generate \
- && npx turbo run build --filter=user-service
+ && pnpm exec turbo run build --filter=user-service
 
 # Deploy flat standalone package to /deploy
 RUN pnpm --filter user-service deploy /deploy --prod
