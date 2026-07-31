@@ -193,19 +193,10 @@ keyword, but useful when the API surface is described in a separate file.
 
 ### `@packageDocumentation`
 
-Marks the top-level JSDoc in a file as the module's documentation. Use
-exactly once per file, at the top.
-
-```
-
-/**
-
-- User authentication utilities.
--
-- @packageDocumentation
-  */
-
-```
+This codebase does not use `@packageDocumentation`. File-level JSDoc blocks
+are not required by the skill; route files, barrels, and DTO modules are
+documented by their names. If you find yourself wanting it, the right answer
+is usually to delete the comment block entirely.
 
 ### `@eventProperty`
 

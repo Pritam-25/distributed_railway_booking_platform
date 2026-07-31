@@ -14,7 +14,16 @@ import router, { healthRoutes } from "@routes";
 const app: Application = express();
 
 /**
- * Security headers (Defense-in-depth: protects service if accessed directly)
+ * ## middleware stack
+ *
+ * Mounted in the order defined by `.claude/rules/bootstrap.md`:
+ *
+ * 1. Helmet with a strict `Content-Security-Policy` (defense-in-depth).
+ * 2. JSON + URL-encoded parsers, capped at `1mb`.
+ * 3. Cookie parser (for future JWT-cookie auth).
+ * 4. Request id and structured request logging before any handler.
+ * 5. Health probes at `/health` ahead of `/api/v1` so k8s always sees them.
+ * 6. 404 + central error handler last.
  */
 app.use(
   helmet({
@@ -27,30 +36,21 @@ app.use(
   }),
 );
 
-/**
- * Request body parsers
- */
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-/**
- * Cookie parser (needed to read JWT from cookies)
- */
 app.use(cookieParser());
 
-/**
- * Request ID + structured logging
- */
 app.use(requestIdMiddleware);
 app.use(requestLoggerMiddleware);
 
-/**
- * Health probes (before routes so k8s always sees them)
- */
 app.use("/health", healthRoutes);
 
 /**
- * Root endpoint
+ * ## root
+ *
+ * Landing endpoint that reports the service version and the available
+ * route prefixes. Useful for `kubectl exec curl` smoke tests.
  */
 app.get("/", (_req: Request, res: Response) => {
   res.status(statusCode.success).json(
@@ -58,19 +58,14 @@ app.get("/", (_req: Request, res: Response) => {
       version: "1.0.0",
       endpoints: {
         health: "/health",
+        search: "/api/v1/search",
       },
     }),
   );
 });
 
-/**
- * API routes
- */
-app.use("/", router);
+app.use("/api/v1", router);
 
-/**
- * 404 + central error handler (always last)
- */
 app.use(notFoundHandler);
 app.use(errorHandler);
 

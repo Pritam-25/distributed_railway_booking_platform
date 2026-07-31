@@ -150,21 +150,6 @@ For deprecated symbols:
 /** @deprecated Use {@link newFunction} instead. Will be removed in v2. */
 ```
 
-## Module-level documentation
-
-A file that documents a whole module uses `@packageDocumentation` at the
-top. This makes the file appear as a module page in TypeDoc:
-
-```ts
-/**
- * User-facing authentication utilities.
- *
- * @packageDocumentation
- */
-```
-
-Use `@packageDocumentation` exactly once per file, at the very top.
-
 ## Self-review checklist before saving
 
 - [ ] No `*/` literal inside the block.
@@ -175,3 +160,4 @@ Use `@packageDocumentation` exactly once per file, at the very top.
 - [ ] Markdown sections are fenced under `@remarks`, not floating.
 - [ ] No TypeScript syntax leaking into prose ("`User`", not `<User>`).
 - [ ] No editorial content, TODOs, or implementation noise.
+- [ ] No `@packageDocumentation` or file-level JSDoc header (the skill does not require them).

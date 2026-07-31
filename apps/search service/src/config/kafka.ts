@@ -9,8 +9,10 @@ import {
 import { env } from "@config";
 
 /**
- * Shared Kafka client instance for the user service.
- * Configured using environment variables for client ID and brokers list.
+ * Shared `KafkaJS` client instance scoped to search-service.
+ *
+ * @remarks
+ * Encapsulates broker list and client ID configuration without opening network connections.
  */
 const kafka: Kafka = createKafkaClient({
   clientId: env.KAFKA_CLIENT_ID,
@@ -20,58 +22,75 @@ const kafka: Kafka = createKafkaClient({
 export { kafka };
 
 /**
- * Asynchronously retrieves or initializes the Kafka Producer instance.
- * Ensures the producer is connected before returning.
+ * Returns the connected process-wide Kafka producer singleton.
  *
- * @returns A promise that resolves to the connected Kafka Producer.
+ * @remarks
+ * ### Responsibilities
+ * - Delegates to {@link KafkaProducerManager.getProducer} for singleton management.
+ *
+ * ### Side Effects
+ * - **Kafka**: Connects producer socket on first invocation.
+ * @returns Connected Kafka producer instance.
  */
 export const getProducer = async (): Promise<Producer> => {
+  // 1. Retrieve or connect process-wide Kafka producer singleton
   return await KafkaProducerManager.getProducer(kafka);
 };
 
 /**
- * Synchronously retrieves the Kafka Producer instance if it has already been initialized.
- * Throws an error if the producer has not been initialized yet.
+ * Returns the producer synchronously if already connected.
  *
- * @returns The initialized Kafka Producer instance.
+ * @returns Connected Kafka producer instance.
+ * @throws {Error} If producer has not been initialized.
  */
 export const getProducerSync = (): Producer => {
   return KafkaProducerManager.getProducerSync();
 };
 
 /**
- * Checks whether the Kafka Producer is currently connected and ready.
+ * Reports whether the Kafka producer is currently connected to brokers.
  *
- * @returns True if the producer is connected, false otherwise.
+ * @returns Boolean flag indicating connection readiness.
  */
-export const isKafkaProducerReady = () => {
+export const isKafkaProducerReady = (): boolean => {
   return KafkaProducerManager.isConnected();
 };
 
 /**
- * Gracefully disconnects the Kafka Producer client.
+ * Disconnects the Kafka producer and releases broker network connections.
  *
- * @returns A promise that resolves when the producer is disconnected.
+ * @remarks
+ * ### Side Effects
+ * - **Kafka**: Closes producer TCP connections.
  */
-export const disconnectKafka = async () => {
+export const disconnectKafka = async (): Promise<void> => {
+  // 1. Disconnect Kafka producer manager
   await KafkaProducerManager.disconnect();
 };
 
 /**
- * Bootstraps the Kafka connections during service startup.
- * Ensures that the producer is connected and ready to process messages.
+ * Bootstraps Kafka producer connection during service startup.
  *
- * @returns A promise that resolves when bootstrapping completes.
+ * @remarks
+ * ### Responsibilities
+ * - Connects producer before consumer loops start.
+ *
+ * ### Side Effects
+ * - **Kafka**: Connects producer to broker network.
  */
 export const initKafka = async (): Promise<void> => {
+  // 1. Initialize and connect process-wide Kafka producer
   await getProducer();
 };
 
 /**
- * Creates and returns a new Kafka consumer instance for the specified group ID.
+ * Creates a new Kafka consumer instance for a specific consumer group.
  *
- * @param groupId - The consumer group ID this consumer will join.
- * @returns An initialized Consumer instance.
+ * @remarks
+ * ### Responsibilities
+ * - Constructs topic-specific consumer for independent partition offset processing.
+ * @param groupId - Kafka consumer group identifier.
+ * @returns Created Kafka consumer instance.
  */
 export const getConsumer = (groupId: string): Consumer => {
   return createConsumer(kafka, groupId);

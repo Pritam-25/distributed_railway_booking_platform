@@ -2,13 +2,23 @@ import { Client } from "@elastic/elasticsearch";
 import { env } from "@config";
 import { logger } from "@irctc/logger";
 
+/**
+ * `globalForElastic` is used to store the `Elasticsearch` client in the global scope.
+ *
+ * This is necessary because the `Elasticsearch` client is a **singleton** and should not be recreated
+ * during hot-reloads in development.
+ */
 const globalForElastic = globalThis as {
   elasticsearch?: Client;
 };
 
 /**
- * Singleton ElasticSearch client instance exported for application-wide use.
- * Reuses the existing client cached on the global scope during development hot-reloads.
+ * Singleton `Elasticsearch` client instance used application-wide.
+ *
+ * @remarks
+ * ### Responsibilities
+ * - Manages HTTP connection pool to `Elasticsearch` cluster.
+ * - Caches client instance on global object during local development hot-reloads to prevent connection leaks.
  */
 export const elasticsearch =
   globalForElastic.elasticsearch ??
@@ -21,19 +31,30 @@ export const elasticsearch =
   });
 
 /**
- * Ensures ElasticSearch is connected and ready to process commands.
- * This is critical for production bootstrap to avoid race conditions.
+ * Verifies `Elasticsearch` cluster connection at application bootstrap.
  *
- * @returns A promise that resolves when the ElasticSearch client status is 'ready'.
- * @throws {Error} - If the connection times out or encounters an error.
+ * @remarks
+ * ### Responsibilities
+ * - Issues `client.info()` ping to fail fast if `Elasticsearch` is unreachable.
+ * - Logs cluster name and node version for environment diagnostic checks.
+ *
+ * ### Side Effects
+ * - **Elasticsearch**: One network round-trip request to node info endpoint.
+ *
+ * ### Failure Guarantees
+ * - Rethrows transport error so application bootstrap fails fast and initiates process exit.
+ * @throws {Error} If `Elasticsearch` cluster node is unreachable or rejects auth.
  */
 export const initElasticsearch = async (): Promise<void> => {
   try {
+    // 1. Issue ping request to Elasticsearch cluster node
     logger.info(
       { module: "elasticsearch", node: env.ELASTICSEARCH_NODE },
       "Initializing Elasticsearch client connection ping...",
     );
     const info = await elasticsearch.info();
+
+    // 2. Log cluster connection details on success
     logger.info(
       {
         module: "elasticsearch",
@@ -57,13 +78,17 @@ if (env.NODE_ENV !== "production") {
 }
 
 /**
- * Gracefully terminates the active ElasticSearch client connection channels.
- * Recommended for use in shutdown hooks to ensure clean application exit.
+ * Gracefully closes the `Elasticsearch` client and releases its connection pool.
  *
- * @returns A promise that resolves when the client successfully disconnects.
+ * @remarks
+ * ### Responsibilities
+ * - Closes open HTTP connection pool during server shutdown.
+ *
+ * ### Side Effects
+ * - **Elasticsearch**: Releases connection sockets.
  */
 export const disconnectElasticsearch = async (): Promise<void> => {
+  // 1. Close Elasticsearch client connection pool
   logger.info({ module: "elasticsearch" }, "Closing Elasticsearch client");
-
   await elasticsearch.close();
 };

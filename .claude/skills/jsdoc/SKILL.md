@@ -1,299 +1,144 @@
 ---
-description: Write professional JSDoc / TSDoc for TypeScript source files. Use when adding or revising comments on a function, class, type, or constant — or when the user asks for documentation, "doc this", "add JSDoc", "explain this function", or asks for TypeDoc output. Triggers on any hand-written `.ts`/`.tsx` file under `scripts/`, `apps/*/src/`, `packages/*/src/`, or `apps/web/lib/`. Does NOT apply to generated artefacts under `apps/web/generated/**` or `apps/*/openapi.{json,yaml}`.
-when_to_use: "Adding or revising JSDoc/TSDoc on a function, class, type, or constant in TypeScript source. Producing documentation that could appear in TypeDoc output unchanged."
+name: JSDoc
+description: Write professional JSDoc / TSDoc for TypeScript source files. Use when adding or revising comments on a function, class, type, or constant — or when the user asks for documentation, "doc this", "add JSDoc", "explain this function", or asks for TypeDoc output. Triggers on any hand-written `.ts`/`.tsx` file under `scripts/`, `apps/*/src/`, `packages/*/src/`.
+when_to_use: "Adding or revising JSDoc/TSDoc on a function, class, type, or constant in TypeScript source. Producing documentation that appears in TypeDoc output unchanged."
 ---
 
-# jsdoc
+# JSDoc / TSDoc Standard
 
-Write JSDoc / TSDoc that documents **contracts**, not **types**. The TypeScript
-type already tells the reader the shape; the comment must tell them what the
-shape means at runtime, what guarantees hold, and what assumptions the caller
-relies on.
+Write JSDoc / TSDoc that documents **contracts**, **guarantees**, and **domain meaning** — never repeat TypeScript types or obvious code. The TypeScript type already tells the reader the shape; the comment must tell them what the shape means at runtime, what guarantees hold, and what assumptions the caller relies on.
 
-This skill is for **hand-written source files** in this repository. Generated
-artefacts (`apps/web/generated/**`, regenerated `openapi.{json,yaml}`, etc.)
-inherit their documentation from the producer that emits them — do not add
-JSDoc to generated files by hand.
+## The Pre-Write Review
 
-## When this skill runs
+Before writing JSDoc on a symbol, perform this review:
 
-Trigger on any of:
+1. **Read surrounding code**: What calls this? What does it call? Who imports it?
+2. **Understand WHY it exists**: What domain problem it solves.
+3. **Determine its contract**: Inputs, outputs, side effects, failure modes, invariants.
+4. **Explain guarantees**: Cache strategy, transaction boundaries, retry policy, idempotency, concurrency.
+5. **Explain side effects**: Database reads/writes, Redis session mutations, Kafka events emitted.
+6. **Explain failure modes**: Specific error codes thrown (`@throws {ApiError}`), return unions, or swallowed errors.
 
-- "Add JSDoc to this function / class / module"
-- "Document this file"
-- "Explain this code"
-- "What should the TypeDoc for this look like?"
-- Adding JSDoc to a new export during code authoring
-
-Do **not** trigger for:
-
-- Generated files (orval output, OpenAPI YAML, etc.)
-- Comments inside test fixtures
-- README prose unrelated to a symbol's contract
-- The `openapi` skill's territory (HTTP API contracts live there)
-
-## The pre-write review
-
-Before writing a single line of JSDoc, perform this review on the symbol being
-documented. Skipping it produces restatements of the type.
-
-1. **Read the surrounding code.** What calls this? What does it call? Who
-   imports it?
-2. **Understand WHY it exists.** Not "what it does" — what problem it solves
-   that nothing else solves. If the answer is "it's a wrapper", consider
-   whether the wrapper is necessary before documenting it.
-3. **Determine its contract.** Inputs, outputs, side effects, failure modes,
-   invariants the caller can rely on.
-4. **Ignore obvious implementation.** Don't narrate the algorithm unless the
-   algorithm IS the contract (e.g. a sort function whose stability matters).
-5. **Explain guarantees.** Cache strategy, transaction boundaries, retry
-   policy, idempotency, concurrency, ordering, freshness.
-6. **Explain caller expectations.** What must the caller have already done?
-   What can the caller do after this returns?
-7. **Explain side effects.** Mutates? Emits? Writes to disk? Sends a message?
-   Logs?
-8. **Explain failure modes.** Throws? Returns error union? Returns `null`?
-   Retries internally? Bubbles up a wrapped error?
-9. **Examples only when beneficial.** Never `add(1, 2)`. Always a realistic
-   call site that shows the contract in action.
-10. **Produce documentation that could appear in TypeDoc without modification.**
-
-If you cannot answer #5–#8, you do not yet understand the symbol. Re-read the
-code or ask the user. **Do not write speculative documentation.**
-
-## The 14 rules
-
-These are not style preferences. They are the contract this skill enforces.
-Numbered for reference in code review.
+## The 14 Core Rules
 
 ### Rule 1 — Never repeat the type
 
-The TS type already says `string`. The comment must say _what_ the string
-represents and _what constraints_ the caller must satisfy.
+The TS type already says `string`. The comment must describe the domain meaning and constraints.
 
-❌ `@param id - string`
-✅ `@param id - ULID of the authenticated user; never null for a verified session.`
-
-If the parameter is named such that the description would only repeat the
-type (e.g. `count: number`), describe the **domain meaning** instead: `Number
-of seats available; never negative; reflects current inventory as of the
-request timestamp`.
+- ❌ `@param id - string`
+- ✅ `@param id - ULID of the authenticated session owner.`
 
 ### Rule 2 — Explain WHY, not WHAT
 
-❌ `/** Gets profile. */`
-✅ ```
-/**
+Describe why the code exists and its runtime guarantees, not just a restatement of the function name.
 
-- Retrieves the authenticated user's profile.
--
-- Uses Redis as a cache-aside layer before querying PostgreSQL. A cache miss
-- adds ~10ms; a cache hit serves in <1ms. The cache TTL is 5 minutes and is
-- invalidated on profile update.
-  */
+- ❌ `/** Gets user profile. */`
+- ✅ `/** Retrieves the user profile, querying Redis cache-aside before PostgreSQL. */`
 
-```
+### Rule 3 — Public exports are fully documented; private helpers only when non-obvious
 
-### Rule 3 — Public exports are fully documented; private helpers only when the algorithm isn't obvious
+Public exports must have complete JSDoc. Private helper methods only require JSDoc if they encode non-obvious logic or algorithms.
 
-If a private function has an obvious body (3 lines of trivial mapping), skip
-the JSDoc. If the private function encodes a non-obvious invariant (e.g. a
-collision-resolution strategy), document it.
-
-### Rule 4 — Middleware documents lifecycle, side effects, errors, response guarantees
+### Rule 4 — Middleware documents lifecycle, side effects, response guarantees
 
 For any middleware or interceptor:
 
-```
+- **Request lifecycle stage**: Pre-handler / error-handler. Short-circuits on failure.
+- **Side effects**: Modifies `req`, sets headers, attaches `req.user`.
+- **Response guarantees**: What downstream handlers can rely on having been populated.
 
-- Request lifecycle stage: pre-handler / handler / error-handler
-- Side effects: modifies req, sets headers, opens transactions, allocates
-- Error behavior: rethrows, transforms, swallows (and when)
-- Response guarantees: what the downstream handler can rely on having been
-  populated on req
+### Rule 5 — Service methods use structured TSDoc under `@remarks`
 
-````
-
-### Rule 5 — Services document cache strategy, transaction boundaries, retries, idempotency, concurrency
-
-These five attributes are the contract of any service-level function. Even
-when the function is a one-liner, the comment must say which of these apply.
-
-### Rule 6 — Repositories document persistence guarantees, optimistic locking, transactions
-
-Repository functions are where the persistence contract lives. If the
-repository uses optimistic locking, the function comment must say so. If it
-runs in a transaction, say which scope.
-
-### Rule 7 — Controllers document HTTP behavior, never business logic
-
-Controllers translate between HTTP and the service layer. Document the HTTP
-contract: status codes, content negotiation, headers, auth requirements.
-Business logic belongs in the service layer's docs, not the controller's.
-
-### Rule 8 — Examples only when useful
-
-❌ `add(1, 2)` — useless example
-✅ ```
-@example
-await authService.refreshSession(req.cookies.refreshToken);
-````
-
-Examples should show the realistic call site, not the toy case.
-
-### Rule 9 — Use Markdown heavily
-
-Section headers inside JSDoc are valid TSDoc. Use them for structure when the
-comment has more than a summary.
-
-```
-@remarks
-
-## Cache Strategy
-
-Read-through Redis cache, 5-minute TTL.
-
-## Failure Modes
-
-Throws ServiceUnavailable if Redis is unreachable after 3 retries.
-```
-
-### Rule 10 — Use `@remarks` for extended prose
-
-```
-/**
- * Refreshes the user's session.
- *
- * @remarks
- * Reads the refresh token from the cookie, rotates the access/refresh pair,
- * and rewrites the cookies. Does NOT touch the database — token rotation is
- * stateless.
- *
- * @param refreshToken - Hex-encoded refresh JWT from the cookie.
- * @returns The new session metadata including the rotated tokens.
- * @throws {InvalidTokenError} If the refresh token is malformed or expired.
- */
-```
-
-### Rule 11 — Cross-reference with `{@link}`
-
-❌ "Returns the User object."
-✅ "Returns the {@link User} profile."
-
-Inline `{@link}` makes the symbol clickable in TypeDoc, IDE hover, and
-rendered docs. Use it instead of repeating the type name as text.
-
-### Rule 12 — Document contracts, not implementation
-
-Good docs answer:
-
-- When can this fail?
-- Is it thread-safe?
-- Is it cached?
-- Is it transactional?
-- Is it idempotent?
-- What assumptions does the caller rely on?
-- What state is mutated?
-
-A doc comment that answers none of these is probably restating the type.
-
-### Rule 13 — Never document obvious code
-
-❌ `/** Returns the user. */`
-✅ ```
-/**
-
-- Returns the authenticated user associated with the active session.
--
-- @throws {SessionExpiredError} If the session has expired.
-  */
-
-```
-
-If you find yourself writing "Returns the X", stop and ask whether the
-description is adding information beyond the type signature. If not, the
-comment is dead weight.
-
-### Rule 14 — Generated docs read like a README
-
-The format below is the target output for any non-trivial public export. It
-maps directly to TypeDoc sections and renders identically when extracted.
-
-```
-
-## [Symbol Name]
-
-[One-line summary.]
-
-### Responsibilities
-
-- [What it does, bullet by bullet.]
-- [Each bullet is a sentence, not a noun.]
-
-### Side Effects
-
-- [Filesystem, network, mutations, emissions.]
-
-### Errors
-
-[When it throws / returns errors. What errors, when.]
-
-### Remarks
-
-[Design rationale, trade-offs, invariants, why this exists.]
-
-````
-
-## File header — every hand-written source file
-
-Every file starts with a JSDoc block covering:
-
-1. **Purpose** of the file
-2. **Responsibilities** (what this file owns vs. what it delegates)
-3. **How it fits into the architecture** (which layer, which pipeline step)
-4. **Important design decisions** (with the WHY)
-5. **Related files** when the relationship is non-obvious
-
-Example for a build script:
+Service functions execute core domain workflows. Structure service JSDoc strictly under TSDoc-compliant tags:
 
 ```ts
 /**
- * Mirrors generated OpenAPI specifications into the Postman Native Git
- * workspace.
+ * One-line summary of domain action.
  *
- * Source of truth: apps/<id>/openapi.yaml. This script does not communicate
- * with Postman Cloud; publishing happens via the Postman Desktop app or CLI.
+ * @remarks
+ * ### Responsibilities
+ * - Core business logic operations executed.
+ *
+ * ### Side Effects
+ * - **PostgreSQL**: Account / entity record queries or mutations.
+ * - **Redis**: Session keys created, refreshed, or deleted.
+ * - **Kafka**: Events published (e.g. `UserLoggedInV1`).
+ *
+ * ### Consistency Guarantees
+ * - Transaction boundaries, atomicity, and rollback policies (e.g. user deletion if session creation fails).
+ *
+ * ### Failure Guarantees
+ * - Resiliency policies and non-blocking operations (e.g. best-effort Kafka event delivery).
+ *
+ * @param [paramName] - Domain meaning of input parameter.
+ * @returns Description of return DTO or domain entity.
+ *
+ * @throws {ApiError}
+ * `ERROR_CODE` — Concise description of failure condition.
  */
-````
+```
 
-## Markdown-in-JSDoc safety
+- **Inline Implementation Comments**: Inside the function body, place 1-line numbered comments (`// 1.`, `// 2.`, `// 3.`) directly above code execution blocks.
 
-**Never write a literal `*/` inside a JSDoc block.** Block comments end at
-the first `*/`, so paths like `apps/*/openapi.yaml` or globs like `*.ts`
-close the comment early and produce cascading syntax errors. Rephrase as
-prose, escape the slash (`app&#x2F;s`), or use a placeholder (`<id>`).
+### Rule 6 — Repositories document persistence contracts under `@remarks`
 
-This is a footgun that has bitten this repo already — see commit history.
+Repository classes and methods encapsulate database and search index interactions:
 
-## Output standard
+- **Repository Classes**: Header `## [RepositoryName]` and `@remarks` detailing `### Responsibilities` and `### Storage & Persistence` (PostgreSQL tables, Elasticsearch indices, Redis keys).
+- **Repository Methods**: Document query execution contracts under `@remarks`:
+  - `### Responsibilities`: Query intent, analyzers, or transaction scope.
+  - `### Side Effects`: Direct database/search index reads, writes, updates, or deletes.
+  - `### Consistency Guarantees`: Explicit `_id` bindings, optimistic locking, or non-fatal error swallowing (e.g. 404 missing-document swallow).
+  - `@param`, `@returns`, and `@throws` tags.
+- **Inline Implementation Comments**: Place 1-line numbered comments (`// 1.`, `// 2.`) inside method bodies directly above database/index calls.
 
-Before declaring the doc done, verify:
+### Rule 7 — Controllers & Route Modules document HTTP behavior
 
-- [ ] The summary says WHY this exists, not WHAT it does.
-- [ ] Every `@param` describes domain meaning, not the type.
-- [ ] `@returns` describes the contract of the return value, not its shape.
-- [ ] `@throws` lists the specific errors and when they occur.
-- [ ] Side effects are listed explicitly.
-- [ ] Cross-references use `{@link}`.
-- [ ] No literal `*/` appears inside the block.
-- [ ] If `pnpm docs` (TypeDoc) ran on this file, the rendered output would
-      befit a README section.
+Controllers translate between HTTP and the service layer:
 
-## Supporting files
+- **Controller Classes**: Class JSDoc stating architectural responsibilities, injected services (`{@link}`), and global error propagation policy.
+- **Controller Methods**: Document HTTP contract using section headers:
+  - Route signature: `` `HTTP_METHOD /api/v1/...` ``
+  - `### Access`: `Public` | `Authenticated` | `Admin`
+  - `### Cookies`: Cookies set or cleared.
+  - ❌ Do **NOT** add `@returns` on methods returning `Promise<void>`.
+  - ❌ Do **NOT** add `@throws` tags (exceptions propagate to `asyncHandler` / global error middleware).
+- **Route modules (`*.routes.ts`)**: Document using a **single top-level JSDoc block** describing routing responsibilities and middleware pipeline (`{@link}`). Do **NOT** write per-route JSDoc blocks (`@route`, `@desc`) above individual `router.get`/`router.post` calls.
 
-- `examples.md` — annotated real-world examples taken from this codebase.
-- `style-guide.md` — formatting conventions, line-wrap rules, Markdown
-  inside JSDoc, TypeDoc output fidelity.
-- `typedoc.md` — the exact TypeDoc/TSDoc tag set and how each tag renders.
+### Rule 8 — Examples only when useful
 
-Load these on demand. Do not paste their contents into `SKILL.md`.
+Include `@example` blocks only when they show realistic call sites that clarify non-obvious symbol usage.
+
+### Rule 9 — Use Markdown heavily inside `@remarks`
+
+Use Markdown section headers (`###`) and bullet lists under `@remarks` to organize multi-dimensional contracts cleanly.
+
+### Rule 10 — Use `@remarks` for extended prose
+
+Reserve main summary lines for short descriptions; place structural sections (`Responsibilities`, `Side Effects`, `Consistency Guarantees`) under `@remarks`.
+
+### Rule 11 — Cross-reference with `{@link}`
+
+Always use `{@link Symbol}` to make types clickable in IDE hover cards and TypeDoc output (e.g., `Returns the {@link UserProfile}`).
+
+### Rule 12 — Document contracts, not implementation
+
+Good docs answer: When can this fail? Is it cached? Is it transactional? What state is mutated? What failure guarantees exist?
+
+### Rule 13 — Never document obvious code
+
+Avoid writing "Returns the X" or restating parameter names. If a comment adds no value beyond the TypeScript type signature, omit it.
+
+### Rule 14 — Generated docs read like a README
+
+Ensure JSDoc formatting produces clean, standalone documentation when rendered via TypeDoc.
+
+## Markdown-in-JSDoc Safety
+
+**Never write a literal `*/` inside a JSDoc block.** Block comments end at the first `*/`, so globs like `apps/*/src` close the comment early and produce syntax errors. Rephrase as prose or use placeholders (`apps/<id>/src`).
+
+## Supporting Files
+
+- `examples.md` — Reference examples across architectural layers (Controller, Service, Repository, Middleware, Route Module, Utility).
+- `style-guide.md` — Formatting conventions, line-wrap rules, and tag indentation rules.
+- `typedoc.md` — Exact TypeDoc/TSDoc tag set and rendering rules.

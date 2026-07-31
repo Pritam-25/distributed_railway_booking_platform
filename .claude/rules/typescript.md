@@ -4,19 +4,16 @@ Strict mode is on across the workspace. The goal is types that make illegal stat
 
 ## Compiler settings (non-negotiable)
 
-Inherited from `@repo/typescript-config/base.json` and pinned in each app's `tsconfig.json`:
+Centralized in `@repo/typescript-config` and extended by every package and app:
 
-- `strict: true`
-- `noUncheckedIndexedAccess: true`
-- `exactOptionalPropertyTypes: true`
-- `verbatimModuleSyntax: true`
-- `isolatedModules: true`
-- `noUncheckedSideEffectImports: true`
-- `module: nodenext`
-- `target: esnext`
-- `skipLibCheck: true`
+| Config             | Used By                        | Key Policies                                                                                                                         |
+| ------------------ | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **`base.json`**    | All projects                   | Baseline strictness (`strict`, `noUncheckedIndexedAccess`, `verbatimModuleSyntax`, `isolatedModules`, `skipLibCheck`)                |
+| **`node.json`**    | Express microservices          | Service strictness (`exactOptionalPropertyTypes`, `noImplicitReturns`, `noImplicitOverride`, `noUnusedLocals`, `noUnusedParameters`) |
+| **`nextjs.json`**  | Next.js frontend (`apps/web`)  | Next.js bundler settings (`jsx: preserve`, `moduleResolution: Bundler`)                                                              |
+| **`library.json`** | Shared packages (`packages/*`) | Standard shared library settings                                                                                                     |
 
-Adding a new app? Copy `apps/admin-service/tsconfig.json` and update the `paths` block. New apps must opt into every strict flag.
+Individual `tsconfig.json` files must only declare local layout options (`rootDir`, `outDir`, `paths`, `include`, `exclude`). Never duplicate compiler policy in project configs.
 
 ## Forbidden
 

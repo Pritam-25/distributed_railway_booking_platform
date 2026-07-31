@@ -2,7 +2,7 @@ import { elasticsearch, kafka, redis } from "@config";
 import { logger } from "@irctc/logger";
 
 /**
- * Result of each dependency probe.
+ * Per-dependency readiness probe result.
  */
 export interface ReadinessCheck {
   name: string;
@@ -24,7 +24,7 @@ const runElasticsearchProbe = async (): Promise<void> => {
 };
 
 /**
- * Probe Elasticsearch with a bounded 5s timeout and deduplicated query promise.
+ * Executes a bounded 5s ping probe against Elasticsearch with probe deduplication.
  */
 const probeElasticsearch = async (): Promise<ReadinessCheck> => {
   const start = Date.now();
@@ -75,7 +75,7 @@ const runRedisProbe = async (): Promise<string> => {
 };
 
 /**
- * Probe Redis with a bounded 5s timeout and deduplicated query promise.
+ * Verifies Redis status and executes a bounded 5s ping probe validating `PONG` response.
  */
 const probeRedis = async (): Promise<ReadinessCheck> => {
   const start = Date.now();
@@ -155,7 +155,7 @@ const runKafkaProbe = async (): Promise<boolean> => {
 };
 
 /**
- * Probe Kafka with a bounded 5s timeout and deduplicated query promise.
+ * Executes a bounded 5s Kafka Admin connection and topic list probe.
  */
 const probeKafka = async (): Promise<ReadinessCheck> => {
   const start = Date.now();
@@ -196,14 +196,51 @@ const probeKafka = async (): Promise<ReadinessCheck> => {
   }
 };
 
+/**
+ * ## HealthService
+ *
+ * Domain service aggregating readiness probes for external infrastructure dependencies.
+ *
+ * @remarks
+ * ### Responsibilities
+ * - Executes concurrent readiness probes for Elasticsearch, Kafka, and Redis.
+ * - Enforces bounded 5-second timeouts and probe deduplication per dependency.
+ * - Measures wall-clock latency per dependency for operator visibility.
+ *
+ * ### Storage & Infrastructure Probed
+ * - **Elasticsearch**: Ping probe via {@link elasticsearch.ping}.
+ * - **Redis**: Status check and ping probe (`PONG` validation).
+ * - **Kafka**: Temporary Admin client connection and topic listing.
+ */
 export class HealthService {
+  /**
+   * Runs all dependency probes concurrently and aggregates results.
+   *
+   * @remarks
+   * ### Responsibilities
+   * - Initiates parallel readiness probes via {@link Promise.all}.
+   * - Collects latency measurements and error states for each dependency.
+   *
+   * ### Side Effects
+   * - Executes network ping and status checks against Elasticsearch, Kafka, and Redis.
+   *
+   * ### Failure Guarantees
+   * - Individual dependency failures or timeouts (5s limit) do not throw; errors are captured in the returned result map.
+   * @returns Object map of dependency name to {@link ReadinessCheck} result.
+   */
   static async runReadinessChecks(): Promise<HealthChecks> {
-    const [elasticsearch, kafka, redis] = await Promise.all([
+    // 1. Execute concurrent dependency readiness probes for Elasticsearch, Kafka, and Redis
+    const [elasticsearchCheck, kafkaCheck, redisCheck] = await Promise.all([
       probeElasticsearch(),
       probeKafka(),
       probeRedis(),
     ]);
 
-    return { elasticsearch, kafka, redis };
+    // 2. Aggregate per-dependency probe results into health map
+    return {
+      elasticsearch: elasticsearchCheck,
+      kafka: kafkaCheck,
+      redis: redisCheck,
+    };
   }
 }

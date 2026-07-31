@@ -20,13 +20,15 @@ let server: Server | undefined;
 let isContainerInitialized = false;
 
 /**
- * Executes a promise-based operation with a maximum timeout threshold.
+ * ## withTimeout
  *
- * @param label - Diagnostic label used in timeout error messages.
- * @param op    - The promise representing the async operation.
- * @param ms    - The timeout limit in milliseconds (default: 5000).
- * @returns A promise resolving to the operation result.
- * @throws {Error} If the timeout is reached before the operation completes.
+ * Bounded `Promise.race` wrapper that rejects a step after `ms` if it does
+ * not complete in time. Used to wrap every startup and shutdown step so a
+ * hung dependency cannot keep the pod alive past the k8s grace window.
+ *
+ * @param label - Diagnostic label used in the timeout error message.
+ * @param op - Promise to await.
+ * @param ms - Timeout in milliseconds (default 5000).
  */
 const withTimeout = async <T>(
   label: string,
@@ -47,14 +49,23 @@ const withTimeout = async <T>(
 };
 
 /**
- * Graceful shutdown sequence to prevent data loss and ensure clean termination in K8s/Docker:
- * 1. Stop HTTP server (draining requests)
- * 2. Stop Kafka event consumers (draining events)
- * 3. Disconnect Kafka
- * 4. Disconnect Redis
- * 5. Disconnect Prisma
- * 6. Shutdown telemetry
- * 7. Exit process with appropriate exit code
+ * ## shutdown
+ *
+ * Graceful shutdown sequence for SIGINT and SIGTERM. Idempotent — a second
+ * signal during shutdown is a no-op.
+ *
+ * ### Steps
+ * 1. Stop accepting new HTTP traffic (server.close drains in-flight requests).
+ * 2. Stop Kafka consumers (via the container).
+ * 3. Disconnect Kafka, Redis, Elasticsearch, telemetry in that order.
+ * 4. `process.exit` with the requested code, upgraded to `1` if any step failed.
+ *
+ * ### Invariants
+ * - Consumers must stop before the Kafka producer is disconnected, otherwise in-flight messages lose their pipeline.
+ * - Every step's failure is logged but never blocks the next step.
+ *
+ * @param signal - Signal that triggered the shutdown (for logs only).
+ * @param exitCode - Process exit code when no error occurred.
  */
 const shutdown = async (signal: NodeJS.Signals, exitCode = 0) => {
   if (isShuttingDown) return;
@@ -64,7 +75,8 @@ const shutdown = async (signal: NodeJS.Signals, exitCode = 0) => {
     { module: "server" },
     `Received ${signal}, shutting down gracefully...`,
   );
-  // 1. Stop HTTP server (drain requests)
+
+  // 1. Drain HTTP
   if (server) {
     try {
       await withTimeout(
@@ -85,7 +97,7 @@ const shutdown = async (signal: NodeJS.Signals, exitCode = 0) => {
     }
   }
 
-  // 2. Stop Kafka event consumers first before disconnecting Kafka client
+  // 2. Stop consumers before the producer disconnects
   if (isContainerInitialized) {
     try {
       const { SearchContainer } = await import("./container/index.js");
@@ -103,7 +115,9 @@ const shutdown = async (signal: NodeJS.Signals, exitCode = 0) => {
     }
   }
 
-  // 3. Disconnect Kafka
+  // 3. Disconnect dependencies in dependency order
+
+  // 3a. Disconnect Kafka
   try {
     await withTimeout("Kafka disconnect", disconnectKafka());
     logger.info({ module: "server" }, "Kafka connection closed.");
@@ -115,7 +129,7 @@ const shutdown = async (signal: NodeJS.Signals, exitCode = 0) => {
     hadError = true;
   }
 
-  // 4. Disconnect Redis
+  // 3b. Disconnect Redis
   try {
     await withTimeout("Redis disconnect", disconnectRedis());
     logger.info({ module: "server" }, "Redis connection closed.");
@@ -126,7 +140,8 @@ const shutdown = async (signal: NodeJS.Signals, exitCode = 0) => {
     );
     hadError = true;
   }
-  // 5. Disconnect Elasticsearch
+
+  // 3c. Disconnect Elasticsearch
   try {
     await withTimeout("Elasticsearch disconnect", disconnectElasticsearch());
     logger.info({ module: "server" }, "Elasticsearch connection closed.");
@@ -137,7 +152,8 @@ const shutdown = async (signal: NodeJS.Signals, exitCode = 0) => {
     );
     hadError = true;
   }
-  // 6. Shutdown telemetry
+
+  // 3d. Shutdown telemetry
   try {
     await withTimeout("Telemetry shutdown", shutdownTelemetry());
     logger.info({ module: "server" }, "Telemetry shutdown successfully.");
@@ -148,6 +164,8 @@ const shutdown = async (signal: NodeJS.Signals, exitCode = 0) => {
     );
     hadError = true;
   }
+
+  // 4. Exit process with the requested code, upgraded to `1` if any step failed
   process.exit(hadError ? Math.max(exitCode, 1) : exitCode);
 };
 
@@ -158,24 +176,44 @@ process.on("SIGTERM", () => {
   void shutdown("SIGTERM", 0);
 });
 
+/**
+ * ## startServer
+ *
+ * Bootstraps dependencies, wires the container, and binds the HTTP port.
+ *
+ * ### Steps
+ * 1. Register error messages with the global registry.
+ * 2. Connect Elasticsearch → Redis → Kafka in that order.
+ * 3. Start the container (ensureIndex + subscribe consumers).
+ * 4. Bind the HTTP port last.
+ *
+ * ### Invariants
+ * - The HTTP port binds after the consumers start so partition assignment is negotiated against a bound listener.
+ *
+ * ### Errors
+ * - Rethrows if any init step fails; the outer catch calls `shutdown` so the process exits cleanly.
+ */
 const startServer = async () => {
+  // 1. Error registry must be populated before any handler can throw
   registerErrorMessages(ERROR_MESSAGES);
 
   logger.info({ module: "server" }, "Bootstrapping dependencies...");
 
-  // Sequential initialization of dependencies to ensure ordered readiness
+  // 2. Dependency order — Elasticsearch first because it's the slowest,
+  // then Redis (idempotency), then Kafka (consumers + producer)
   await withTimeout("Elasticsearch connect", initElasticsearch());
   await withTimeout("Redis connect", initRedis());
   await withTimeout("Kafka connect", initKafka());
 
   logger.info({ module: "server" }, "All dependencies connected successfully.");
 
-  // Import container dynamically to guarantee initialized network dependencies
+  // 3. Container must be created AFTER initKafka/initRedis/initElasticsearch
   const { SearchContainer } = await import("./container/index.js");
   const container = SearchContainer.getInstance();
   await container.start();
   isContainerInitialized = true;
 
+  // 4. Bind the port last so it is up before any consumer partition assignment
   const { default: app } = await import("./app.js");
 
   server = app.listen(PORT, () => {
@@ -188,7 +226,9 @@ const startServer = async () => {
   return server;
 };
 
-// Handle unhandled promise rejections
+// Catch unhandled rejections and uncaught exceptions
+// to avoid the process being in an inconsistent state.
+// Shutdown is idempotent so a second signal is a no-op.
 process.on("unhandledRejection", (reason) => {
   logger.error(
     { module: "server", err: reason },
@@ -197,7 +237,6 @@ process.on("unhandledRejection", (reason) => {
   void shutdown("SIGTERM", 1);
 });
 
-// Handle uncaught exceptions
 process.on("uncaughtException", (error) => {
   logger.error(
     { module: "server", err: error },
@@ -206,6 +245,7 @@ process.on("uncaughtException", (error) => {
   void shutdown("SIGTERM", 1);
 });
 
+// start the server and catch any errors during startup so the process exits cleanly
 try {
   await startServer();
 } catch (error) {

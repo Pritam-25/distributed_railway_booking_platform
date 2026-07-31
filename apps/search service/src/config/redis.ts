@@ -3,26 +3,46 @@ import { logger } from "@irctc/logger";
 import { createRedisClient } from "@irctc/redis";
 import type { Redis } from "@irctc/redis";
 
+/**
+ * `globalForRedis` is used to store the Redis client in the global scope.
+ *
+ * This is necessary because the Redis client is a **singleton** and should not be recreated
+ * during hot-reloads in development.
+ */
 const globalForRedis = globalThis as {
   redis?: Redis;
 };
 
 /**
- * Singleton Redis client instance exported for application-wide use.
- * Reuses the existing client cached on the global scope during development hot-reloads.
+ * Singleton Redis client instance used application-wide for caching and idempotency.
+ *
+ * @remarks
+ * ### Responsibilities
+ * - Manages Redis connection pool.
+ * - Caches client instance on global object during local development hot-reloads.
  */
 export const redis = globalForRedis.redis ?? createRedisClient(env.REDIS_URL);
 
 /**
- * Ensures Redis is connected and ready to process commands.
- * This is critical for production bootstrap to avoid race conditions.
+ * Waits for the Redis client connection to reach the `ready` state during bootstrap.
  *
- * @returns A promise that resolves when the Redis client status is 'ready'.
- * @throws {Error} - If the connection times out or encounters an error.
+ * @remarks
+ * ### Responsibilities
+ * - Returns immediately if Redis status is already `ready`.
+ * - Subscribes to `ready` and `error` events with a 5-second connection timeout guard.
+ *
+ * ### Side Effects
+ * - **Redis**: Establishes connection to Redis cluster.
+ *
+ * ### Failure Guarantees
+ * - Rejects after 5 seconds if Redis connection fails or times out.
+ * @throws {Error} If Redis connection fails or times out during bootstrap.
  */
 export const initRedis = async (): Promise<void> => {
+  // 1. Return immediately if Redis is already connected
   if (redis.status === "ready") return;
 
+  // 2. Wait for Redis ready event or 5-second timeout
   return new Promise((resolve, reject) => {
     const onReady = () => {
       clearTimeout(timeout);
@@ -53,12 +73,17 @@ if (env.NODE_ENV !== "production") {
 }
 
 /**
- * Gracefully terminates the active Redis client connection channels.
- * Recommended for use in shutdown hooks to ensure clean application exit.
+ * Gracefully closes the Redis client connection pool.
  *
- * @returns A promise that resolves when the client successfully disconnects.
+ * @remarks
+ * ### Responsibilities
+ * - Safely disconnects Redis socket channels if not already closed.
+ *
+ * ### Side Effects
+ * - **Redis**: Closes client TCP connections.
  */
 export const disconnectRedis = async (): Promise<void> => {
+  // 1. Gracefully quit Redis client if connection is active
   if (redis.status !== "end") {
     logger.info(
       { module: "redis" },
