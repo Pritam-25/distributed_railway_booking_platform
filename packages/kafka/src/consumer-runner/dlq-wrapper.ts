@@ -1,41 +1,37 @@
 import { KafkaJS } from "@confluentinc/kafka-javascript";
-import type { logger as irctcLogger } from "@irctc/logger";
-
-type EachMessagePayload = KafkaJS.EachMessagePayload;
-type Producer = KafkaJS.Producer;
+import type { LoggerLike } from "./kafka-consumer-runner.js";
 import { KAFKA_HEADERS } from "../headers/kafka-headers.js";
 import { DLQ_REASONS } from "../headers/dlq-reasons.js";
 
+type EachMessagePayload = KafkaJS.EachMessagePayload;
+type Producer = KafkaJS.Producer;
+
 /**
- * Configuration options for routing failed messages to a Dead Letter Queue (DLQ).
- * @property dlqTopic - The kafka topic name designated as the Dead Letter Queue
- * @property maxRetries - The maximum number of retry attempts before routing to the DLQ
+ * Configuration options for Dead Letter Queue (DLQ) error routing.
  */
 export interface DlqOptions {
+  /** Target Kafka topic designated as the Dead Letter Queue for failed dispatches. */
   dlqTopic: string;
+  /** Maximum retry limit prior to delegating to the DLQ topic. */
   maxRetries?: number;
 }
 
 /**
- * Wraps a standard Kafka message handler with Dead Letter Queue (DLQ) routing capabilities.
+ * Wraps a standard Kafka message handler callback with Dead Letter Queue (DLQ) fallback capabilities.
  *
- * If the provided `handler` throws an exception, this wrapper catches it, constructs diagnostic
- * metadata (original topic, partition, error message, stack trace, timestamp, and routing reason),
- * attaches it to the original message headers, and forwards the message to the DLQ topic.
+ * Catches unhandled exceptions thrown by `handler`. On error, constructs diagnostic metadata headers and
+ * publishes the message to `options.dlqTopic`. If the DLQ publish fails, re-throws to trigger container restart.
  *
- * If routing to the DLQ itself fails, a fatal error is logged and the error is rethrown.
- * This crashes the consumer to avoid silent message loss and trigger standard container restarts.
- *
- * @param producer - The Kafka producer instance used to publish messages to the DLQ.
- * @param options - Configuration options specifying the DLQ topic name.
- * @param logger - The application logger instance.
- * @param handler - The target message processing function.
- * @returns A wrapped message handler function with built-in DLQ fallback logic.
+ * @param producer - Connected {@link Producer} instance used to forward failed messages to the DLQ topic.
+ * @param options - {@link DlqOptions} specifying the target DLQ topic name.
+ * @param logger - Diagnostic logger instance satisfying {@link LoggerLike}.
+ * @param handler - Core message processing callback to execute.
+ * @returns An async function executing the wrapped message handler with DLQ fallback routing.
  */
 export const wrapWithDlq = (
   producer: Producer,
   options: DlqOptions,
-  logger: typeof irctcLogger,
+  logger: LoggerLike,
   handler: (payload: EachMessagePayload) => Promise<void>,
 ) => {
   return async (payload: EachMessagePayload): Promise<void> => {
@@ -82,7 +78,9 @@ export const wrapWithDlq = (
         );
       } catch (dlqErr) {
         // Critical system failure: Can't process message AND can't write to DLQ
-        logger.fatal(
+        const logFatal = logger.fatal ?? logger.error;
+        logFatal.call(
+          logger,
           { dlqErr, originalErr: err, topic, partition },
           "FATAL: Failed to write to DLQ. Consumer will crash to prevent message loss.",
         );

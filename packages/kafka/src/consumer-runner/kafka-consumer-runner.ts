@@ -6,45 +6,36 @@ type EachMessagePayload = KafkaJS.EachMessagePayload;
 import { extractTraceContextFromKafkaHeaders } from "@irctc/telemetry";
 
 /**
- * Minimal logger interface.
+ * Minimal diagnostic logging interface.
  *
- * Exposes the standard logging levels required by the Kafka consumer runner
- * without enforcing a direct dependency on any specific logging library (e.g., Pino).
+ * Encapsulates standard log levels required by {@link KafkaConsumerRunner} without creating a rigid dependency on Pino.
  */
 export interface LoggerLike {
+  /** Log informational messages. */
   info: (obj: Record<string, unknown>, msg: string) => void;
+  /** Log non-fatal warnings. */
   warn: (obj: Record<string, unknown>, msg: string) => void;
+  /** Log execution errors. */
   error: (obj: Record<string, unknown>, msg: string) => void;
+  /** Log fatal unrecoverable errors. */
+  fatal?: (obj: Record<string, unknown>, msg: string) => void;
 }
 
 /**
- * Type-safe message handler callback.
- *
- * Receives the raw KafkaJS message payload. The business application is
- * responsible for parsing, validating, and handling the message.
+ * Async message handler callback function signature.
  */
 export type MessageHandler = (payload: EachMessagePayload) => Promise<void>;
 
 /**
- * A generic runner for Kafka consumer groups.
- *
- * It manages standard lifecycle boilerplates:
- * - Establishing a connection to the broker.
- * - Subscribing to the specified topic (configured to not replay messages by default).
- * - Executing the message processing loop.
- * - Extracting and propagating OpenTelemetry distributed tracing context.
- *
- * Note that this runner is generic infrastructure and does not define a DLQ fallback policy.
- * Any unhandled exceptions remaining after KafkaJS retries are exhausted will crash the consumer,
- * relying on orchestrator restarts (e.g., Kubernetes) for retries.
+ * Consumer lifecycle manager for running Kafka consumer group subscription loops.
  */
 export class KafkaConsumerRunner {
   /**
-   * Creates an instance of KafkaConsumerRunner.
+   * Create an instance of KafkaConsumerRunner.
    *
-   * @param consumer - The active KafkaJS Consumer instance to manage.
-   * @param logger - The diagnostic logger instance.
-   * @param propagateTraceContext - Whether to automatically propagate OpenTelemetry trace context from message headers.
+   * @param consumer - Managed {@link Consumer} instance.
+   * @param logger - Diagnostic logger satisfying {@link LoggerLike}.
+   * @param propagateTraceContext - Enables OpenTelemetry trace context extraction from incoming message headers (defaults to `true`).
    */
   constructor(
     private readonly consumer: Consumer,
@@ -53,11 +44,14 @@ export class KafkaConsumerRunner {
   ) {}
 
   /**
-   * Connects the consumer, subscribes to the designated topic, and starts the message run loop.
+   * Connects the consumer, subscribes to the designated topic, and starts the message execution loop.
    *
-   * @param topic - The Kafka topic to subscribe to.
-   * @param handler - The message processing handler callback.
-   * @returns A promise that resolves when the runner has successfully connected and started the message loop.
+   * For each incoming message, creates an OpenTelemetry active span (`"<topic> process"`, kind `CONSUMER`) linked to
+   * parent trace headers attached to the message. Re-throws unhandled errors so parent Kafka retries or DLQ wrappers run.
+   *
+   * @param topic - Name of the Kafka topic to subscribe to.
+   * @param handler - {@link MessageHandler} callback executing business logic for each message.
+   * @returns A promise resolving once the consumer has connected and launched its run loop.
    */
   async run(topic: string, handler: MessageHandler): Promise<void> {
     await this.consumer.connect();
@@ -102,9 +96,9 @@ export class KafkaConsumerRunner {
   }
 
   /**
-   * Gracefully disconnects the managed Kafka consumer from the broker.
+   * Gracefully disconnects the managed Kafka consumer from the broker cluster.
    *
-   * @returns A promise that resolves when the disconnection is complete.
+   * @returns A promise resolving when disconnection completes.
    */
   async disconnect(): Promise<void> {
     await this.consumer.disconnect();

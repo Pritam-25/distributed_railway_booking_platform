@@ -2,6 +2,7 @@ import type { RequestHandler } from "express";
 
 /**
  * Helper to wrap async request handlers in a try-catch and pass errors to the next middleware.
+ *
  * @param fn Async request handler to wrap
  * @returns Wrapped request handler
  */

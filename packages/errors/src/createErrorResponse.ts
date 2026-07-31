@@ -12,6 +12,7 @@ type ErrorInput = {
 
 /**
  * Creates an error response from an ApiError or ErrorInput.
+ *
  * @param input The error to create a response from.
  * @returns The error response.
  */

@@ -1,5 +1,5 @@
 import { KafkaJS } from "@confluentinc/kafka-javascript";
-import { logger } from "@irctc/logger";
+import type { LoggerLike } from "../consumer-runner/kafka-consumer-runner.js";
 
 const { Kafka: ConfluentKafka, logLevel } = KafkaJS;
 type Kafka = KafkaJS.Kafka;
@@ -8,16 +8,17 @@ type KafkaConfig = KafkaJS.KafkaConfig;
 /**
  * Creates and initializes a Kafka client instance.
  *
- * It merges caller-supplied options (such as SSL, SASL credentials, timeouts,
- * and custom log creators) with predefined infrastructure defaults under the `kafkaJS` configuration block.
+ * Merges caller-supplied configuration options with infrastructure defaults under
+ * the `kafkaJS` nested configuration block required by `@confluentinc/kafka-javascript`.
  *
- * @param config - Optional configuration overrides to merge with client defaults.
- * @returns An initialized Kafka client instance.
+ * @param config - Optional configuration overrides to merge over default settings.
+ * @param logger - Optional diagnostic logger satisfying {@link LoggerLike}.
+ * @returns An initialized {@link Kafka} client instance.
  */
-export const createKafkaClient = (config: Partial<KafkaConfig> = {}): Kafka => {
-  const cleanRetry = { ...(config.retry || {}) } as Record<string, unknown>;
-  delete cleanRetry.factor;
-  delete cleanRetry.multiplier;
+export const createKafkaClient = (
+  config: Partial<KafkaConfig> = {},
+  logger?: LoggerLike,
+): Kafka => {
   // Merge user config, providing default values for standard fields
   const kafkaJSConfig: KafkaConfig = {
     ...config,
@@ -26,7 +27,7 @@ export const createKafkaClient = (config: Partial<KafkaConfig> = {}): Kafka => {
     retry: {
       initialRetryTime: 100,
       retries: 8,
-      ...cleanRetry,
+      ...config.retry,
     },
     logLevel: config.logLevel ?? logLevel.NOTHING,
   };
@@ -34,6 +35,6 @@ export const createKafkaClient = (config: Partial<KafkaConfig> = {}): Kafka => {
   const kafka = new ConfluentKafka({
     kafkaJS: kafkaJSConfig,
   });
-  logger.info({ module: "kafka-client" }, "Kafka client initialized");
+  logger?.info({ module: "kafka-client" }, "Kafka client initialized");
   return kafka;
 };

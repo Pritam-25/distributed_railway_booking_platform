@@ -1,111 +1,117 @@
 /**
- * Represents the lifecycle state of a transactional outbox event.
+ * Represents the lifecycle state machine of a transactional outbox event entity.
  */
 export enum OutboxStatus {
-  /**
-   * The event has been recorded in the database but has not yet been processed by the worker.
-   */
+  /** Recorded in the database transaction; waiting for the publisher worker poll cycle. */
   PENDING = "PENDING",
-  /**
-   * The event has been claimed by a publisher worker and is currently in-flight to Kafka.
-   */
+  /** Claimed by an active publisher worker; currently in-flight to Kafka. */
   PROCESSING = "PROCESSING",
-  /**
-   * The event has been successfully delivered and acknowledged by the Kafka broker.
-   */
+  /** Successfully published and acknowledged by the Kafka broker cluster. */
   PUBLISHED = "PUBLISHED",
-  /**
-   * Publishing failed due to a transient error; pending retry.
-   */
+  /** Publication attempt failed due to a transient error; scheduled for backoff retry. */
   FAILED = "FAILED",
-  /**
-   * The event has exhausted all retry attempts and requires manual intervention.
-   */
+  /** Maximum retry limit exceeded; requires manual operator investigation or replay. */
   DEAD = "DEAD",
 }
 
 /**
- * Minimally defined interface for the database client, matching the Prisma operations
- * required by the outbox repository.
+ * Minimal database client interface matching Prisma operations required by the outbox repository.
  */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export interface OutboxPrismaClient {
+  /** Outbox table database collection interface. */
   outboxEvent: {
-    create(args: any): Promise<any>;
-    updateMany(args: any): Promise<{ count: number }>;
-    groupBy(args: any): Promise<any[]>;
+    create(args: unknown): Promise<unknown>;
+    updateMany(args: unknown): Promise<{ count: number }>;
+    groupBy(args: unknown): Promise<unknown[]>;
   };
-  $queryRaw<T = any>(query: TemplateStringsArray, ...values: any[]): Promise<T>;
+  /** Executes raw SQL queries (used for `FOR UPDATE SKIP LOCKED`). */
+  $queryRaw<T = unknown>(
+    query: TemplateStringsArray,
+    ...values: unknown[]
+  ): Promise<T>;
+  /** Opens a database transaction boundary. */
   $transaction<T>(
-    fn: (tx: any) => Promise<T>,
+    fn: (tx: OutboxPrismaClient) => Promise<T>,
     options?: { maxWait?: number; timeout?: number },
   ): Promise<T>;
 }
 
 /**
- * Represents an outbox event entity retrieved from the storage engine.
+ * Represents an outbox event entity stored in the database.
  */
 export interface OutboxEvent {
-  /** Unique identifier of the outbox record (usually UUID). */
+  /** Unique UUID primary key identifier of the outbox record. */
   id: string;
-  /** The target Kafka topic this message should be routed to. */
+  /** Destination Kafka topic for the event. */
   topic: string;
-  /** The correlation ID / aggregate ID used as the Kafka message key (for partition locking). */
+  /** Correlation/aggregate ID used as the Kafka message key (for partition hashing). */
   aggregateId: string;
-  /** The raw event payload body. */
+  /** Raw event payload body object. */
   payload: unknown;
   /** Optional metadata headers accompanying the payload. */
   headers?: unknown;
-  /** The number of times publishing this specific event has failed. */
+  /** Number of failed publication attempts recorded so far. */
   retryCount: number;
 }
 
 /**
- * Repository interface defining database-level operations for the Transactional Outbox pattern.
+ * Data transfer object parameters required to create and record an outbox event.
+ */
+export interface CreateOutboxEventData {
+  /** Domain classification of the aggregate entity (e.g., "Schedule", "Train"). */
+  aggregateType: string;
+  /** Primary key or business key of the aggregate root entity. */
+  aggregateId: string;
+  /** Name of the domain event being recorded (e.g., "schedule.created.v1"). */
+  eventType: string;
+  /** Destination Kafka topic where the message should be routed. */
+  topic: string;
+  /** Payload content of the event. */
+  payload: unknown;
+  /** Optional key-value header metadata to attach to the Kafka message. */
+  headers?: unknown;
+}
+
+/**
+ * Persistence repository interface defining outbox operations.
  */
 export interface OutboxRepository {
   /**
-   * Persists a new event record to the outbox database within an active transaction.
+   * Persists a new outbox event record within an active database transaction.
    *
-   * @param tx - The active database transaction client.
-   * @param data - The outbox message payload and routing details.
+   * Must be called inside the same transaction as the aggregate entity mutation to guarantee atomicity.
+   *
+   * @param tx - Active database transaction client satisfying {@link OutboxPrismaClient}.
+   * @param data - {@link CreateOutboxEventData} containing event attributes and payload.
    */
-  insert(
-    tx: OutboxPrismaClient,
-    data: {
-      aggregateType: string;
-      aggregateId: string;
-      eventType: string;
-      topic: string;
-      payload: unknown;
-      headers?: unknown;
-    },
-  ): Promise<void>;
+  insert(tx: OutboxPrismaClient, data: CreateOutboxEventData): Promise<void>;
 
   /**
-   * Claims a limited batch of pending outbox events, transitioning their status to PROCESSING.
-   * Uses lock skip features to ensure safety when multiple worker processes run concurrently.
+   * Atomically claims a batch of pending events using row-level locking.
    *
-   * @param limit - Maximum number of events to claim in this batch.
-   * @returns A promise resolving to the list of claimed events.
+   * Transitions claimed event states from `PENDING` to `PROCESSING`. Uses `SKIP LOCKED` SQL semantics to prevent lock contention among concurrent workers.
+   *
+   * @param limit - Maximum number of events to claim in a single batch.
+   * @returns Array of claimed {@link OutboxEvent} records.
    */
   claimPendingEvents(limit: number): Promise<OutboxEvent[]>;
 
   /**
-   * Marks an outbox event as successfully sent to Kafka (transitions status to PUBLISHED).
+   * Transitions an outbox record status to `PUBLISHED` upon successful Kafka dispatch.
    *
-   * @param id - The ID of the outbox event.
+   * @param id - UUID primary key of the outbox record.
    */
   markPublished(id: string): Promise<void>;
 
   /**
-   * Records a publishing failure for the outbox event, incrementing retry count.
-   * If the failure count exceeds maximum limits, the event transitions to DEAD.
+   * Records a publication failure for an outbox record, incrementing its retry count.
    *
-   * @param id - The ID of the outbox event.
-   * @param error - The error message that occurred.
-   * @param currentRetryCount - The retry count prior to this failure.
-   * @returns A promise indicating if the event was marked as DEAD.
+   * If the new retry count reaches maximum limits, transitions status to `DEAD`; otherwise sets status to `FAILED` with backoff schedule.
+   *
+   * @param id - UUID primary key of the outbox record.
+   * @param error - Diagnostic error message string.
+   * @param currentRetryCount - Retry count prior to this failure.
+   * @returns Object indicating whether the record transitioned to `DEAD`.
    */
   markFailed(
     id: string,
@@ -114,19 +120,19 @@ export interface OutboxRepository {
   ): Promise<{ becameDead: boolean }>;
 
   /**
-   * Scans and resets events stuck in the PROCESSING state (e.g. from crashed publisher pods)
-   * back to PENDING so other active workers can process them.
+   * Scans and resets events stuck in `PROCESSING` state back to `PENDING` (e.g. from crashed worker nodes).
    */
   resetStuckProcessingEvents(): Promise<void>;
 
   /**
-   * Requeues failed outbox events back to PENDING once their scheduled backoff retry interval
-   * has elapsed.
+   * Requeues failed outbox events back to `PENDING` once their scheduled backoff delay has elapsed.
    */
   requeueFailedEvents(): Promise<void>;
 
   /**
    * Aggregates and returns count statistics for outbox records grouped by status.
+   *
+   * @returns Status-to-count mapping object.
    */
   getStatusCounts(): Promise<Record<OutboxStatus, number>>;
 }

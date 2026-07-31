@@ -1,6 +1,6 @@
 import { CircuitBreaker } from "./circuitBreaker.js";
-import { CircuitBreakerOptions, CircuitBreakerState } from "./types.js";
-import { LoggerLike } from "../rate-limiter/types.js";
+import type { CircuitBreakerOptions, CircuitBreakerState } from "./types.js";
+import type { LoggerLike } from "../rate-limiter/types.js";
 
 /**
  * Registry to manage and reuse CircuitBreaker instances across the application.
@@ -14,6 +14,9 @@ export class CircuitBreakerRegistry {
     to: CircuitBreakerState,
   ) => void;
 
+  /**
+   *
+   */
   constructor(options?: {
     logger?: LoggerLike;
     onStateChange?: (

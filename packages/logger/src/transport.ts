@@ -1,5 +1,5 @@
 import pretty, { colorizerFactory } from "pino-pretty";
-import { HttpLog } from "./types.js";
+import { type HttpLog } from "./types.js";
 
 const levelColorize = colorizerFactory(true);
 
