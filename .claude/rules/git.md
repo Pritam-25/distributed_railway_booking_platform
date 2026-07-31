@@ -30,7 +30,8 @@ Subject line:
 - imperative mood ("add", not "added")
 - lowercase after the colon (`feat(search): add suggest endpoint`)
 - no trailing period
-- ≤ 72 characters
+- header total length ≤ 100 characters (strictly enforced by `@commitlint/config-conventional`)
+- commit body must explain **WHY** the change was made, not just what changed
 
 ## Auto-commit policy
 

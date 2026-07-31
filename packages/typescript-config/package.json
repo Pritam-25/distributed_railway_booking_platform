@@ -3,9 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "license": "MIT",
-  "publishConfig": {
-    "access": "public"
-  },
+  "files": [
+    "base.json",
+    "node.json",
+    "nextjs.json",
+    "library.json",
+    "react-library.json"
+  ],
   "devDependencies": {
     "@repo/eslint-config": "workspace:*"
   }
