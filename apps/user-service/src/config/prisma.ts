@@ -1,6 +1,7 @@
 import { PrismaClient } from "@generated/prisma/client.js";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { env } from "@config";
+import { logger } from "@irctc/logger";
 
 const globalForPrisma = globalThis as {
   prisma?: PrismaClient;
@@ -17,7 +18,7 @@ const createPrismaClient = () => {
     connectionString: env.DATABASE_URL,
     max: 10,
     idleTimeoutMillis: 120_000,
-    connectionTimeoutMillis: 15_000,
+    connectionTimeoutMillis: 10_000,
     keepAlive: true,
   });
 
@@ -36,6 +37,14 @@ export const prisma = globalForPrisma.prisma ?? createPrismaClient();
 if (env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
 }
+
+/**
+ * Initializes and verifies the PostgreSQL database connection via Prisma.
+ */
+export const initPrisma = async (): Promise<void> => {
+  await prisma.$connect();
+  logger.info({ module: "postgres" }, "PostgreSQL connected successfully.");
+};
 
 /**
  * Gracefully disconnects the Prisma database client.

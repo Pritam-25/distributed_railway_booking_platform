@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@irctc/contracts": "workspace:*",
+    "@irctc/http": "workspace:*",
     "@irctc/kafka": "workspace:*",
     "@irctc/logger": "workspace:*",
     "@irctc/redis": "workspace:^",

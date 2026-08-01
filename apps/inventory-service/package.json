@@ -12,7 +12,7 @@
     "lint:fix": "eslint . --fix",
     "seed": "pnpm prisma db seed",
     "docker:build": "docker build -t inventory-service:latest -f Dockerfile ../..",
-    "docker:run": "docker run --rm --name inventory-service -p 4001:4001 --env-file .env inventory-service:latest"
+    "docker:run": "docker run --rm --name inventory-service -p 4003:4003 --env-file .env inventory-service:latest"
   },
   "keywords": [],
   "author": "",

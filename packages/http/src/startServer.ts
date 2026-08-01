@@ -7,18 +7,15 @@
  *
  * ### Lifecycle
  *
- * 1. `beforeListen` — env load, prisma connect, redis init, kafka init
- * 2. HTTP bind
- * 3. `afterListen` — `Container.start()` (consumers, outbox worker)
- * 4. `SIGINT` / `SIGTERM` / `unhandledRejection` / `uncaughtException` wired
- * 5. Shutdown on signal:
+ * 1. HTTP bind
+ * 2. `afterListen` — `Container.start()` (consumers, outbox worker)
+ * 3. `SIGINT` / `SIGTERM` / `unhandledRejection` / `uncaughtException` wired
+ * 4. Shutdown on signal:
  *    a. `beforeShutdown` — Container.disconnect (consumers)
  *    b. HTTP server close
  *    c. `afterShutdown` — disconnect Kafka, Redis, Prisma
  *    d. `shutdownTelemetry` (always last)
  *    e. `process.exit(...)`
- *
- * @packageDocumentation
  */
 
 import type { Application } from "express";
@@ -48,8 +45,8 @@ export interface StartServerOptions {
   port?: string | number;
   /** Defaults to `"http"`. Use `"worker"` for Kafka-only services. */
   mode?: StartServerMode;
-  /** Runs before HTTP bind. Use for env load, prisma connect, redis init, kafka init. */
-  beforeListen?: () => Promise<void>;
+  /** NODE_ENV value `development`, `production`, `test`.*/
+  environment: string;
   /** Runs after HTTP bind. Use for `Container.start()` (consumers, outbox worker). */
   afterListen?: (server: Server) => Promise<void>;
   /** Runs during graceful shutdown, BEFORE HTTP close. Use to stop consumers. */
@@ -97,7 +94,7 @@ export const startServer = async (
     app,
     port,
     mode = "http",
-    beforeListen,
+    environment = "development",
     afterListen,
     beforeShutdown,
     afterShutdown,
@@ -124,7 +121,7 @@ export const startServer = async (
     let hadError = false;
 
     logger.info(
-      { module: "server", serviceName },
+      { module: "server" },
       `Received ${signal}, shutting down gracefully...`,
     );
 
@@ -137,10 +134,10 @@ export const startServer = async (
           beforeShutdown(),
           shutdownTimeoutMs,
         );
-        logger.info({ module: "server", serviceName }, "beforeShutdown done.");
+        logger.info({ module: "server" }, "beforeShutdown done.");
       } catch (error) {
         logger.error(
-          { module: "server", serviceName, err: error },
+          { module: "server", err: error },
           "beforeShutdown failed.",
         );
         hadError = true;
@@ -160,10 +157,10 @@ export const startServer = async (
           }),
           shutdownTimeoutMs,
         );
-        logger.info({ module: "server", serviceName }, "HTTP server closed.");
+        logger.info({ module: "server" }, "HTTP server closed.");
       } catch (error) {
         logger.error(
-          { module: "server", serviceName, err: error },
+          { module: "server", err: error },
           "Error occurred while closing HTTP server.",
         );
         hadError = true;
@@ -174,12 +171,9 @@ export const startServer = async (
     if (afterShutdown) {
       try {
         await withTimeout("afterShutdown", afterShutdown(), shutdownTimeoutMs);
-        logger.info({ module: "server", serviceName }, "afterShutdown done.");
+        logger.info({ module: "server" }, "afterShutdown done.");
       } catch (error) {
-        logger.error(
-          { module: "server", serviceName, err: error },
-          "afterShutdown failed.",
-        );
+        logger.error({ module: "server", err: error }, "afterShutdown failed.");
         hadError = true;
       }
     }
@@ -191,13 +185,10 @@ export const startServer = async (
         shutdownTelemetry(),
         shutdownTimeoutMs,
       );
-      logger.info(
-        { module: "server", serviceName },
-        "Telemetry shutdown successfully.",
-      );
+      logger.info({ module: "server" }, "Telemetry shutdown successfully.");
     } catch (error) {
       logger.error(
-        { module: "server", serviceName, err: error },
+        { module: "server", err: error },
         "Error occurred while shutting down telemetry.",
       );
       hadError = true;
@@ -215,7 +206,7 @@ export const startServer = async (
 
   process.on("unhandledRejection", (reason) => {
     logger.error(
-      { module: "server", serviceName, err: reason },
+      { module: "server", err: reason },
       "Unhandled Promise Rejection detected. Shutting down...",
     );
     void shutdown("SIGTERM", 1);
@@ -223,24 +214,19 @@ export const startServer = async (
 
   process.on("uncaughtException", (error) => {
     logger.error(
-      { module: "server", serviceName, err: error },
+      { module: "server", err: error },
       "Uncaught Exception detected. Shutting down...",
     );
     void shutdown("SIGTERM", 1);
   });
 
-  // 1. beforeListen — env load, prisma connect, redis init, kafka init.
-  if (beforeListen) {
-    await beforeListen();
-  }
-
-  // 2. HTTP bind (server mode only).
+  // 1. HTTP bind (server mode only).
   if (mode === "http" && app && numericPort !== undefined) {
     server = await new Promise<Server>((resolve) => {
       const bound = app.listen(numericPort, () => {
         logger.info(
-          { module: "server", serviceName },
-          `server listening at http://localhost:${numericPort}`,
+          { module: "server" },
+          `server listening at http://localhost:${numericPort} (${environment})`,
         );
         resolve(bound);
       });
@@ -273,10 +259,6 @@ export const triggerShutdown = async (
 ): Promise<void> => {
   if (isShuttingDown) return;
   isShuttingDown = true;
-  // The wider shutdown routine lives inside `startServer`. This is a
-  // placeholder for services that need to drive shutdown from outside
-  // (e.g. as the catch-arm of a startup try/catch). The full variant
-  // requires the running `startServer` context.
   logger.info(
     { module: "server" },
     `triggerShutdown called with ${signal}, exitCode=${exitCode}`,

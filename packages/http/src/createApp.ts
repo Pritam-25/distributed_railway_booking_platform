@@ -8,8 +8,6 @@
  * Services compose by passing their versioned router and (optional) health
  * router and CORS origins. The framework does not own the root banner or
  * any service-specific routes.
- *
- * @packageDocumentation
  */
 
 import express, {

@@ -6,8 +6,6 @@
  * helmet, body parsers, cookie parser, request id, request logger, health
  * router, and error handler. The service owns the root banner and any
  * service-specific routes mounted after `createApp`.
- *
- * @packageDocumentation
  */
 
 import type { Request, Response } from "express";
@@ -20,6 +18,9 @@ import {
 } from "@irctc/middleware";
 import router, { healthRoutes } from "@routes";
 
+/**
+ * Creates and configures the Express application.
+ */
 const app = createApp({
   serviceName: "user-service",
   router,

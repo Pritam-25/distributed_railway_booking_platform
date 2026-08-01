@@ -25,7 +25,7 @@ export const env = createEnv({
     // Elasticsearch configuration environment
     ELASTICSEARCH_NODE: z.url().default("http://localhost:9200"),
     ELASTICSEARCH_USERNAME: z.string().default("elastic"),
-    ELASTICSEARCH_PASSWORD: z.string().default("your_password"),
+    ELASTICSEARCH_PASSWORD: z.string().default("password"),
 
     // Elasticsearch station projection — recreate only for local resets; leave
     // false in production so the existing index survives restarts.

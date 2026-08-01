@@ -3,9 +3,6 @@
  *
  * The contract a service implements to register a readiness probe with
  * `createHealthRouter`. The framework owns the iteration, dedup, and
- * response envelope; the service owns the actual dependency check.
- *
- * @packageDocumentation
  */
 
 /**

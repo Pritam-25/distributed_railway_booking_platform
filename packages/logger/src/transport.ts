@@ -1,5 +1,5 @@
 import pretty, { colorizerFactory } from "pino-pretty";
-import { type HttpLog } from "./types.js";
+import type { HttpLog } from "./types.js";
 
 const levelColorize = colorizerFactory(true);
 
@@ -8,6 +8,21 @@ const RESET = "\x1b[0m";
 const SERVICE_COLOR = "\x1b[38;5;208m"; // Orange
 const MODULE_COLOR = "\x1b[90m"; // Gray
 const MESSAGE_COLOR = "\x1b[34m"; // Blue
+const UNDERLINE = "\x1b[4m"; // Underline ANSI escape code
+const NO_UNDERLINE = "\x1b[24m"; // Disable underline ANSI escape code
+
+/**
+ * Regular expression matching HTTP/HTTPS/WS/WSS URLs and localhost endpoint addresses.
+ */
+const URL_REGEX =
+  /(https?:\/\/[^\s"'`)\]}]+|wss?:\/\/[^\s"'`)\]}]+|localhost:\d+[^\s"'`)\]}]*)/g;
+
+/**
+ * Wraps any URLs found in text with ANSI underline formatting codes.
+ */
+const formatUrls = (text: string): string => {
+  return text.replace(URL_REGEX, (url) => `${UNDERLINE}${url}${NO_UNDERLINE}`);
+};
 
 /**
  * Returns the terminal ANSI color codes based on HTTP status code.
@@ -91,7 +106,11 @@ const transport = (opts: Record<string, unknown>) =>
 
       // Non-HTTP requests format as a standard single line message
       if (log.module !== "http") {
-        return `${SERVICE_COLOR}[${log.service}]${RESET} ${MODULE_COLOR}[${moduleName}]${RESET} ${MESSAGE_COLOR}${log.message}${RESET}`;
+        const msgVal = log.message ?? log.msg;
+        const rawMessage =
+          typeof msgVal === "string" ? msgVal : JSON.stringify(msgVal ?? "");
+        const formattedMessage = formatUrls(rawMessage);
+        return `${SERVICE_COLOR}[${log.service}]${RESET} ${MODULE_COLOR}[${moduleName}]${RESET} ${MESSAGE_COLOR}${formattedMessage}${RESET}`;
       }
 
       const httpLog = log as HttpLog;
@@ -112,7 +131,7 @@ const transport = (opts: Record<string, unknown>) =>
         `${statusColor(code)}${paddedStatus}${RESET} | ` +
         `${durationColor}${paddedDuration}${RESET} | ` +
         `${paddedRemoteAddress} | ` +
-        `${methodColor(method)}${paddedMethod}${RESET} "${path}"`
+        `${methodColor(method)}${paddedMethod}${RESET} "${UNDERLINE}${path}${NO_UNDERLINE}"`
       );
     },
   });

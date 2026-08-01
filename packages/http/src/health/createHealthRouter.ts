@@ -7,8 +7,6 @@
  * The framework owns the response envelope, dedup timing, and per-probe
  * timeout. Service code lives in `apps/<service>/src/health/dependencies.ts`
  * and registers the actual probes.
- *
- * @packageDocumentation
  */
 
 import { Router } from "express";

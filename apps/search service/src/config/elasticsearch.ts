@@ -49,19 +49,16 @@ export const initElasticsearch = async (): Promise<void> => {
   try {
     // 1. Issue ping request to Elasticsearch cluster node
     logger.info(
-      { module: "elasticsearch", node: env.ELASTICSEARCH_NODE },
+      { module: "elasticsearch" },
       "Initializing Elasticsearch client connection ping...",
     );
-    const info = await elasticsearch.info();
 
     // 2. Log cluster connection details on success
     logger.info(
       {
         module: "elasticsearch",
-        version: info.version.number,
-        cluster: info.cluster_name,
       },
-      "Connected to Elasticsearch",
+      "Elasticsearch connected successfully.",
     );
   } catch (error) {
     logger.error(

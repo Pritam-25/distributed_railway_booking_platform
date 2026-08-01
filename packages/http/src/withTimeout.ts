@@ -5,8 +5,6 @@
  * not complete in time. Used by every service's startup and shutdown
  * sequence so a hung dependency cannot keep the pod alive past the k8s
  * grace window.
- *
- * @packageDocumentation
  */
 
 /**
@@ -14,14 +12,14 @@
  *
  * @param label - Diagnostic label used in the timeout error message.
  * @param op    - Promise to await.
- * @param ms    - Timeout limit in milliseconds (default: 5000).
+ * @param ms    - Timeout limit in milliseconds (@default: 10000).
  * @returns A promise resolving to the operation result.
  * @throws {Error} If the timeout is reached before the operation completes.
  */
 export const withTimeout = async <T>(
   label: string,
   op: Promise<T>,
-  ms = 5000,
+  ms = 10000,
 ): Promise<T> => {
   let timer: NodeJS.Timeout | undefined;
   try {

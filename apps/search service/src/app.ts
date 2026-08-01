@@ -1,56 +1,43 @@
-import express from "express";
-import type { Request, Response, Application } from "express";
-import helmet from "helmet";
-import cookieParser from "cookie-parser";
+/**
+ * ## module/app
+ *
+ * `search-service` Express application. The framework boilerplate
+ * (helmet, body parsers, cookie parser, request id, request logger,
+ * `/health`, not-found handler, error handler) is wired by `createApp`
+ * from `@irctc/http`. Middleware is injected to avoid a cycle with
+ * `@irctc/middleware`.
+ *
+ * The versioned router is mounted under `/api/v1` (the framework
+ * default mounts the root router at `/`, so we re-mount the router
+ * explicitly to honour the gateway-facing prefix).
+ */
+import type { Request, Response } from "express";
+import { successResponse, statusCode, createApp } from "@irctc/http";
 import {
   requestIdMiddleware,
   requestLoggerMiddleware,
   errorHandler,
   notFoundHandler,
 } from "@irctc/middleware";
-import { successResponse, statusCode } from "@irctc/http";
 import router, { healthRoutes } from "@routes";
 
-const app: Application = express();
-
 /**
- * ## middleware stack
- *
- * Mounted in the order defined by `.claude/rules/bootstrap.md`:
- *
- * 1. Helmet with a strict `Content-Security-Policy` (defense-in-depth).
- * 2. JSON + URL-encoded parsers, capped at `1mb`.
- * 3. Cookie parser (for future JWT-cookie auth).
- * 4. Request id and structured request logging before any handler.
- * 5. Health probes at `/health` ahead of `/api/v1` so k8s always sees them.
- * 6. 404 + central error handler last.
+ * Creates and configures the Express application.
  */
-app.use(
-  helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'none'"],
-        frameAncestors: ["'none'"],
-      },
-    },
-  }),
-);
-
-app.use(express.json({ limit: "1mb" }));
-app.use(express.urlencoded({ extended: true }));
-
-app.use(cookieParser());
-
-app.use(requestIdMiddleware);
-app.use(requestLoggerMiddleware);
-
-app.use("/health", healthRoutes);
+const app = createApp({
+  serviceName: "search-service",
+  router,
+  healthRouter: healthRoutes,
+  middleware: {
+    requestId: requestIdMiddleware,
+    requestLogger: requestLoggerMiddleware,
+    notFoundHandler,
+    errorHandler,
+  },
+});
 
 /**
- * ## root
- *
- * Landing endpoint that reports the service version and the available
- * route prefixes. Useful for `kubectl exec curl` smoke tests.
+ * Root endpoint — service banner.
  */
 app.get("/", (_req: Request, res: Response) => {
   res.status(statusCode.success).json(
@@ -63,10 +50,5 @@ app.get("/", (_req: Request, res: Response) => {
     }),
   );
 });
-
-app.use("/api/v1", router);
-
-app.use(notFoundHandler);
-app.use(errorHandler);
 
 export default app;
