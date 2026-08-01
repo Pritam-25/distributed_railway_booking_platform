@@ -9,8 +9,6 @@
  * failures to `{ ok: false, error }` instead of throwing, and deduplicates
  * concurrent calls via a module-level singleton so a flood of
  * `/health/ready` requests does not stampede the dependency.
- *
- * @packageDocumentation
  */
 
 import { logger } from "@irctc/logger";

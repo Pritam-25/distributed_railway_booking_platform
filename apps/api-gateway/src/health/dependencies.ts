@@ -1,19 +1,18 @@
-import { redis } from "@config";
-import { logger } from "@irctc/logger";
-
 /**
- * Result of each dependency probe. Mirrors the shape used by other
- * services' `/health/ready` handlers so dashboards can render the
- * result uniformly across the fleet.
+ * ## module/health/dependencies
+ *
+ * `api-gateway` readiness probes. Each adapter is a `HealthDependency`
+ * that `createHealthRouter` runs in parallel, bounded by a 5s timeout per
+ * probe. Probe logic is lifted verbatim from the previous
+ * `apps/api-gateway/src/health/health.service.ts`.
+ *
+ * `api-gateway` probes `redis` only — it depends on Redis for rate
+ * limiting but has no database and is stateless otherwise.
  */
-export interface ReadinessCheck {
-  name: string;
-  ok: boolean;
-  latencyMs: number;
-  error?: string;
-}
 
-export type HealthChecks = Record<string, ReadinessCheck>;
+import { logger } from "@irctc/logger";
+import type { HealthCheckResult, HealthDependency } from "@irctc/http";
+import { redis } from "@config";
 
 let activeRedisProbe: Promise<string> | null = null;
 
@@ -26,13 +25,12 @@ const runRedisProbe = async (): Promise<string> => {
 };
 
 /**
- * Probe Redis with a bounded 5s timeout and deduplicated query promise.
- * Avoids queueing up commands during connection stalls.
+ * Probes Redis with a bounded 5s timeout. Returns `ok: false` immediately
+ * if the client is not in the `"ready"` state.
  */
-const probeRedis = async (): Promise<ReadinessCheck> => {
+const probeRedis = async (): Promise<HealthCheckResult> => {
   const start = Date.now();
-  let timeoutId: NodeJS.Timeout | undefined;
-
+  let timer: NodeJS.Timeout | undefined;
   try {
     if (redis.status !== "ready") {
       logger.warn(
@@ -52,7 +50,7 @@ const probeRedis = async (): Promise<ReadinessCheck> => {
     const pong = await Promise.race([
       activeRedisProbe,
       new Promise<string>((_, reject) => {
-        timeoutId = setTimeout(
+        timer = setTimeout(
           () => reject(new Error("redis probe timeout")),
           5000,
         );
@@ -76,18 +74,13 @@ const probeRedis = async (): Promise<ReadinessCheck> => {
       error: "redis probe failed",
     };
   } finally {
-    if (timeoutId) clearTimeout(timeoutId);
+    if (timer) clearTimeout(timer);
   }
 };
 
-export class HealthService {
-  /**
-   * Runs all readiness probes. Returns a flat map keyed by probe name
-   * so the controller can render a single response payload.
-   * @returns {Promise<HealthChecks>} hashmap of all readiness probes
-   */
-  static async runReadinessChecks(): Promise<HealthChecks> {
-    const redisCheck = await probeRedis();
-    return { redis: redisCheck };
-  }
-}
+/**
+ * Readiness probes registered with `createHealthRouter` for `api-gateway`.
+ */
+export const healthDependencies: HealthDependency[] = [
+  { name: "redis", check: probeRedis },
+];

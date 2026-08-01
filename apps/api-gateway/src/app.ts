@@ -27,11 +27,7 @@ import {
 } from "@irctc/middleware";
 import { env } from "@config";
 import routes from "@routes";
-import { mountRoutes } from "@routing";
 
-/**
- * Creates and configures the Express application.
- */
 /**
  * Creates and configures the Express application.
  */
@@ -65,10 +61,5 @@ app.get("/", (_req: Request, res: Response) => {
     }),
   );
 });
-
-/**
- * Per-prefix proxy chains (auth → rate limit → proxy).
- */
-mountRoutes(app);
 
 export default app;

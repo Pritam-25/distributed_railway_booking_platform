@@ -27,10 +27,10 @@ export interface UpdateProfileRequest {
    * @minLength 3
    * @maxLength 50
    */
-  firstName: string
+  firstName?: string
   /**
    * @minLength 2
    * @maxLength 50
    */
-  lastName: string
+  lastName?: string
 }
