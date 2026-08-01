@@ -123,6 +123,9 @@ export class AdminContainer {
     );
   }
 
+  /**
+   *
+   */
   static getInstance(): AdminContainer {
     if (!AdminContainer.instance) {
       AdminContainer.instance = new AdminContainer();

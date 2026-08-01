@@ -14,7 +14,7 @@
       "@dto": ["./src/dto/index.js"],
       "@grpc": ["./src/grpc/index.js"],
       "@utils/errors": ["./src/utils/errors/index.js"],
-      "@utils": ["./src/utils/index.ts"],
+      "@health": ["./src/health/index.js"],
       "@generated/*": ["./src/generated/*"]
     }
   },

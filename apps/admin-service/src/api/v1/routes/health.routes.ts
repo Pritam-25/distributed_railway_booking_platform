@@ -1,9 +1,18 @@
-import { Router } from "express";
-import { liveCheck, readyCheck } from "@controllers";
+/**
+ * ## routes/health
+ *
+ * `admin-service` Kubernetes-friendly liveness and readiness probe routes.
+ * Delegates to `createHealthRouter` from `@irctc/http` and the per-service
+ * adapters from `health/dependencies.ts`.
+ *
+ * Mounted at `/health` by `routes/index.ts`. Probes registered: database,
+ * kafka (see `healthDependencies`).
+ */
+import { createHealthRouter } from "@irctc/http";
+import { healthDependencies } from "@health";
 
-const router: Router = Router();
+const healthRoutes = createHealthRouter({
+  dependencies: healthDependencies,
+});
 
-router.get("/live", liveCheck);
-router.get("/ready", readyCheck);
-
-export default router;
+export default healthRoutes;

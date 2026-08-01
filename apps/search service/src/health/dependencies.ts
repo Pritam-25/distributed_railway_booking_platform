@@ -1,17 +1,20 @@
-import { elasticsearch, kafka, redis } from "@config";
-import { logger } from "@irctc/logger";
-
 /**
- * Per-dependency readiness probe result.
+ * ## module/health/dependencies
+ *
+ * `search-service` readiness probes. Each adapter is a `HealthDependency`
+ * that `createHealthRouter` runs in parallel, bounded by a 5s timeout per
+ * probe. Probe logic is lifted verbatim from the previous
+ * `apps/search service/src/services/health.service.ts`.
+ *
+ * `search-service` probes `elasticsearch`, `redis`, and `kafka`. It does
+ * not own a database (read-only projection over Elasticsearch).
  */
-export interface ReadinessCheck {
-  name: string;
-  ok: boolean;
-  latencyMs: number;
-  error?: string;
-}
 
-export type HealthChecks = Record<string, ReadinessCheck>;
+import { logger } from "@irctc/logger";
+import type { HealthCheckResult, HealthDependency } from "@irctc/http";
+import { elasticsearch, kafka, redis } from "@config";
+
+// --- Elasticsearch probe ----------------------------------------------------
 
 let activeElasticsearchProbe: Promise<void> | null = null;
 
@@ -24,25 +27,23 @@ const runElasticsearchProbe = async (): Promise<void> => {
 };
 
 /**
- * Executes a bounded 5s ping probe against Elasticsearch with probe deduplication.
+ * Probes Elasticsearch with a bounded 5s timeout and a deduplicated
+ * in-flight promise.
  */
-const probeElasticsearch = async (): Promise<ReadinessCheck> => {
+const probeElasticsearch = async (): Promise<HealthCheckResult> => {
   const start = Date.now();
-  let timeoutId: NodeJS.Timeout | undefined;
-
+  let timer: NodeJS.Timeout | undefined;
   try {
     activeElasticsearchProbe ??= runElasticsearchProbe();
-
     await Promise.race([
       activeElasticsearchProbe,
       new Promise<void>((_, reject) => {
-        timeoutId = setTimeout(
+        timer = setTimeout(
           () => reject(new Error("elasticsearch probe timeout")),
           5000,
         );
       }),
     ]);
-
     return {
       name: "elasticsearch",
       ok: true,
@@ -60,9 +61,11 @@ const probeElasticsearch = async (): Promise<ReadinessCheck> => {
       error: "elasticsearch probe failed",
     };
   } finally {
-    if (timeoutId) clearTimeout(timeoutId);
+    if (timer) clearTimeout(timer);
   }
 };
+
+// --- Redis probe ------------------------------------------------------------
 
 let activeRedisProbe: Promise<string> | null = null;
 
@@ -75,12 +78,12 @@ const runRedisProbe = async (): Promise<string> => {
 };
 
 /**
- * Verifies Redis status and executes a bounded 5s ping probe validating `PONG` response.
+ * Probes Redis with a bounded 5s timeout. Returns `ok: false` immediately
+ * if the client is not in the `"ready"` state.
  */
-const probeRedis = async (): Promise<ReadinessCheck> => {
+const probeRedis = async (): Promise<HealthCheckResult> => {
   const start = Date.now();
-  let timeoutId: NodeJS.Timeout | undefined;
-
+  let timer: NodeJS.Timeout | undefined;
   try {
     if (redis.status !== "ready") {
       logger.warn(
@@ -100,7 +103,7 @@ const probeRedis = async (): Promise<ReadinessCheck> => {
     const pong = await Promise.race([
       activeRedisProbe,
       new Promise<string>((_, reject) => {
-        timeoutId = setTimeout(
+        timer = setTimeout(
           () => reject(new Error("redis probe timeout")),
           5000,
         );
@@ -111,11 +114,7 @@ const probeRedis = async (): Promise<ReadinessCheck> => {
       throw new Error(`Unexpected Redis ping response: ${pong}`);
     }
 
-    return {
-      name: "redis",
-      ok: true,
-      latencyMs: Date.now() - start,
-    };
+    return { name: "redis", ok: true, latencyMs: Date.now() - start };
   } catch (error) {
     logger.warn(
       { module: "health", err: error },
@@ -128,9 +127,11 @@ const probeRedis = async (): Promise<ReadinessCheck> => {
       error: "redis probe failed",
     };
   } finally {
-    if (timeoutId) clearTimeout(timeoutId);
+    if (timer) clearTimeout(timer);
   }
 };
+
+// --- Kafka probe ------------------------------------------------------------
 
 let activeKafkaProbe: Promise<boolean> | null = null;
 
@@ -155,25 +156,23 @@ const runKafkaProbe = async (): Promise<boolean> => {
 };
 
 /**
- * Executes a bounded 5s Kafka Admin connection and topic list probe.
+ * Probes Kafka with a bounded 5s timeout and a deduplicated in-flight
+ * promise.
  */
-const probeKafka = async (): Promise<ReadinessCheck> => {
+const probeKafka = async (): Promise<HealthCheckResult> => {
   const start = Date.now();
-  let timeoutId: NodeJS.Timeout | undefined;
-
+  let timer: NodeJS.Timeout | undefined;
   try {
     activeKafkaProbe ??= runKafkaProbe();
-
     const ok = await Promise.race([
       activeKafkaProbe,
       new Promise<boolean>((_, reject) => {
-        timeoutId = setTimeout(
+        timer = setTimeout(
           () => reject(new Error("kafka probe timeout")),
           5000,
         );
       }),
     ]);
-
     return {
       name: "kafka",
       ok,
@@ -192,55 +191,16 @@ const probeKafka = async (): Promise<ReadinessCheck> => {
       error: "kafka probe timeout",
     };
   } finally {
-    if (timeoutId) clearTimeout(timeoutId);
+    if (timer) clearTimeout(timer);
   }
 };
 
 /**
- * ## HealthService
- *
- * Domain service aggregating readiness probes for external infrastructure dependencies.
- *
- * @remarks
- * ### Responsibilities
- * - Executes concurrent readiness probes for Elasticsearch, Kafka, and Redis.
- * - Enforces bounded 5-second timeouts and probe deduplication per dependency.
- * - Measures wall-clock latency per dependency for operator visibility.
- *
- * ### Storage & Infrastructure Probed
- * - **Elasticsearch**: Ping probe via {@link elasticsearch.ping}.
- * - **Redis**: Status check and ping probe (`PONG` validation).
- * - **Kafka**: Temporary Admin client connection and topic listing.
+ * Readiness probes registered with `createHealthRouter` for
+ * `search-service`.
  */
-export class HealthService {
-  /**
-   * Runs all dependency probes concurrently and aggregates results.
-   *
-   * @remarks
-   * ### Responsibilities
-   * - Initiates parallel readiness probes via {@link Promise.all}.
-   * - Collects latency measurements and error states for each dependency.
-   *
-   * ### Side Effects
-   * - Executes network ping and status checks against Elasticsearch, Kafka, and Redis.
-   *
-   * ### Failure Guarantees
-   * - Individual dependency failures or timeouts (5s limit) do not throw; errors are captured in the returned result map.
-   * @returns Object map of dependency name to {@link ReadinessCheck} result.
-   */
-  static async runReadinessChecks(): Promise<HealthChecks> {
-    // 1. Execute concurrent dependency readiness probes for Elasticsearch, Kafka, and Redis
-    const [elasticsearchCheck, kafkaCheck, redisCheck] = await Promise.all([
-      probeElasticsearch(),
-      probeKafka(),
-      probeRedis(),
-    ]);
-
-    // 2. Aggregate per-dependency probe results into health map
-    return {
-      elasticsearch: elasticsearchCheck,
-      kafka: kafkaCheck,
-      redis: redisCheck,
-    };
-  }
-}
+export const healthDependencies: HealthDependency[] = [
+  { name: "elasticsearch", check: probeElasticsearch },
+  { name: "redis", check: probeRedis },
+  { name: "kafka", check: probeKafka },
+];

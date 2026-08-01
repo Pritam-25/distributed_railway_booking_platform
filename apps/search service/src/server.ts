@@ -26,40 +26,54 @@ import {
 } from "@config";
 import { logger } from "@irctc/logger";
 import { registerErrorMessages } from "@irctc/errors";
-import { withTimeout, startServer } from "@irctc/http";
+import { withTimeout, startServer, runBootstrap } from "@irctc/http";
 import { ERROR_MESSAGES } from "@utils/errors";
 
 // 1. Register user-facing error messages with the @irctc/errors registry.
 registerErrorMessages(ERROR_MESSAGES);
 
-// 2. Connect network dependencies BEFORE importing container and app.js.
+await runBootstrap({
+  bootstrap: async () => {
+    // 2. Connect network dependencies BEFORE importing container and app.js.
+    await withTimeout("Elasticsearch connect", initElasticsearch());
+    await withTimeout("Redis connect", initRedis());
+    await withTimeout("Kafka connect", initKafka());
+    logger.info(
+      { module: "server" },
+      "All dependencies connected successfully.",
+    );
 
-await withTimeout("Elasticsearch connect", initElasticsearch());
-await withTimeout("Redis connect", initRedis());
-await withTimeout("Kafka connect", initKafka());
-logger.info({ module: "server" }, "All dependencies connected successfully.");
+    // 3. Import SearchContainer and app.js.
+    const { SearchContainer } = await import("./container/search.container.js");
+    const { default: app } = await import("./app.js");
 
-// 3. Import SearchContainer and initialize indices/consumers BEFORE listening.
-const { SearchContainer } = await import("./container/search.container.js");
-await SearchContainer.getInstance().start();
-
-// 4. Import app.js after dependencies and container are ready.
-const { default: app } = await import("./app.js");
-
-await startServer({
-  app,
-  port: env.PORT,
-  environment: env.NODE_ENV,
-  serviceName: env.SERVICE_NAME,
-  beforeShutdown: async () => {
-    await SearchContainer.getInstance().disconnect();
+    await startServer({
+      app,
+      port: env.PORT,
+      environment: env.NODE_ENV,
+      serviceName: env.SERVICE_NAME,
+      afterListen: async () => {
+        await SearchContainer.getInstance().start();
+      },
+      beforeShutdown: async () => {
+        await SearchContainer.getInstance().disconnect();
+      },
+      afterShutdown: async () => {
+        await withTimeout("Kafka disconnect", disconnectKafka());
+        await withTimeout("Redis disconnect", disconnectRedis());
+        await withTimeout(
+          "Elasticsearch disconnect",
+          disconnectElasticsearch(),
+        );
+      },
+    });
   },
-  afterShutdown: async () => {
-    await withTimeout("Kafka disconnect", disconnectKafka());
-    await withTimeout("Redis disconnect", disconnectRedis());
-    await withTimeout("Elasticsearch disconnect", disconnectElasticsearch());
+  onFailure: async () => {
+    await withTimeout("Kafka disconnect", disconnectKafka()).catch(() => {});
+    await withTimeout("Redis disconnect", disconnectRedis()).catch(() => {});
+    await withTimeout(
+      "Elasticsearch disconnect",
+      disconnectElasticsearch(),
+    ).catch(() => {});
   },
-}).catch((err) => {
-  logger.error({ module: "server", err }, "Failed to start server.");
-  process.exit(1);
 });

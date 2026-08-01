@@ -15,7 +15,7 @@ import {
 import { getBreaker } from "@resilience";
 import { ApiError } from "@irctc/errors";
 import { statusCode } from "@irctc/http";
-import { ERROR_CODES } from "@utils";
+import { ERROR_CODES } from "@utils/error";
 import type { RouteConfig } from "@config";
 
 /**

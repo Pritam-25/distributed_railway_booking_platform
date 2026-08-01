@@ -44,6 +44,7 @@ app.get("/", (_req: Request, res: Response) => {
       version: "1.0.0",
       endpoints: {
         health: "/health",
+        inventory: "/inventory",
       },
     }),
   );

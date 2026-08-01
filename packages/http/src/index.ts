@@ -9,3 +9,4 @@ export * from "./health/types.js";
 export * from "./health/createHealthRouter.js";
 export * from "./createApp.js";
 export * from "./startServer.js";
+export * from "./runBootstrap.js";

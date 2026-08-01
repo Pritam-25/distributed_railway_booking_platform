@@ -121,9 +121,10 @@ export class InventoryContainer {
     logger.info(
       {
         module: "container",
-        scheduleCreatedConsumer: CONSUMER_GROUPS.INVENTORY_SCHEDULE_CREATED,
-        scheduleStatusChangedConsumer:
+        consumerGroups: [
+          CONSUMER_GROUPS.INVENTORY_SCHEDULE_CREATED,
           CONSUMER_GROUPS.INVENTORY_SCHEDULE_STATUS_CHANGED,
+        ],
       },
       "Inventory service event consumer loops started successfully.",
     );

@@ -238,6 +238,11 @@ export const startServer = async (
     await afterListen(server as Server);
   }
 
+  logger.info(
+    { module: "server" },
+    `Application startup completed. Service is READY.`,
+  );
+
   // The promise stays open until shutdown. The caller never gets a return
   // value in practice — the process exits at the end of shutdown().
   await new Promise<void>(() => {

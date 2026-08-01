@@ -7,9 +7,8 @@
  * from `@irctc/http`. Middleware is injected to avoid a cycle with
  * `@irctc/middleware`.
  *
- * The versioned router is mounted under `/api/v1` (the framework
- * default mounts the root router at `/`, so we re-mount the router
- * explicitly to honour the gateway-facing prefix).
+ * The versioned router is mounted at `/` by `createApp` (exposing `/search/stations/suggest`
+ * upstream, which the gateway proxies from `/api/v1/search/stations/suggest`).
  */
 import type { Request, Response } from "express";
 import { successResponse, statusCode, createApp } from "@irctc/http";
@@ -45,7 +44,7 @@ app.get("/", (_req: Request, res: Response) => {
       version: "1.0.0",
       endpoints: {
         health: "/health",
-        search: "/api/v1/search",
+        search: "/search/stations/suggest",
       },
     }),
   );

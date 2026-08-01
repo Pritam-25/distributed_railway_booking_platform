@@ -27,10 +27,8 @@ import {
 } from "@irctc/middleware";
 import { env } from "@config";
 import routes from "@routes";
+import { mountRoutes } from "@routing";
 
-/**
- * Creates and configures the Express application.
- */
 const app = createApp({
   serviceName: "api-gateway",
   router: routes,
@@ -57,9 +55,16 @@ app.get("/", (_req: Request, res: Response) => {
         health: "/health",
         auth: "/api/v1/auth",
         users: "/api/v1/users",
+        search: "/api/v1/search",
+        inventory: "/api/v1/inventory",
       },
     }),
   );
 });
+
+/**
+ * Per-prefix proxy chains (auth → rate limit → proxy).
+ */
+mountRoutes(app);
 
 export default app;

@@ -9,7 +9,7 @@
  * kafka (see `healthDependencies`).
  */
 import { createHealthRouter } from "@irctc/http";
-import { healthDependencies } from "../../../health/dependencies.js";
+import { healthDependencies } from "@health";
 
 const healthRoutes = createHealthRouter({
   dependencies: healthDependencies,

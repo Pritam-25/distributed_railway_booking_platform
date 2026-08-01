@@ -24,42 +24,45 @@ import {
   disconnectRedis,
 } from "@config";
 import { logger } from "@irctc/logger";
-import { withTimeout, startServer } from "@irctc/http";
+import { withTimeout, startServer, runBootstrap } from "@irctc/http";
 
-// 1. Connect worker network dependencies BEFORE importing container.
-logger.info({ module: "server" }, "Bootstrapping worker dependencies...");
-await withTimeout("Redis connect", initRedis());
-await withTimeout("Kafka connect", initKafka());
-logger.info(
-  { module: "server" },
-  "All connection channels established successfully.",
-);
+await runBootstrap({
+  bootstrap: async () => {
+    // 1. Connect worker network dependencies BEFORE importing container.
+    logger.info({ module: "server" }, "Bootstrapping worker dependencies...");
+    await withTimeout("Redis connect", initRedis());
+    await withTimeout("Kafka connect", initKafka());
+    logger.info(
+      { module: "server" },
+      "All connection channels established successfully.",
+    );
 
-// 2. Import container and start event consumers.
-const { NotificationContainer } =
-  await import("./container/notification.container.js");
+    // 2. Import container and start event consumers via afterListen hook.
+    const { NotificationContainer } =
+      await import("./container/notification.container.js");
 
-await NotificationContainer.getInstance().start();
-logger.info(
-  { module: "server" },
-  `Notification Service worker running successfully in (${env.NODE_ENV}) mode.`,
-);
-
-await startServer({
-  serviceName: env.SERVICE_NAME,
-  environment: env.NODE_ENV,
-  mode: "worker",
-  beforeShutdown: async () => {
-    await NotificationContainer.getInstance().disconnect();
+    await startServer({
+      serviceName: env.SERVICE_NAME,
+      environment: env.NODE_ENV,
+      mode: "worker",
+      afterListen: async () => {
+        await NotificationContainer.getInstance().start();
+        logger.info(
+          { module: "server" },
+          `Notification Service worker running successfully in (${env.NODE_ENV}) mode.`,
+        );
+      },
+      beforeShutdown: async () => {
+        await NotificationContainer.getInstance().disconnect();
+      },
+      afterShutdown: async () => {
+        await withTimeout("Kafka disconnect", disconnectKafka());
+        await withTimeout("Redis disconnect", disconnectRedis());
+      },
+    });
   },
-  afterShutdown: async () => {
-    await withTimeout("Kafka disconnect", disconnectKafka());
-    await withTimeout("Redis disconnect", disconnectRedis());
+  onFailure: async () => {
+    await withTimeout("Kafka disconnect", disconnectKafka()).catch(() => {});
+    await withTimeout("Redis disconnect", disconnectRedis()).catch(() => {});
   },
-}).catch((err) => {
-  logger.error(
-    { module: "server", err },
-    "Failed to start notification worker.",
-  );
-  process.exit(1);
 });

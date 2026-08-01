@@ -12,7 +12,7 @@
       "@routing": ["./src/routing/index.js"],
       "@routes": ["./src/routes/index.js"],
       "@proxy": ["./src/proxy/index.js"],
-      "@utils": ["./src/utils/errors/index.js"]
+      "@utils/error": ["./src/utils/errors/index.js"]
     }
   },
   "include": ["src/**/*.ts", "test/**/*.ts"],

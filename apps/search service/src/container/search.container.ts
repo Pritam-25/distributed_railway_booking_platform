@@ -6,7 +6,7 @@ import {
 } from "@irctc/kafka";
 import { logger } from "@irctc/logger";
 import { IdempotencyRepository } from "@irctc/redis";
-import { CONSUMER_GROUPS, KAFKA_TOPICS } from "@irctc/contracts";
+import { CONSUMER_GROUPS } from "@irctc/contracts";
 import { StationSearchRepository } from "@repository";
 import { SearchService, StationProjectionService } from "@services";
 import { SearchController } from "@controllers";
@@ -130,11 +130,6 @@ export class SearchContainer {
     logger.info(
       {
         module: "search-container",
-        topics: [
-          KAFKA_TOPICS.STATION_CREATED,
-          KAFKA_TOPICS.STATION_UPDATED,
-          KAFKA_TOPICS.STATION_DEACTIVATED,
-        ],
         consumerGroups: [
           CONSUMER_GROUPS.SEARCH_STATION_CREATED,
           CONSUMER_GROUPS.SEARCH_STATION_UPDATED,

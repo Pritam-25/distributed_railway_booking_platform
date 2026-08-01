@@ -16,10 +16,7 @@ import { stationSuggestQuerySchema } from "@dto";
  *
  * ### Middleware Pipeline
  * - {@link validateQuery} — Validates request query parameters against Zod schemas.
- * - {@link asyncHandler} — Catches unhandled async exceptions and routes them to global error middleware.
- *
- * @remarks
- * Contains no business logic. All business exceptions propagate to global error handling via {@link asyncHandler}.
+ * - {@link asyncHandler} — Catches unhandled async exceptions and routes them to global error handler.
  */
 const router: Router = Router();
 
