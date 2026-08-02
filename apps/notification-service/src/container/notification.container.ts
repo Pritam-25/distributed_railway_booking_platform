@@ -107,6 +107,8 @@ export class NotificationContainer {
       welcomeService,
       logger,
     );
+
+    logger.info({ module: "notification-container" }, "Dependencies wired.");
   }
 
   /**

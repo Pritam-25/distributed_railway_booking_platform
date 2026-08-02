@@ -1,8 +1,9 @@
-import { kafka, prisma } from "@config";
+import { kafka, prisma, getProducerSync } from "@config";
 import {
   createConsumer,
   KafkaConsumerRunner,
   PostgresOutboxRepository,
+  OutboxPublisherWorker,
   RetryPolicies,
   type OutboxRepository,
 } from "@irctc/kafka";
@@ -39,6 +40,11 @@ export class InventoryContainer {
   public readonly outboxRepository: OutboxRepository;
 
   /**
+   * Outbox publisher worker instance.
+   */
+  private readonly outboxWorker: OutboxPublisherWorker;
+
+  /**
    * Kafka consumers
    * 1. Schedule created
    * 2. Schedule status changed
@@ -49,6 +55,11 @@ export class InventoryContainer {
   private constructor() {
     // 1. Repositories
     this.outboxRepository = new PostgresOutboxRepository(prisma);
+    this.outboxWorker = new OutboxPublisherWorker(
+      this.outboxRepository,
+      getProducerSync,
+      logger,
+    );
 
     const scheduleInventoryRepo = new ScheduleInventoryRepository(prisma);
     const routeStopRepo = new RouteStopRepository(prisma);
@@ -102,18 +113,17 @@ export class InventoryContainer {
       scheduleService,
       logger,
     );
+
+    logger.info({ module: "inventory-container" }, "Dependencies wired.");
   }
 
   /**
-   * Starts both consumer subscription loops on their respective Kafka topics.
+   * Starts outbox publisher worker and both consumer subscription loops on their respective Kafka topics.
    *
-   * @returns A promise that resolves when both consumers have started.
+   * @returns A promise that resolves when worker and consumers have started.
    */
   async start(): Promise<void> {
-    logger.info(
-      { module: "container" },
-      "Starting inventory event consumers...",
-    );
+    this.outboxWorker.start();
     await Promise.all([
       this.scheduleCreatedConsumer.start(),
       this.scheduleStatusChangedConsumer.start(),
@@ -144,16 +154,13 @@ export class InventoryContainer {
   }
 
   /**
-   * Gracefully shuts down the consumer loops and releases network resources.
+   * Gracefully shuts down the outbox worker and consumer loops and releases network resources.
    *
-   * @returns A promise that resolves when all consumers have stopped.
+   * @returns A promise that resolves when all workers and consumers have stopped.
    */
   async disconnect(): Promise<void> {
-    logger.info(
-      { module: "container" },
-      "Initiating graceful shutdown of event consumers...",
-    );
     await Promise.all([
+      this.outboxWorker.stop(),
       this.scheduleCreatedConsumer.stop(),
       this.scheduleStatusChangedConsumer.stop(),
     ]);

@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { statusCode, successResponse } from "@irctc/http";
-import type { SearchService } from "@services";
-import type { StationSuggestQueryDto } from "@dto";
+import type { SearchService, TrainSearchService } from "@services";
+import type { StationSuggestQueryDto, TrainSearchQueryDto } from "@dto";
 
 /**
  * ## SearchController
@@ -9,7 +9,8 @@ import type { StationSuggestQueryDto } from "@dto";
  *
  * ### Responsibilities
  * - Accepts requests that have already passed route-level validation.
- * - Delegates all business operations to {@link SearchService}.
+ * - Delegates all business operations to {@link SearchService} and
+ *   {@link TrainSearchService}.
  * - Translates service results into the project's standard
  *   {@link successResponse} envelope.
  * - Leaves business rules, ranking, and persistence to the service layer.
@@ -22,9 +23,13 @@ export class SearchController {
   /**
    * Creates a new SearchController.
    *
-   * @param searchService - Service that owns the suggest flow.
+   * @param searchService - Service that owns the station-suggest flow.
+   * @param trainSearchService - Service that owns the train-search flow.
    */
-  constructor(private readonly searchService: SearchService) {}
+  constructor(
+    private readonly searchService: SearchService,
+    private readonly trainSearchService: TrainSearchService,
+  ) {}
 
   /**
    * Retrieves station suggestions for an autocomplete query.
@@ -48,5 +53,28 @@ export class SearchController {
         stations,
       }),
     );
+  }
+
+  /**
+   * Retrieves train search results for `(fromStation, toStation, date)`.
+   *
+   * `GET /api/v1/search/trains`
+   *
+   * ### Access
+   * Public endpoint, no authentication required
+   *
+   * @param req - Express request with a validated {@link TrainSearchQueryDto}.
+   * @param res - Express response returning the train search payload.
+   */
+  async searchTrains(req: Request, res: Response): Promise<void> {
+    const query = req.query as unknown as TrainSearchQueryDto;
+
+    const result = await this.trainSearchService.searchTrains(query);
+
+    res
+      .status(statusCode.success)
+      .json(
+        successResponse("Train search results retrieved successfully", result),
+      );
   }
 }

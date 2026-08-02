@@ -46,7 +46,10 @@ services:
     image: docker.elastic.co/elasticsearch/elasticsearch:9.1.4
     container_name: irctc-elasticsearch
     restart: always
-    profiles: ["dev", "prod"]
+    # `debug` is included so `kibana` / `elasticsearch-init` (which sit in
+    # both `dev` and `debug`) can resolve this service when only the debug
+    # profile is active. dev / prod pull it in via their own profiles.
+    profiles: ["dev", "prod", "debug"]
     ports:
       - "9200:9200"
     environment:
@@ -149,6 +152,49 @@ services:
     profiles: ["debug"]
     ports:
       - "8001:8001"
+    networks:
+      - irctc-network
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:9.1.4
+    container_name: irctc-kibana
+    restart: unless-stopped
+    profiles: ["dev", "debug"]
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      elasticsearch-init:
+        condition: service_completed_successfully
+    ports:
+      - "5601:5601"
+    environment:
+      # Match the elasticsearch service's `xpack.security.enabled=true`.
+      ELASTICSEARCH_HOSTS: http://irctc-elasticsearch:9200
+      ELASTICSEARCH_USERNAME: kibana_system
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-password}
+      # Disable telemetry banner + news so the dev UI stays clean.
+      TELEMETRY_OPTIMIZATION_ENABLED: "true"
+    networks:
+      - irctc-network
+
+  # Bootstrap Elasticsearch built-in users that ES 9 does not auto-configure
+  # (specifically `kibana_system`). Exits successfully after the password is
+  # set; `restart: "no"` prevents endless retries. Mirrors the `kafka-init`
+  # one-shot pattern. Required for Kibana to authenticate against ES.
+  elasticsearch-init:
+    build:
+      context: ./infra/elasticsearch-init
+      dockerfile: Dockerfile
+    container_name: irctc-elasticsearch-init
+    profiles: ["dev", "debug"]
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      ELASTICSEARCH_URL: http://irctc-elasticsearch:9200
+      ELASTICSEARCH_USERNAME: ${ELASTICSEARCH_USERNAME:-elastic}
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-password}
+    restart: "no"
     networks:
       - irctc-network
 

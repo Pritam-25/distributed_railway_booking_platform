@@ -7,4 +7,9 @@ import { type ErrorCode } from "./errorCodes.js";
 export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   STATION_SEARCH_INTERNAL_ERROR:
     "Station search could not complete the request.",
+  STATION_NOT_FOUND:
+    "Station could not be resolved. Verify the code or id and try again.",
+  SEARCH_INDEX_UNAVAILABLE:
+    "Train search index is temporarily unavailable. Please retry shortly.",
+  SEARCH_INTERNAL_ERROR: "Train search could not complete the request.",
 };

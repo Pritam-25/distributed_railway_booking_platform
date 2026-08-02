@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { asyncHandler, validateQuery } from "@irctc/middleware";
 import { searchController } from "@container";
-import { stationSuggestQuerySchema } from "@dto";
+import { stationSuggestQuerySchema, trainSearchQuerySchema } from "@dto";
 
 /**
  * Public search endpoints.
@@ -26,6 +26,15 @@ router.get(
   validateQuery(stationSuggestQuerySchema),
   asyncHandler(async (req, res) => {
     await searchController.suggestStations(req, res);
+  }),
+);
+
+//  Search trains by from/to station and date.
+router.get(
+  "/trains",
+  validateQuery(trainSearchQuerySchema),
+  asyncHandler(async (req, res) => {
+    await searchController.searchTrains(req, res);
   }),
 );
 

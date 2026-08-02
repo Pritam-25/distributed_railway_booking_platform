@@ -88,3 +88,4 @@ async function run() {
 }
 
 await run();
+process.exit(0);

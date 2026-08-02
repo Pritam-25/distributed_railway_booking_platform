@@ -80,7 +80,7 @@ export class OutboxPublisherWorker {
 
     this.logger?.info(
       { module: "outbox-worker" },
-      "Outbox publisher worker started",
+      "Outbox publisher worker started.",
     );
   }
 

@@ -30,7 +30,7 @@ export const createKafkaClient = (
   const kafkaJSConfig: KafkaConfig = {
     ...config,
     clientId: config.clientId ?? "irctc-service",
-    brokers: config.brokers ?? ["localhost:9092"],
+    brokers: config.brokers ?? ["127.0.0.1:9092"],
     connectionTimeout: config.connectionTimeout ?? 10_000,
     requestTimeout: config.requestTimeout ?? 30_000,
     retry: {
@@ -44,6 +44,6 @@ export const createKafkaClient = (
   const kafka = new ConfluentKafka({
     kafkaJS: kafkaJSConfig,
   });
-  logger?.info({ module: "kafka-client" }, "Kafka client initialized");
+  logger?.info({ module: "kafka-client" }, "Kafka client initialized.");
   return kafka;
 };

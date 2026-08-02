@@ -340,19 +340,19 @@ x-admin-id: {{adminId}}
 @schedules = {{baseUrl}}/admin/schedules
 
 ### Create Train Schedule - SUCCESS case (Operating day Monday)
-# 2026-07-20 is a Monday (dayOfWeek = 1). Since train has operating days [1, 3, 5], this succeeds!
+# 2026-08-21 is a Monday (dayOfWeek = 1). Since train has operating days [1, 3, 5], this succeeds!
 # @name createSchedule
 POST {{schedules}}
 Content-Type: application/json
 x-admin-id: {{adminId}}
 
 {
-  "trainId": "{{fallbackTrainId}}",
-  "departureDate": "2026-07-20T08:00:00.000Z"
+  "trainId": "{{trainId}}",
+  "departureDate": "2026-08-21T08:00:00.000Z"
 }
 
 ### Create Train Schedule - FAIL case (Non-operating day Tuesday)
-# 2026-07-21 is a Tuesday (dayOfWeek = 2). Since 2 is not in [1, 3, 5], this fails with 409!
+# 2026-08-22 is a Tuesday (dayOfWeek = 2). Since 2 is not in [1, 3, 5], this fails with 409!
 POST {{schedules}}
 Content-Type: application/json
 x-admin-id: {{adminId}}

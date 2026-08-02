@@ -36,7 +36,8 @@ await runBootstrap({
       "All dependencies connected successfully.",
     );
 
-    // 3. Dynamically import app.js after dependencies are ready.
+    // 3. Dynamically import container and app.js after dependencies are ready.
+    const { AdminContainer } = await import("@container");
     const { default: app } = await import("./app.js");
 
     await startServer({
@@ -44,6 +45,20 @@ await runBootstrap({
       port: env.PORT,
       environment: env.NODE_ENV,
       serviceName: env.SERVICE_NAME,
+      afterListen: async () => {
+        logger.info(
+          { module: "server" },
+          "Starting admin outbox publisher worker...",
+        );
+        AdminContainer.getInstance().start();
+      },
+      beforeShutdown: async () => {
+        logger.info(
+          { module: "server" },
+          "Stopping admin outbox publisher worker...",
+        );
+        await AdminContainer.getInstance().disconnect();
+      },
       afterShutdown: async () => {
         await withTimeout("Kafka disconnect", disconnectKafka());
         await withTimeout("Prisma disconnect", disconnectPrisma());

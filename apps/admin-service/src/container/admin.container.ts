@@ -7,7 +7,11 @@ import {
   RouteRepository,
   ScheduleRepository,
 } from "@repository";
-import { PostgresOutboxRepository, type OutboxRepository } from "@irctc/kafka";
+import {
+  PostgresOutboxRepository,
+  OutboxPublisherWorker,
+  type OutboxRepository,
+} from "@irctc/kafka";
 import {
   StationService,
   AdminAuthService,
@@ -26,11 +30,11 @@ import {
   RouteController,
   ScheduleController,
 } from "@controllers";
-import { prisma } from "@config";
+import { prisma, getProducerSync } from "@config";
 import { logger } from "@irctc/logger";
 
 /**
- * Dependency injection container for user-service.
+ * Dependency injection container for admin-service.
  * Wires repositories, services, controllers, and event publishers.
  * Singleton pattern ensures shared state across the service.
  *
@@ -41,6 +45,7 @@ export class AdminContainer {
   private static instance: AdminContainer;
 
   public readonly outboxRepository: OutboxRepository;
+  private readonly outboxWorker: OutboxPublisherWorker;
 
   public readonly stationController: StationController;
   public readonly trainController: TrainController;
@@ -60,6 +65,11 @@ export class AdminContainer {
     const routeRepository = new RouteRepository(prisma);
     const scheduleRepository = new ScheduleRepository(prisma);
     this.outboxRepository = new PostgresOutboxRepository(prisma);
+    this.outboxWorker = new OutboxPublisherWorker(
+      this.outboxRepository,
+      getProducerSync,
+      logger,
+    );
 
     // 3. Services
     const adminAuthService = new AdminAuthService(adminAuthRepository);
@@ -117,14 +127,28 @@ export class AdminContainer {
     this.routeController = new RouteController(routeService);
     this.scheduleController = new ScheduleController(scheduleService);
 
-    logger.info(
-      { module: "admin-container" },
-      "AdminContainer dependencies wired synchronously",
-    );
+    logger.info({ module: "admin-container" }, "Dependencies wired.");
+  }
+
+  /**y
+   * Starts background outbox publisher worker polling loop.
+   */
+  /**
+   *
+   */
+  start(): void {
+    this.outboxWorker.start();
   }
 
   /**
-   *
+   * Gracefully stops the outbox publisher worker loop.
+   */
+  async disconnect(): Promise<void> {
+    await this.outboxWorker.stop();
+  }
+
+  /**
+   * Retrieves the singleton container instance.
    */
   static getInstance(): AdminContainer {
     if (!AdminContainer.instance) {

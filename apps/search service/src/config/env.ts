@@ -35,6 +35,13 @@ export const env = createEnv({
       .default("false")
       .transform((v) => v === "true"),
 
+    // Elasticsearch train schedule projection — recreate only for local resets.
+    TRAIN_INDEX_NAME: z.string().default("train_schedules"),
+    TRAIN_INDEX_RECREATE: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
+
     // Kafka configuration environment
     KAFKA_BROKERS: z
       .string()
@@ -65,9 +72,23 @@ export const env = createEnv({
     IDEMPOTENCY_TTL_SECONDS: z.coerce.number().int().min(1).default(86400),
     IDEMPOTENCY_KEYSPACE: z.string().default("search:station-idempotency"),
 
+    // Independent idempotency keyspace for the schedule projection. Sharing
+    // a keyspace with stations would let a station event shadow a schedule
+    // event with the same UUID (unlikely but defensible).
+    IDEMPOTENCY_KEYSPACE_SCHEDULE: z
+      .string()
+      .default("search:schedule-idempotency"),
+
     // Suggest-query cache — read-heavy, tolerates a short staleness window.
     SUGGEST_CACHE_TTL_SECONDS: z.coerce.number().int().min(1).default(60),
     SUGGEST_CACHE_KEY_PREFIX: z.string().default("cache:station-suggest"),
+
+    // Train-search query cache — read-heavy, tolerates a short staleness
+    // window. Cache invalidation is best-effort via TTL; projected events
+    // refresh the underlying index, and cache entries are short enough that
+    // occasional staleness is acceptable.
+    TRAIN_SEARCH_CACHE_TTL_SECONDS: z.coerce.number().int().min(1).default(60),
+    TRAIN_SEARCH_CACHE_KEY_PREFIX: z.string().default("cache:train-search"),
 
     // Telemetry configuration environment
     OTEL_EXPORTER_OTLP_ENDPOINT: z.url().default("http://localhost:4318"),

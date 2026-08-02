@@ -39,14 +39,14 @@ await runBootstrap({
     await withTimeout("Prisma connect", initPrisma());
     await withTimeout("Redis connect", initRedis());
     await withTimeout("Kafka connect", initKafka());
+
     logger.info(
       { module: "server" },
       "All dependencies connected successfully.",
     );
 
     // 3. Import container and app.js.
-    const { InventoryContainer } =
-      await import("./container/inventory.container.js");
+    const { InventoryContainer } = await import("@container");
     const { default: app } = await import("./app.js");
 
     await startServer({
@@ -57,14 +57,14 @@ await runBootstrap({
       afterListen: async () => {
         logger.info(
           { module: "server" },
-          "Starting inventory event consumers...",
+          "Starting inventory event consumers and outbox publisher worker...",
         );
         await InventoryContainer.getInstance().start();
       },
       beforeShutdown: async () => {
         logger.info(
           { module: "server" },
-          "Stopping inventory event consumers...",
+          "Stopping inventory event consumers and outbox publisher worker...",
         );
         await InventoryContainer.getInstance().disconnect();
       },
