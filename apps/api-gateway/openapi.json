@@ -2054,8 +2054,7 @@
             "maxLength": 50,
             "example": "Doe"
           }
-        },
-        "required": ["firstName", "lastName"]
+        }
       },
       "SessionSummary": {
         "type": "object",

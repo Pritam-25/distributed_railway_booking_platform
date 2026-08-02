@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query"
 import { useRouter } from "next/navigation"
-import { resetPassword, ResetPasswordRequest } from "@/generated"
+import { resetPassword, type ResetPasswordRequest } from "@/generated"
 import { toast } from "@/components/ui/toast"
 import { getErrorMessage } from "@/lib/utils/error"
 

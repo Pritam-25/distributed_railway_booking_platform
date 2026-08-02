@@ -29,6 +29,7 @@ export class StationRepository {
 
   /**
    * Fetches a station by its unique ID.
+   *
    * @param id - The unique ID of the station
    * @returns The station record if found, otherwise null
    */

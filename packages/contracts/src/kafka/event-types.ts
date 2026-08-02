@@ -28,4 +28,8 @@ export const EVENT_TYPES = {
   // schedule domain
   SCHEDULE_CREATED: "ScheduleCreatedV1",
   SCHEDULE_STATUS_CHANGED: "ScheduleStatusChangedV1",
+
+  // inventory domain
+  INVENTORY_SCHEDULE_PROJECTED: "InventoryScheduleProjectedV1",
+  INVENTORY_SCHEDULE_STATUS_CHANGED: "InventoryScheduleStatusChangedV1",
 } as const;

@@ -1,5 +1,8 @@
 import type { RequestHandler } from "express";
-import { createProxyMiddleware as createHPM } from "http-proxy-middleware";
+import {
+  createProxyMiddleware as createHPM,
+  fixRequestBody,
+} from "http-proxy-middleware";
 import type {
   Options as HPMOptions,
   RequestHandler as HPMRequestHandler,
@@ -12,7 +15,7 @@ import {
 import { getBreaker } from "@resilience";
 import { ApiError } from "@irctc/errors";
 import { statusCode } from "@irctc/http";
-import { ERROR_CODES } from "@utils";
+import { ERROR_CODES } from "@utils/error";
 import type { RouteConfig } from "@config";
 
 /**
@@ -38,6 +41,7 @@ const getOrCreateProxy = (
       return String(originalUrl ?? req.url ?? "").replace(/^\/api\/v1/, "");
     },
     on: {
+      proxyReq: fixRequestBody,
       error: (err, _req, res) => {
         // Connection-level failure (ECONNREFUSED, ECONNRESET, DNS error).
         // We log here so the failure is recorded with the upstream name

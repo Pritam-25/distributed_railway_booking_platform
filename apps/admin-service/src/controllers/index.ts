@@ -1,5 +1,4 @@
 export * from "./auth.controller.js";
-export * from "./health.controller.js";
 export * from "./station.controller.js";
 export * from "./train.controller.js";
 export * from "./coach.controller.js";

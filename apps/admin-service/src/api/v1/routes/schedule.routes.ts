@@ -21,7 +21,7 @@ router.use(requireAdmin);
 
 /**
  * @route POST /api/v1/admin/schedules
- * @desc Create a new train schedule departure run
+ * @description Create a new train schedule departure run
  */
 router.post(
   "/",
@@ -31,7 +31,7 @@ router.post(
 
 /**
  * @route GET /api/v1/admin/schedules
- * @desc List and paginate train schedules
+ * @description List and paginate train schedules
  */
 router.get(
   "/",
@@ -41,7 +41,7 @@ router.get(
 
 /**
  * @route GET /api/v1/admin/schedules/:scheduleId
- * @desc Retrieve details for a schedule
+ * @description Retrieve details for a schedule
  */
 router.get(
   "/:scheduleId",
@@ -51,7 +51,7 @@ router.get(
 
 /**
  * @route PATCH /api/v1/admin/schedules/:scheduleId/status
- * @desc Transition/update schedule status
+ * @description Transition/update schedule status
  */
 router.patch(
   "/:scheduleId/status",

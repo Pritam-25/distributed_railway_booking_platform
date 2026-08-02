@@ -11,6 +11,7 @@ import {
 export class ScheduleRepository {
   /**
    * Creates an instance of ScheduleRepository.
+   *
    * @param prisma The Prisma client instance.
    */
   constructor(protected readonly prisma: PrismaClient) {}

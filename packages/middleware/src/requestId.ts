@@ -10,6 +10,7 @@ const UUID_V4_PATTERN =
 
 /**
  * Checks if the request ID is valid based on length and patterns (alphanumeric/dash/underscore or UUID v4).
+ *
  * @param value - The Request ID string to validate.
  * @returns True if the request ID format is valid, otherwise false.
  */

@@ -15,6 +15,7 @@ import { statusCode, successResponse, paginatedResponse } from "@irctc/http";
 export class TrainController {
   /**
    * Creates an instance of TrainController.
+   *
    * @param service The TrainService instance used to handle train business operations.
    */
   constructor(private readonly service: TrainService) {}

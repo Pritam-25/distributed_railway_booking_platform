@@ -18,7 +18,6 @@ export type NormalizedKafkaHeaders = Record<string, string>;
  *
  * @param headers Kafka message headers (raw format).
  * @returns Headers normalized to string key-value pairs.
- *
  * @remarks
  * Preprocesses headers before OpenTelemetry context extraction.
  * Converts all header values to strings and ensures keys are normalized for consistent lookup.
@@ -58,7 +57,6 @@ export function normaliseKafkaHeaders(
  *
  * @param headers Kafka message headers (raw format).
  * @returns The extracted OpenTelemetry trace context.
- *
  * @remarks
  * Extracts parent trace metadata (e.g. traceparent) from consumed messages.
  * Normalizes raw message headers to lowercase string key-value pairs, then extracts the OpenTelemetry trace context using the standard W3C propagator.
@@ -71,12 +69,12 @@ export function extractTraceContextFromKafkaHeaders(headers: unknown): Context {
 /**
  * Injects the active tracing context into outgoing Kafka message headers.
  *
- * @param headers Kafka message headers (raw format).
- * @returns The Kafka message headers with injected trace context.
- *
  * @remarks
  * Propagates the active trace context downstream across a Kafka boundary.
- * Reads the active OpenTelemetry span context, serializes it into a temporary W3C trace header map, and merges it back into the outgoing message headers.
+ * Reads the active OpenTelemetry span context, serializes it into a temporary W3C trace header map,
+ * and merges it back into the outgoing message headers.
+ * @param headers Kafka message headers (raw format).
+ * @returns The Kafka message headers with injected trace context.
  */
 export function injectTraceContextToKafkaHeaders(
   headers: RawKafkaHeaders = {},

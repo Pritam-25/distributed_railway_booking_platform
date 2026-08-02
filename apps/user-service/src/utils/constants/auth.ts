@@ -3,4 +3,4 @@ export const AUTH_DURATIONS = {
   SESSION_TTL_MS: 30 * 24 * 60 * 60 * 1000, // 30 days
   PASSWORD_RESET_TOKEN_TTL_SECONDS: 10 * 60, // 10 minutes
   PROFILE_CACHE_TTL_SECONDS: 60 * 60, // 1 hour
-} as const;
+};

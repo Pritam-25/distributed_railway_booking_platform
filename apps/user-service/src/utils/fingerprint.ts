@@ -2,11 +2,14 @@ import type { Request } from "express";
 import crypto from "node:crypto";
 
 /**
- * Generates a unique fingerprint for the current device/browser session.
- * Based on User-Agent, IP address, and Accept headers.
+ * Generates a stable device fingerprint hash from request metadata.
  *
- * @param req - The Express Request object.
- * @returns A SHA-256 hash representing the device fingerprint.
+ * @remarks
+ * Combines the `User-Agent`, source IP, and `Accept` header into a
+ * SHA-256 digest. The fingerprint is bound to the auth session so a
+ * stolen refresh token presented from a different device is rejected.
+ * @param req - The Express `Request` object.
+ * @returns A SHA-256 hex digest representing the device fingerprint.
  */
 export function getDeviceFingerprint(req: Request): string {
   const userAgent = req.headers["user-agent"] || "";

@@ -1,59 +1,51 @@
 import { KafkaJS } from "@confluentinc/kafka-javascript";
-import { logger } from "@irctc/logger";
-
-type Producer = KafkaJS.Producer;
+import type { LoggerLike } from "../consumer-runner/kafka-consumer-runner.js";
 import { KAFKA_HEADERS } from "../headers/kafka-headers.js";
 import type { OutboxRepository, OutboxEvent } from "./interfaces.js";
 
-/**
- * Delay interval in milliseconds between successive database poll cycles.
- */
+type Producer = KafkaJS.Producer;
+/** Delay interval in milliseconds between successive database polling cycles (2 seconds). */
 const POLL_INTERVAL_MS = 2_000;
 
-/**
- * Maximum number of pending outbox events claimed in a single poll batch.
- */
+/** Maximum batch size of outbox events claimed per polling iteration. */
 const BATCH_SIZE = 50;
 
-/**
- * Period in milliseconds for scanning and resetting stuck processing events (e.g. from crashed workers).
- */
+/** Interval in milliseconds for scanning and resetting orphaned PROCESSING events (60 seconds). */
 const RECOVERY_INTERVAL_MS = 60_000;
 
-/**
- * Period in milliseconds for scanning and requeueing failed events after their backoff delay has elapsed.
- */
+/** Interval in milliseconds for scanning and requeueing backoff-completed FAILED events (30 seconds). */
 const RETRY_INTERVAL_MS = 30_000;
 
 /**
- * Transactional Outbox Worker.
- *
- * Implements the transactional outbox pattern by polling event records committed inside application
- * transactions and publishing them to Kafka.
- *
- * It runs a continuous polling loop and schedules recurring maintenance sweeps to recover stuck
- * processing events and retry failed ones.
+ * Background outbox publisher worker managing polling loops and event dispatches.
  */
 export class OutboxPublisherWorker {
+  /** Indicates whether the worker background loops and timers are active. */
   private running = false;
+  /** Timer handle for the recurring outbox polling cycle. */
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Timer handle for the recovery interval resetting stuck `PROCESSING` events. */
   private recoveryTimer: ReturnType<typeof setInterval> | null = null;
+  /** Timer handle for the retry interval requeueing backoff-completed `FAILED` events. */
   private retryTimer: ReturnType<typeof setInterval> | null = null;
+  /** Promise tracking the currently executing poll and publish iteration. */
   private inFlightPoll: Promise<void> | null = null;
 
   /**
    * Creates an instance of OutboxPublisherWorker.
    *
-   * @param outboxRepository - The repository managing the database outbox events.
-   * @param getProducer - Function returning the active, connected Kafka Producer.
+   * @param outboxRepository - {@link OutboxRepository} managing database outbox event records.
+   * @param getProducer - Supplier function returning the connected shared {@link Producer} instance.
+   * @param logger - Optional diagnostic logger satisfying {@link LoggerLike}.
    */
   constructor(
     private readonly outboxRepository: OutboxRepository,
     private readonly getProducer: () => Producer,
+    private readonly logger?: LoggerLike,
   ) {}
 
   /**
-   * Starts the outbox polling loop and starts the recovery and retry scheduler intervals.
+   * Starts the background outbox polling loop and starts recovery and retry interval timers.
    */
   start(): void {
     if (this.running) return;
@@ -67,7 +59,7 @@ export class OutboxPublisherWorker {
       try {
         await this.outboxRepository.resetStuckProcessingEvents();
       } catch (error) {
-        logger.error(
+        this.logger?.error(
           { module: "outbox-worker", error },
           "Recovery sweep failed",
         );
@@ -79,21 +71,25 @@ export class OutboxPublisherWorker {
       try {
         await this.outboxRepository.requeueFailedEvents();
       } catch (error) {
-        logger.error(
+        this.logger?.error(
           { module: "outbox-worker", error },
           "Retry requeue failed",
         );
       }
     }, RETRY_INTERVAL_MS);
 
-    logger.info({ module: "outbox-worker" }, "Outbox publisher worker started");
+    this.logger?.info(
+      { module: "outbox-worker" },
+      "Outbox publisher worker started",
+    );
   }
 
   /**
-   * Gracefully stops the worker loop and clears all active timers.
-   * Awaits any in-flight database polling cycles to complete.
+   * Gracefully stops the worker loop and clears all active scheduler timers.
    *
-   * @returns A promise resolving when the worker has fully stopped.
+   * Awaits completion of any active in-flight database polling cycles before returning.
+   *
+   * @returns A promise resolving when the worker cycle has safely terminated.
    */
   async stop(): Promise<void> {
     this.running = false;
@@ -106,11 +102,17 @@ export class OutboxPublisherWorker {
       await this.inFlightPoll;
     }
 
-    logger.info({ module: "outbox-worker" }, "Outbox publisher worker stopped");
+    this.logger?.info(
+      { module: "outbox-worker" },
+      "Outbox publisher worker stopped",
+    );
   }
 
   /**
-   * Schedules the next polling execution if the worker is still active.
+   * Schedules the next database polling cycle using a timeout loop.
+   *
+   * Triggers {@link pollAndPublish} and tracks the execution promise in `inFlightPoll`
+   * to guarantee that `stop()` can await completion of an active poll cycle before halting.
    */
   private schedulePoll(): void {
     if (!this.running) return;
@@ -120,7 +122,10 @@ export class OutboxPublisherWorker {
         this.inFlightPoll = this.pollAndPublish();
         await this.inFlightPoll;
       } catch (error) {
-        logger.error({ module: "outbox-worker", error }, "Poll cycle failed");
+        this.logger?.error(
+          { module: "outbox-worker", error },
+          "Poll cycle failed",
+        );
       } finally {
         this.inFlightPoll = null;
       }
@@ -129,11 +134,12 @@ export class OutboxPublisherWorker {
   }
 
   /**
-   * Claims a batch of pending events from the outbox repository and attempts to send them
-   * to their respective Kafka topics.
+   * Claims a batch of pending outbox events from the repository and publishes each event to Kafka.
    *
-   * Maps trace context event metadata headers (event-type, schema-version, event-id)
-   * onto the Kafka message headers to preserve metadata propagation.
+   * If no pending events are claimed, returns immediately. Otherwise, iterates over the batch
+   * and delegates dispatching to {@link publishEvent}.
+   *
+   * @returns A promise resolving when all claimed events in the batch have been processed.
    */
   private async pollAndPublish(): Promise<void> {
     const events = await this.outboxRepository.claimPendingEvents(BATCH_SIZE);
@@ -149,6 +155,16 @@ export class OutboxPublisherWorker {
     }
   }
 
+  /**
+   * Serializes and publishes a single outbox event to its target Kafka topic.
+   *
+   * On successful dispatch, marks the event as `PUBLISHED` in the database.
+   * If dispatch fails, delegates failure handling to {@link handlePublishFailure}.
+   *
+   * @param producer - The active connected {@link Producer} instance.
+   * @param event - The {@link OutboxEvent} record to publish.
+   * @returns A promise resolving when publishing and status recording complete.
+   */
   private async publishEvent(
     producer: Producer,
     event: OutboxEvent,
@@ -171,6 +187,15 @@ export class OutboxPublisherWorker {
     }
   }
 
+  /**
+   * Constructs the Kafka message headers dictionary for an outbox event.
+   *
+   * Merges event-type and schema-version metadata from stored event headers and extracts
+   * the event ID from the payload body.
+   *
+   * @param event - The {@link OutboxEvent} containing headers and payload metadata.
+   * @returns A key-value dictionary of string headers for the Kafka message.
+   */
   private buildHeaders(event: OutboxEvent): Record<string, string> {
     const headers: Record<string, string> = {};
 
@@ -180,6 +205,12 @@ export class OutboxPublisherWorker {
     return headers;
   }
 
+  /**
+   * Copies stored metadata headers (`x-event-type`, `x-schema-version`) into the target headers object.
+   *
+   * @param storedHeaders - Raw stored header object from the outbox record.
+   * @param headers - Target header key-value dictionary to mutate.
+   */
   private copyStoredHeaders(
     storedHeaders: unknown,
     headers: Record<string, string>,
@@ -194,6 +225,13 @@ export class OutboxPublisherWorker {
     this.copyHeader(stored, headers, KAFKA_HEADERS.SCHEMA_VERSION);
   }
 
+  /**
+   * Copies a single header key from a source dictionary to a target dictionary if present.
+   *
+   * @param source - Source header object map.
+   * @param target - Target header map to mutate.
+   * @param key - The header key name to copy (e.g. `x-event-type`).
+   */
   private copyHeader(
     source: Record<string, string | undefined>,
     target: Record<string, string>,
@@ -206,6 +244,15 @@ export class OutboxPublisherWorker {
     }
   }
 
+  /**
+   * Extracts `eventId` from the event payload object and sets the `x-event-id` Kafka header.
+   *
+   * If `eventId` is a string or number, sets `x-event-id` on `headers`. Logs a warning if the `eventId`
+   * field is present but has an unexpected data type.
+   *
+   * @param event - The {@link OutboxEvent} containing the payload to inspect.
+   * @param headers - Target header map to mutate.
+   */
   private addEventIdHeader(
     event: OutboxEvent,
     headers: Record<string, string>,
@@ -223,7 +270,7 @@ export class OutboxPublisherWorker {
       return;
     }
 
-    logger.warn(
+    this.logger?.warn(
       {
         module: "outbox-worker",
         eventId: event.id,
@@ -232,6 +279,15 @@ export class OutboxPublisherWorker {
     );
   }
 
+  /**
+   * Handles publishing failures by recording failure state in the outbox repository and logging diagnostics.
+   *
+   * Increments the retry count and computes backoff schedule, marking the event as `FAILED` or `DEAD`.
+   *
+   * @param event - The {@link OutboxEvent} whose publishing failed.
+   * @param error - The error caught during message dispatch.
+   * @returns A promise resolving when failure status persistence and logging complete.
+   */
   private async handlePublishFailure(
     event: OutboxEvent,
     error: unknown,
@@ -243,7 +299,7 @@ export class OutboxPublisherWorker {
         event.retryCount ?? 0,
       );
     } catch (markError) {
-      logger.error(
+      this.logger?.error(
         {
           module: "outbox-worker",
           eventId: event.id,
@@ -253,7 +309,7 @@ export class OutboxPublisherWorker {
       );
     }
 
-    logger.error(
+    this.logger?.error(
       {
         module: "outbox-worker",
         eventId: event.id,
