@@ -1,5 +1,4 @@
 export * from "./auth.service.js";
-export * from "./health.service.js";
 export * from "./station.service.js";
 export * from "./train.service.js";
 export * from "./coach.service.js";

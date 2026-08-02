@@ -11,7 +11,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "seed": "pnpm prisma db seed",
-    "docker:build": "docker build -t inventory-service:latest -f Dockerfile ../..",
+    "docker:build": "docker build -t inventory-service:latest --build-arg SERVICE=inventory-service -f Dockerfile ../..",
     "docker:run": "docker run --rm --name inventory-service -p 4003:4003 --env-file .env inventory-service:latest"
   },
   "keywords": [],
@@ -32,6 +32,7 @@
     "@irctc/telemetry": "workspace:*",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "prisma": "^7.8.0",
     "@repo/typescript-config": "workspace:*",
     "@t3-oss/env-core": "^0.13.11",
     "@types/cookie-parser": "^1.4.10",
@@ -46,7 +47,6 @@
     "express": "^5.2.1",
     "helmet": "^8.2.0",
     "jsonwebtoken": "^9.0.2",
-    "prisma": "^7.8.0",
     "zod": "^4.4.3"
   }
 }

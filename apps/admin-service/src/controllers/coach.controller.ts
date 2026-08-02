@@ -7,6 +7,9 @@ import type { CreateCoachRequestDto, UpdateCoachRequestDto } from "@dto";
  * Controller class orchestrating coach HTTP request mappings.
  */
 export class CoachController {
+  /**
+   *
+   */
   constructor(private readonly service: CoachService) {}
 
   /**

@@ -179,23 +179,23 @@ async handle(event: TrainUpdatedV1Type): Promise<void> {
     // count to find train-search keys containing this train's id.
     await this.invalidateTrainCaches(event.trainId);
   });
+}
 
-  async invalidateTrainCaches(trainId: string): Promise<void> {
-    let cursor = "0";
-    do {
-      const [next, keys] = await redis.scan(cursor, "MATCH", "cache:train-search:*", "COUNT", 100);
-      cursor = next;
-      // Each cached value is JSON; we don't want to fetch and parse
-      // every one. For a coarse invalidation, drop a sample and
-      // trust TTL.
-      for (const key of keys) {
-        // Coarse-grained: drop every key. Acceptable for a 5-min
-        // TTL; expensive at scale. For finer control, store an
-        // inverse index per route.
-        await redis.del(key);
-      }
-    } while (cursor !== "0");
-  }
+async invalidateTrainCaches(trainId: string): Promise<void> {
+  let cursor = "0";
+  do {
+    const [next, keys] = await redis.scan(cursor, "MATCH", "cache:train-search:*", "COUNT", 100);
+    cursor = next;
+    // Each cached value is JSON; we don't want to fetch and parse
+    // every one. For a coarse invalidation, drop a sample and
+    // trust TTL.
+    for (const key of keys) {
+      // Coarse-grained: drop every key. Acceptable for a 5-min
+      // TTL; expensive at scale. For finer control, store an
+      // inverse index per route.
+      await redis.del(key);
+    }
+  } while (cursor !== "0");
 }
 ```
 

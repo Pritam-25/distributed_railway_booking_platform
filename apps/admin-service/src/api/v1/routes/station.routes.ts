@@ -24,7 +24,7 @@ router.use(requireAdmin);
 
 /**
  * @route POST /api/v1/stations
- * @desc Create a new station in the system
+ * @description Create a new station in the system
  */
 router.post(
   "/",
@@ -34,7 +34,7 @@ router.post(
 
 /**
  * @route GET /api/v1/stations/:stationId
- * @desc Retrieve a station by its unique ID
+ * @description Retrieve a station by its unique ID
  */
 router.get(
   "/:stationId",
@@ -44,7 +44,7 @@ router.get(
 
 /**
  * @route GET /api/v1/stations
- * @desc Retrieve a list of all stations with optional filtering and pagination
+ * @description Retrieve a list of all stations with optional filtering and pagination
  */
 router.get(
   "/",
@@ -54,7 +54,7 @@ router.get(
 
 /**
  * @route PATCH /api/v1/stations/:stationId
- * @desc Update station details by its ID
+ * @description Update station details by its ID
  */
 router.patch(
   "/:stationId",
@@ -65,7 +65,7 @@ router.patch(
 
 /**
  * @route PATCH /api/v1/stations/:stationId/deactivate
- * @desc Deactivate a station by its ID
+ * @description Deactivate a station by its ID
  */
 router.patch(
   "/:stationId/deactivate",

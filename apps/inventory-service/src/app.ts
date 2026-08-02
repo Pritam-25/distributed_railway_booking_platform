@@ -33,21 +33,22 @@ const app = createApp({
     notFoundHandler,
     errorHandler,
   },
-});
-
-/**
- * Root endpoint — service banner.
- */
-app.get("/", (_req: Request, res: Response) => {
-  res.status(statusCode.success).json(
-    successResponse("Welcome to Inventory Service API", {
-      version: "1.0.0",
-      endpoints: {
-        health: "/health",
-        inventory: "/inventory",
-      },
-    }),
-  );
+  configure(app) {
+    /**
+     * Root endpoint — service banner.
+     */
+    app.get("/", (_req: Request, res: Response) => {
+      res.status(statusCode.success).json(
+        successResponse("Welcome to Inventory Service API", {
+          version: "1.0.0",
+          endpoints: {
+            health: "/health",
+            inventory: "/inventory",
+          },
+        }),
+      );
+    });
+  },
 });
 
 export default app;

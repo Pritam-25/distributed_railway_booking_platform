@@ -10,8 +10,7 @@
     "check-types": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "seed": "pnpm prisma db seed",
-    "docker:build": "docker build -t search-service:latest -f Dockerfile ../..",
+    "docker:build": "docker build -t search-service:latest --build-arg SERVICE=search-service -f Dockerfile ../..",
     "docker:run": "docker run --rm --name search-service -p 4004:4004 --env-file .env search-service:latest"
   },
   "keywords": [],

@@ -4,8 +4,6 @@ import { env } from "@config";
 import type { StationSuggestion } from "@dto";
 
 /**
- * ## StationDocument
- *
  * Structure of a station document stored in Elasticsearch `stations` index.
  */
 export interface StationDocument {

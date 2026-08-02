@@ -57,3 +57,7 @@ out
 # Per-service generated/cloned artifacts
 **/.husky/_/husky.sh
 **/tsconfig.tsbuildinfo
+
+# Debug / experimental artifacts (gitignored but Docker reads .dockerignore, not .gitignore)
+images
+**/images/**

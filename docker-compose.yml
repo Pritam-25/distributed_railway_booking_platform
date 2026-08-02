@@ -60,7 +60,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "wget --quiet --tries=1 --spider http://elastic:$${ELASTICSEARCH_PASSWORD:-password}`@localhost`:9200/_cluster/health || exit 1",
+          "curl -f -s -u elastic:${ELASTICSEARCH_PASSWORD:-password} http://localhost:9200/_cluster/health >/dev/null 2>&1",
         ]
       interval: 10s
       timeout: 5s
@@ -106,11 +106,7 @@ services:
     networks:
       - irctc-network
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "kafka-broker-api-versions --bootstrap-server localhost:9092 || exit 1",
-        ]
+      test: ["CMD-SHELL", "nc -z localhost 9092"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -201,6 +197,8 @@ services:
     build:
       context: .
       dockerfile: infra/kafka-init/Dockerfile
+      args:
+        SERVICE: kafka-init
     container_name: irctc-kafka-init
     profiles: ["dev", "prod"]
     depends_on:
@@ -215,7 +213,9 @@ services:
   user-service:
     build:
       context: .
-      dockerfile: apps/user-service/Dockerfile
+      dockerfile: Dockerfile
+      args:
+        SERVICE: user-service
     container_name: irctc-user-service
     profiles: ["prod"]
     restart: always
@@ -261,7 +261,9 @@ services:
   admin-service:
     build:
       context: .
-      dockerfile: apps/admin-service/Dockerfile
+      dockerfile: Dockerfile
+      args:
+        SERVICE: admin-service
     container_name: irctc-admin-service
     profiles: ["prod"]
     restart: always
@@ -301,7 +303,9 @@ services:
   notification-service:
     build:
       context: .
-      dockerfile: apps/notification-service/Dockerfile
+      dockerfile: Dockerfile
+      args:
+        SERVICE: notification-service
     container_name: irctc-notification-service
     profiles: ["prod"]
     restart: always
@@ -329,7 +333,9 @@ services:
   search-service:
     build:
       context: .
-      dockerfile: apps/search service/Dockerfile
+      dockerfile: Dockerfile
+      args:
+        SERVICE: search-service
     container_name: irctc-search-service
     profiles: ["prod"]
     restart: always
@@ -372,7 +378,9 @@ services:
   api-gateway:
     build:
       context: .
-      dockerfile: apps/api-gateway/Dockerfile
+      dockerfile: Dockerfile
+      args:
+        SERVICE: api-gateway
     container_name: irctc-api-gateway
     profiles: ["prod"]
     restart: always

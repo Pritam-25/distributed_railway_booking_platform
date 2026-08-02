@@ -33,27 +33,28 @@ const app = createApp({
     notFoundHandler,
     errorHandler,
   },
-});
-
-/**
- * Root endpoint — service banner.
- */
-app.get("/", (_req: Request, res: Response) => {
-  res.status(statusCode.success).json(
-    successResponse("Welcome to Admin Service API", {
-      version: "1.0.0",
-      endpoints: {
-        health: "/health",
-        auth: "/admin/auth",
-        trains: "/admin/trains",
-        coaches: "/admin/coaches",
-        stations: "/admin/stations",
-        routes: "/admin/routes",
-        routeStations: "/admin/route-stations",
-        schedules: "/admin/schedules",
-      },
-    }),
-  );
+  configure(app) {
+    /**
+     * Root endpoint — service banner.
+     */
+    app.get("/", (_req: Request, res: Response) => {
+      res.status(statusCode.success).json(
+        successResponse("Welcome to Admin Service API", {
+          version: "1.0.0",
+          endpoints: {
+            health: "/health",
+            auth: "/admin/auth",
+            trains: "/admin/trains",
+            coaches: "/admin/coaches",
+            stations: "/admin/stations",
+            routes: "/admin/routes",
+            routeStations: "/admin/route-stations",
+            schedules: "/admin/schedules",
+          },
+        }),
+      );
+    });
+  },
 });
 
 export default app;

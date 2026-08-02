@@ -47,32 +47,28 @@ For any middleware or interceptor:
 - **Side effects**: Modifies `req`, sets headers, attaches `req.user`.
 - **Response guarantees**: What downstream handlers can rely on having been populated.
 
-### Rule 5 — Service methods use structured TSDoc under `@remarks`
+### Rule 5 — Service classes & methods use structured TSDoc without redundancy
 
-Service functions execute core domain workflows. Structure service JSDoc strictly under TSDoc-compliant tags:
+- **Class-Level JSDoc (`## ServiceName`)**: High-level overview containing `### Responsibilities`, `### Storage & Persistence`, and `### Events Published` for the service module as a whole.
+- **Method-Level JSDoc**:
+  - **Do NOT repeat** `### Responsibilities` or `### Storage & Persistence` on individual methods if it repeats class-level documentation.
+  - Keep the summary line concise and focused on the specific method's domain action.
+  - Under `@remarks`, only include method-specific runtime sections when applicable:
+    - `### Side Effects` (e.g. Redis key mutated, Kafka event emitted)
+    - `### Consistency Guarantees` (e.g. transaction boundary, atomic rollback)
+    - `### Failure Guarantees` (e.g. non-fatal Redis cache fallback)
+  - If a method has no special side effects, transactions, or failure policies beyond standard execution, **omit `@remarks` entirely** to prevent boilerplate bloat.
 
 ```ts
 /**
- * One-line summary of domain action.
+ * Summary of specific method domain action.
  *
  * @remarks
- * ### Responsibilities
- * - Core business logic operations executed.
- *
- * ### Side Effects
- * - **PostgreSQL**: Account / entity record queries or mutations.
- * - **Redis**: Session keys created, refreshed, or deleted.
- * - **Kafka**: Events published (e.g. `UserLoggedInV1`).
- *
- * ### Consistency Guarantees
- * - Transaction boundaries, atomicity, and rollback policies (e.g. user deletion if session creation fails).
- *
  * ### Failure Guarantees
- * - Resiliency policies and non-blocking operations (e.g. best-effort Kafka event delivery).
+ * - Redis read/write errors are logged non-fatally and degrade gracefully to PostgreSQL.
  *
  * @param [paramName] - Domain meaning of input parameter.
  * @returns Description of return DTO or domain entity.
- *
  * @throws {ApiError}
  * `ERROR_CODE` — Concise description of failure condition.
  */

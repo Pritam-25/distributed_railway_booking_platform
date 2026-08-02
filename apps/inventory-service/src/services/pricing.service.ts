@@ -1,3 +1,6 @@
+/**
+ *
+ */
 export class PricingService {
   static readonly BASE_RATE_PER_KM = 0.8;
 

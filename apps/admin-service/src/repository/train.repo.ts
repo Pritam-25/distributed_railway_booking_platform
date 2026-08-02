@@ -7,6 +7,9 @@ import type { PaginationOptions } from "@irctc/http";
  * Utilizes the Prisma Client for type-safe database interactions.
  */
 export class TrainRepository {
+  /**
+   *
+   */
   constructor(private readonly prisma: PrismaClient) {}
 
   /**
@@ -24,6 +27,7 @@ export class TrainRepository {
 
   /**
    * Fetches a train by its unique ID.
+   *
    * @param id - The unique ID of the train
    * @returns The train record if found, otherwise null
    */

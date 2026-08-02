@@ -11,7 +11,7 @@
     "check-types": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "docker:build": "docker build -t notification-service:latest -f Dockerfile ../..",
+    "docker:build": "docker build -t notification-service:latest --build-arg SERVICE=notification-service -f Dockerfile ../..",
     "docker:run": "docker run --rm --name notification-service --env-file .env notification-service:latest"
   },
   "keywords": [],

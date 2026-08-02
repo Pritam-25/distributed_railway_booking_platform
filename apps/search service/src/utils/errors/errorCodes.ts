@@ -7,6 +7,3 @@ export const ERROR_CODES = {
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
-
-// Re-exported common codes so throwing sites can import from one barrel.
-export { COMMON_ERROR_CODES, type CommonErrorCode } from "@irctc/errors";

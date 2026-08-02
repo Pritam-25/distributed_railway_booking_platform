@@ -11,6 +11,7 @@ import { statusCode, successResponse, paginatedResponse } from "@irctc/http";
 export class StationController {
   /**
    * Creates an instance of StationController.
+   *
    * @param service The StationService instance used to handle station business operations.
    */
   constructor(private readonly service: StationService) {}

@@ -4,7 +4,8 @@ import type { SearchService } from "@services";
 import type { StationSuggestQueryDto } from "@dto";
 
 /**
- * Thin HTTP adapter for search related endpoints
+ * ## SearchController
+ * Thin HTTP adapter for search related endpoints.
  *
  * ### Responsibilities
  * - Accepts requests that have already passed route-level validation.
@@ -14,7 +15,7 @@ import type { StationSuggestQueryDto } from "@dto";
  * - Leaves business rules, ranking, and persistence to the service layer.
  *
  * ### Error Handling
- * - Controller does not catch errors; they propagate to the global error handler.
+ * - Does not catch errors; they propagate to the global error handler.
  * - Never throws `ApiError` or any other error type; service layer handles that.
  */
 export class SearchController {
@@ -34,7 +35,7 @@ export class SearchController {
    * Public endpoint, no authentication required
    *
    * @param req - Express request with a validated {@link StationSuggestQueryDto}.
-   * @param res - Express response.
+   * @param res - Express response returning the station suggestions.
    */
   async suggestStations(req: Request, res: Response): Promise<void> {
     const query = req.query as unknown as StationSuggestQueryDto;

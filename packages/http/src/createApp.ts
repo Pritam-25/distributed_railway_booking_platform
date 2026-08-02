@@ -61,6 +61,8 @@ export interface CreateAppOptions {
   trustProxy?: boolean;
   /** Maximum JSON body size. Default `"1mb"`. */
   bodyLimit?: string;
+  /** Optional callback to configure service-specific routes (such as root banner or proxies) before notFoundHandler is attached. */
+  configure?: (app: Application) => void;
 }
 
 const DEFAULT_CORS_ALLOWED_HEADERS = [
@@ -161,6 +163,10 @@ export const createApp = (options: CreateAppOptions): Application => {
   }
 
   app.use("/", router);
+
+  if (options.configure) {
+    options.configure(app);
+  }
 
   app.use(middleware.notFoundHandler);
   app.use(middleware.errorHandler);

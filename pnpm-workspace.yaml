@@ -2,6 +2,13 @@ packages:
   - "apps/*"
   - "packages/*"
 
+# Trust the lockfile: skip the supply-chain verification pass that pnpm 11
+# runs on every install. Without this, each install re-validates 700+
+# lockfile entries against `minimumReleaseAge` and `trustPolicy: 'no-downgrade'`,
+# adding 10+ minutes of registry hammering to every parallel Docker build.
+# The lockfile is checked into git and reviewed in PRs, so it can be trusted.
+trustLockfile: true
+
 allowBuilds:
   "@bufbuild/buf": true
   "@confluentinc/kafka-javascript": true

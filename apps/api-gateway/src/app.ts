@@ -40,31 +40,32 @@ const app = createApp({
     notFoundHandler,
     errorHandler,
   },
-});
+  configure(app) {
+    /**
+     * Root endpoint — service banner.
+     */
+    app.get("/", (_req: Request, res: Response) => {
+      res.status(statusCode.success).json(
+        successResponse("Welcome to API Gateway", {
+          version: "1.0.0",
+          endpoints: {
+            docs: "/docs",
+            openapi: "/openapi.json",
+            health: "/health",
+            auth: "/api/v1/auth",
+            users: "/api/v1/users",
+            search: "/api/v1/search",
+            inventory: "/api/v1/inventory",
+          },
+        }),
+      );
+    });
 
-/**
- * Root endpoint — service banner.
- */
-app.get("/", (_req: Request, res: Response) => {
-  res.status(statusCode.success).json(
-    successResponse("Welcome to API Gateway", {
-      version: "1.0.0",
-      endpoints: {
-        docs: "/docs",
-        openapi: "/openapi.json",
-        health: "/health",
-        auth: "/api/v1/auth",
-        users: "/api/v1/users",
-        search: "/api/v1/search",
-        inventory: "/api/v1/inventory",
-      },
-    }),
-  );
+    /**
+     * Per-prefix proxy chains (auth → rate limit → proxy).
+     */
+    mountRoutes(app);
+  },
 });
-
-/**
- * Per-prefix proxy chains (auth → rate limit → proxy).
- */
-mountRoutes(app);
 
 export default app;

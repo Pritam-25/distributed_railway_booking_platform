@@ -7,6 +7,9 @@ import { env } from "@config";
  * Controller class that handles incoming HTTP requests for Admin authentication.
  */
 export class AdminAuthController {
+  /**
+   *
+   */
   constructor(private readonly authService: AdminAuthService) {}
 
   /**
