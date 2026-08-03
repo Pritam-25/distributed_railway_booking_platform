@@ -9,7 +9,7 @@ import { IdempotencyRepository } from "@irctc/redis";
 import { CONSUMER_GROUPS } from "@irctc/contracts";
 import { StationSearchRepository, TrainSearchRepository } from "@repository";
 import {
-  SearchService,
+  StationSearchService,
   StationProjectionService,
   ScheduleProjectionService,
   TrainSearchService,
@@ -42,7 +42,7 @@ export class SearchContainer {
 
   public readonly stationSearchRepository: StationSearchRepository;
   public readonly trainSearchRepository: TrainSearchRepository;
-  public readonly searchService: SearchService;
+  public readonly stationSearchService: StationSearchService;
   public readonly trainSearchService: TrainSearchService;
   public readonly stationProjectionService: StationProjectionService;
   public readonly scheduleProjectionService: ScheduleProjectionService;
@@ -81,7 +81,10 @@ export class SearchContainer {
       scheduleIdempotency,
     );
 
-    this.searchService = new SearchService(this.stationSearchRepository, redis);
+    this.stationSearchService = new StationSearchService(
+      this.stationSearchRepository,
+      redis,
+    );
     this.trainSearchService = new TrainSearchService(
       this.trainSearchRepository,
       this.stationSearchRepository,
@@ -90,7 +93,7 @@ export class SearchContainer {
 
     // 3. Create Controllers (Search HTTP controller)
     this.searchController = new SearchController(
-      this.searchService,
+      this.stationSearchService,
       this.trainSearchService,
     );
 

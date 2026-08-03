@@ -217,8 +217,8 @@ const toDocument = (
     distanceFromStart: stop.distanceFromStart,
   }));
 
-  const firstStop = sortedStops[0];
-  const lastStop = sortedStops[sortedStops.length - 1];
+  const firstStop = sortedStops.at(0);
+  const lastStop = sortedStops.at(-1);
 
   // Build flat `routesServed` list: every (i, j) pair where i < j.
   const routesServed: string[] = [];

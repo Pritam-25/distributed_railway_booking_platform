@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { statusCode, successResponse } from "@irctc/http";
-import type { SearchService, TrainSearchService } from "@services";
+import type { StationSearchService, TrainSearchService } from "@services";
 import type { StationSuggestQueryDto, TrainSearchQueryDto } from "@dto";
 
 /**
@@ -9,7 +9,7 @@ import type { StationSuggestQueryDto, TrainSearchQueryDto } from "@dto";
  *
  * ### Responsibilities
  * - Accepts requests that have already passed route-level validation.
- * - Delegates all business operations to {@link SearchService} and
+ * - Delegates all business operations to {@link StationSearchService} and
  *   {@link TrainSearchService}.
  * - Translates service results into the project's standard
  *   {@link successResponse} envelope.
@@ -23,11 +23,11 @@ export class SearchController {
   /**
    * Creates a new SearchController.
    *
-   * @param searchService - Service that owns the station-suggest flow.
+   * @param StationSearchService - Service that owns the station-suggest flow.
    * @param trainSearchService - Service that owns the train-search flow.
    */
   constructor(
-    private readonly searchService: SearchService,
+    private readonly StationSearchService: StationSearchService,
     private readonly trainSearchService: TrainSearchService,
   ) {}
 
@@ -45,7 +45,7 @@ export class SearchController {
   async suggestStations(req: Request, res: Response): Promise<void> {
     const query = req.query as unknown as StationSuggestQueryDto;
 
-    const stations = await this.searchService.suggestStations(query);
+    const stations = await this.StationSearchService.suggestStations(query);
 
     res.status(statusCode.success).json(
       successResponse("Station suggestions retrieved successfully", {

@@ -5,7 +5,7 @@ import type { StationSearchRepository } from "@repository";
 import type { StationSuggestion, StationSuggestQueryDto } from "@dto";
 
 /**
- * ## SearchService
+ * ## StationSearchService
  *
  * Domain service providing station autocomplete suggestions backed by Elasticsearch and Redis.
  *
@@ -19,9 +19,9 @@ import type { StationSuggestion, StationSuggestQueryDto } from "@dto";
  * - **Elasticsearch**: Source-of-truth `stations` index.
  * - **Redis**: Read-through suggestion cache with TTL.
  */
-export class SearchService {
+export class StationSearchService {
   /**
-   * Creates an instance of SearchService.
+   * Creates an instance of StationSearchService.
    *
    * @param repository - Injected Elasticsearch station search repository.
    * @param redis - Injected Redis client.
@@ -95,7 +95,7 @@ export class SearchService {
       return JSON.parse(raw) as StationSuggestion[];
     } catch (err) {
       logger.warn(
-        { module: "search-service", err, cacheKey: key },
+        { module: "station-search-service", err, cacheKey: key },
         "failed to read suggestion cache entry; falling through to Elasticsearch",
       );
       return null;
@@ -121,7 +121,7 @@ export class SearchService {
       );
     } catch (err) {
       logger.warn(
-        { module: "search-service", err, cacheKey: key },
+        { module: "station-search-service", err, cacheKey: key },
         "failed to write suggestion cache entry",
       );
     }

@@ -1,0 +1,118 @@
+{
+  "_index": "train_schedules",
+  "_id": "6b83a9a4-15cd-4d3e-8bd2-e007f4d6d0af",
+  "_version": 1,
+  "_source": {
+    "scheduleId": "6b83a9a4-15cd-4d3e-8bd2-e007f4d6d0af",
+    "trainId": "e3d1a6c2-0b87-4a58-962f-923b9c0a9df0",
+    "trainNumber": "12841",
+    "trainName": "Coromandel Express",
+    "trainCategory": "EXPRESS",
+    "routeId": "942c0ebf-a87e-4a8b-ab98-ada33235a5a6",
+    "departureDate": "2026-08-21",
+    "status": "ACTIVE",
+    "version": 1,
+    "operatingDays": [1, 3, 5],
+    "fromStationId": "b4445f32-d61d-45aa-a90c-a1d736e530c0",
+    "toStationId": "c860e957-daee-413c-9803-2363aca6a425",
+    "totalDistance": 15,
+    "routesServed": [
+      "b4445f32-d61d-45aa-a90c-a1d736e530c0:c860e957-daee-413c-9803-2363aca6a425"
+    ],
+    "stops": [
+      {
+        "stationId": "b4445f32-d61d-45aa-a90c-a1d736e530c0",
+        "stationCode": "HWR",
+        "stationName": "Howrah Junction",
+        "sequenceNumber": 1,
+        "arrivalMinutes": null,
+        "departureMinutes": 10,
+        "distanceFromStart": 0
+      },
+      {
+        "stationId": "c860e957-daee-413c-9803-2363aca6a425",
+        "stationCode": "SRC",
+        "stationName": "Santragachi Junction",
+        "sequenceNumber": 2,
+        "arrivalMinutes": 20,
+        "departureMinutes": null,
+        "distanceFromStart": 15
+      }
+    ],
+    "coaches": [
+      {
+        "coachId": "cbb70d35-5a85-4728-a8a1-1588f446afef",
+        "coachNumber": "A1",
+        "coachType": "AC_2A",
+        "totalSeats": 48,
+        "pricePerKm": 0.9
+      }
+    ],
+    "fareRange": {
+      "min": 14,
+      "max": 14,
+      "currency": "INR"
+    },
+    "capacity": {
+      "total": 48,
+      "byCoachType": {
+        "AC_2A": 48
+      }
+    },
+    "createdAt": "2026-08-02T19:37:07.904Z",
+    "updatedAt": "2026-08-02T19:37:07.904Z"
+  },
+  "fields": {
+    "trainCategory": ["EXPRESS"],
+    "trainId": ["e3d1a6c2-0b87-4a58-962f-923b9c0a9df0"],
+    "capacity.total": [48],
+    "trainName.keyword": ["Coromandel Express"],
+    "fromStationId": ["b4445f32-d61d-45aa-a90c-a1d736e530c0"],
+    "operatingDays": [1, 3, 5],
+    "fareRange.max": [14],
+    "fareRange.currency": ["INR"],
+    "version": [1],
+    "toStationId": ["c860e957-daee-413c-9803-2363aca6a425"],
+    "capacity.byCoachType.AC_2A": [48],
+    "coaches": [
+      {
+        "coachNumber": ["A1"],
+        "coachType": ["AC_2A"],
+        "pricePerKm": [0.9],
+        "coachId": ["cbb70d35-5a85-4728-a8a1-1588f446afef"],
+        "totalSeats": [48]
+      }
+    ],
+    "createdAt": ["2026-08-02T19:37:07.904Z"],
+    "routeId": ["942c0ebf-a87e-4a8b-ab98-ada33235a5a6"],
+    "trainName": ["Coromandel Express"],
+    "fareRange.min": [14],
+    "departureDate": ["2026-08-21T00:00:00.000Z"],
+    "trainNumber": ["12841"],
+    "stops": [
+      {
+        "sequenceNumber": [1],
+        "stationCode": ["HWR"],
+        "departureMinutes": [10],
+        "stationName": ["Howrah Junction"],
+        "stationId": ["b4445f32-d61d-45aa-a90c-a1d736e530c0"],
+        "distanceFromStart": [0]
+      },
+      {
+        "sequenceNumber": [2],
+        "stationCode": ["SRC"],
+        "arrivalMinutes": [20],
+        "stationName": ["Santragachi Junction"],
+        "stationId": ["c860e957-daee-413c-9803-2363aca6a425"],
+        "distanceFromStart": [15]
+      }
+    ],
+    "totalDistance": [15],
+    "routesServed": [
+      "b4445f32-d61d-45aa-a90c-a1d736e530c0:c860e957-daee-413c-9803-2363aca6a425"
+    ],
+    "scheduleId": ["6b83a9a4-15cd-4d3e-8bd2-e007f4d6d0af"],
+    "status": ["ACTIVE"],
+    "updatedAt": ["2026-08-02T19:37:07.904Z"]
+  }
+}

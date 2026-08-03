@@ -22,12 +22,7 @@ export const successResponse = <T>(
   meta: createMeta(metaExtra),
 });
 
-/**
- * Pagination options interface.
- *
- * @field skip The number of records to skip.
- * @field take The number of records to take.
- */
+/** Pagination options interface. */
 export interface PaginationOptions {
   skip: number;
   take: number;

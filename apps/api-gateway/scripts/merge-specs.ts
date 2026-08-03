@@ -89,9 +89,9 @@ const GATEWAY_INFO = {
 
   - **User Service** — Authentication, identity, and profile management.
   - **Admin Service** — Administrator authentication and administrative operations.
+  - **Search Service** — Train and station search.
   - **Inventy Service** - Inventory Schedule Management. *(future)*
   - **Booking Service** — Seat reservation and booking lifecycle. *(future)*
-  - **Search Service** — Train and station search. *(future)*
   - **Payment Service** — Payment processing. *(future)*
   - **Notification Service** — User-facing notifications. *(internal)*
 `,
@@ -114,6 +114,13 @@ type ServiceSpecSource = {
 // services.config.ts — including it would cause the merge to read its
 // own previous output as an input, which is a self-reference at best and
 // a circular consistency violation at worst.
+//
+// Note: directory names use spaces (`apps/search service/`) while the
+// `SERVICES` map uses hyphens (`search-service`). We normalise the
+// directory name to a service id by lowercasing and collapsing whitespace.
+const normaliseServiceId = (dirName: string): string =>
+  dirName.trim().toLowerCase().replace(/\s+/g, "-");
+
 const collectMergeInputs = (): ServiceSpecSource[] => {
   if (!fs.existsSync(APPS_DIR)) return [];
 
@@ -122,14 +129,15 @@ const collectMergeInputs = (): ServiceSpecSource[] => {
   const sources: ServiceSpecSource[] = entries
     .filter((entry) => entry.isDirectory())
     .map((entry) => {
-      const metadata = SERVICES[entry.name];
+      const serviceId = normaliseServiceId(entry.name);
+      const metadata = SERVICES[serviceId];
       if (metadata?.publish !== true) return null;
       if (metadata.mergeInput === false) return null;
 
       const specPath = path.join(APPS_DIR, entry.name, "openapi.yaml");
       if (!fs.existsSync(specPath)) return null;
 
-      return { id: entry.name, specPath };
+      return { id: serviceId, specPath };
     })
     .filter((source): source is ServiceSpecSource => source !== null);
 
@@ -146,25 +154,42 @@ const collectMergeInputs = (): ServiceSpecSource[] => {
 // the gateway's target YAML path. Output is the merged YAML; we'll read it
 // back as JSON for the .json sibling.
 //
-// We invoke the binary via `pnpm exec` rather than the unqualified path
-// `apps/api-gateway/node_modules/.bin/redocly(.cmd)` because on Windows,
-// `child_process.execFileSync` against a `.cmd` shim can fail with EINVAL
-// under certain Node versions. Routing through pnpm exec keeps the same
-// pnpm-managed resolution but avoids the spawn constraint.
+// We invoke the binary via `pnpm exec` with `cwd` set to the api-gateway
+// workspace (where `@redocly/cli` is declared as a dependency). The
+// input and output paths in `redoclyArgs` are still relative to the repo
+// root so we pass them through unchanged — redocly resolves them against
+// its own `cwd` first, but we then use absolute paths below instead.
 const runRedoclyJoin = (sources: ServiceSpecSource[]): void => {
+  const API_GATEWAY_DIR = path.resolve(__dirname, "..");
   const redoclyArgs = [
     "join",
-    ...sources.map((s) => path.relative(REPO_ROOT, s.specPath)),
+    ...sources.map((s) => path.resolve(REPO_ROOT, s.specPath)),
     "--output",
-    path.relative(REPO_ROOT, TARGET_YAML),
+    path.resolve(REPO_ROOT, TARGET_YAML),
   ];
-  console.log(`→ pnpm exec redocly ${redoclyArgs.join(" ")}`);
+  console.log(`→ node redocly ${redoclyArgs.join(" ")}`);
 
   try {
-    execFileSync("pnpm", ["exec", "redocly", ...redoclyArgs], {
+    // Invoke the redocly JS entry directly via Node. Two reasons we skip
+    // the `pnpm exec redocly` wrapper:
+    //   1. On Windows, `execFileSync("pnpm", ...)` with `shell: true`
+    //      passes args through cmd.exe, which mangles paths containing
+    //      spaces (e.g. `apps/search service/openapi.yaml`).
+    //   2. With `shell: false`, Node looks for `pnpm` (not `pnpm.cmd`)
+    //      and fails with ENOENT.
+    // Going through Node + cli.js avoids both problems and saves a layer
+    // of process overhead.
+    const redoclyBin = path.join(
+      API_GATEWAY_DIR,
+      "node_modules",
+      "@redocly",
+      "cli",
+      "bin",
+      "cli.js",
+    );
+    execFileSync(process.execPath, [redoclyBin, ...redoclyArgs], {
       stdio: ["ignore", "inherit", "inherit"],
-      cwd: REPO_ROOT,
-      shell: process.platform === "win32",
+      cwd: API_GATEWAY_DIR,
     });
   } catch (err) {
     console.error("❌ redocly join failed");

@@ -404,6 +404,9 @@ importers:
       "@irctc/middleware":
         specifier: workspace:*
         version: link:../../packages/middleware
+      "@irctc/openapi":
+        specifier: workspace:*
+        version: link:../../packages/openapi
       "@irctc/redis":
         specifier: workspace:*
         version: link:../../packages/redis
@@ -450,12 +453,18 @@ importers:
       "@types/express":
         specifier: ^4.17.25
         version: 4.17.25
+      "@types/js-yaml":
+        specifier: ^4.0.9
+        version: 4.0.9
       "@types/jsonwebtoken":
         specifier: ^9.0.10
         version: 9.0.10
       "@types/node":
         specifier: ^22.19.21
         version: 22.20.1
+      js-yaml:
+        specifier: ^4.1.0
+        version: 4.3.1
       tsc-alias:
         specifier: ^1.9.0
         version: 1.9.1

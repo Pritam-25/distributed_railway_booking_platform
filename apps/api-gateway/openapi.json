@@ -3,12 +3,16 @@
   "info": {
     "title": "Railway Booking Platform API",
     "version": "1.0.0",
-    "description": "\n  # Railway Booking Platform API\n\n  Welcome to the **Railway Booking Platform API**. This document is the\n  unified public API contract for the IRCTC Railway Booking Platform,\n  combining every public endpoint exposed through the API Gateway.\n\n  ## Services\n\n  - **User Service** — Authentication, identity, and profile management.\n  - **Admin Service** — Administrator authentication and administrative operations.\n  - **Inventy Service** - Inventory Schedule Management. *(future)*\n  - **Booking Service** — Seat reservation and booking lifecycle. *(future)*\n  - **Search Service** — Train and station search. *(future)*\n  - **Payment Service** — Payment processing. *(future)*\n  - **Notification Service** — User-facing notifications. *(internal)*\n"
+    "description": "\n  # Railway Booking Platform API\n\n  Welcome to the **Railway Booking Platform API**. This document is the\n  unified public API contract for the IRCTC Railway Booking Platform,\n  combining every public endpoint exposed through the API Gateway.\n\n  ## Services\n\n  - **User Service** — Authentication, identity, and profile management.\n  - **Admin Service** — Administrator authentication and administrative operations.\n  - **Search Service** — Train and station search.\n  - **Inventy Service** - Inventory Schedule Management. *(future)*\n  - **Booking Service** — Seat reservation and booking lifecycle. *(future)*\n  - **Payment Service** — Payment processing. *(future)*\n  - **Notification Service** — User-facing notifications. *(internal)*\n"
   },
   "tags": [
     {
       "name": "Admin",
       "x-displayName": "Admin"
+    },
+    {
+      "name": "Search",
+      "x-displayName": "Search"
     },
     {
       "name": "Authentication",
@@ -262,6 +266,307 @@
                   },
                   "required": ["success", "error", "meta"],
                   "description": "Error Response Envelope (UNAUTHORIZED)",
+                  "x-sdk-ref": "ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests - Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalServerErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/search/stations/suggest": {
+      "servers": [
+        {
+          "url": "http://localhost:4000",
+          "description": "API Gateway Proxy URL"
+        },
+        {
+          "url": "http://localhost:4004",
+          "description": "Local Direct Search Service URL"
+        }
+      ],
+      "get": {
+        "operationId": "suggestStations",
+        "tags": ["Search"],
+        "summary": "Suggest stations for autocomplete",
+        "description": "Returns a list of station suggestions matching a user-entered query. Backed by an Elasticsearch projection of `STATION_*` lifecycle events with a Redis read-through cache.\n\n**Query Parameters:**\n- `q` - The autocomplete search term. Minimum 2 characters; trimmed before lookup.\n- `limit` - Maximum number of suggestions to return. Defaults to 10; max 20.\n\n**Response:**\nReturns a `StationSuggestResponse` containing `count` and a `stations[]` array. Each station carries its canonical `stationId`, `code`, `name`, `zone`, `state`, and an `isActive` flag.\n\n**Outcomes:**\n- 200 OK - One or more stations matched (or zero, in which case `stations` is an empty array).\n- 400 Bad Request - The query failed schema validation (e.g. `q` shorter than 2 characters, or `limit` out of range).\n- 429 Too Many Requests - The caller exceeded the platform rate limit.\n- 500 Internal Server Error - Elasticsearch or Redis returned an unexpected error.\n\n**Notes:**\n- The endpoint is public — no authentication is required.\n- Results are served from Redis when warm; cache TTL is bounded by `SUGGEST_CACHE_TTL_SECONDS`.",
+        "security": [],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 64,
+              "example": "HWR"
+            },
+            "required": true,
+            "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20,
+              "default": 10,
+              "example": 10
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Station suggestions retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [true],
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Station suggestions retrieved successfully"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/StationSuggestResponse"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "message", "data", "meta"],
+                  "description": "Success Response Envelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Validation or invalid input error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests - Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalServerErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/search/trains": {
+      "servers": [
+        {
+          "url": "http://localhost:4000",
+          "description": "API Gateway Proxy URL"
+        },
+        {
+          "url": "http://localhost:4004",
+          "description": "Local Direct Search Service URL"
+        }
+      ],
+      "get": {
+        "operationId": "searchTrains",
+        "tags": ["Search"],
+        "summary": "Search trains by from/to station and date",
+        "description": "Returns trains running between two stations on a given date, including timing, fare range, capacity, and operating-days metadata. Backed by an Elasticsearch projection of `SCHEDULE_CREATED` admin events with a Redis read-through cache.\n\n**Query Parameters:**\n- `fromStation` - Origin station code (e.g. `NDLS`) or UUID. Required.\n- `toStation` - Destination station code (e.g. `HWH`) or UUID. Required.\n- `date` - Travel date in `YYYY-MM-DD` format. Required.\n- `category` - Optional filter by train category (e.g. `RAJDHANI`, `SHATABDI`).\n- `limit` - Page size. Defaults to 10; max 50.\n- `offset` - Pagination offset. Defaults to 0.\n\n**Response:**\nReturns a `TrainSearchResponse` containing the resolved `fromStation`, `toStation`, the requested `date`, the total `count`, and a `trains[]` array. Each train carries timing, distance, fare range, capacity, and operating days.\n\n**Outcomes:**\n- 200 OK - The query ran; the `trains` array may be empty when no schedules match.\n- 400 Bad Request - The query failed schema validation (e.g. invalid date format, missing required field).\n- 404 Not Found - Either `fromStation` or `toStation` could not be resolved against the `stations` index.\n- 429 Too Many Requests - The caller exceeded the platform rate limit.\n- 500 Internal Server Error - Elasticsearch or Redis returned an unexpected error.\n\n**Notes:**\n- The endpoint is public — no authentication is required.\n- Stations are resolved upstream against the existing `stations` Elasticsearch index, then the schedule index is queried with the resolved UUIDs.\n- Cache TTL is bounded by `TRAIN_SEARCH_CACHE_TTL_SECONDS`.\n- `availableSeats` is **capacity**, not live availability. Per-seat live counts are fetched by booking-service from inventory-service at hold time.\n- Snapshot data is frozen at `SCHEDULE_CREATED` time; edits to the underlying train or route do not trigger a re-projection.",
+        "security": [],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 64,
+              "example": "Howrah Jn"
+            },
+            "required": true,
+            "name": "fromStation",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 64,
+              "example": "New Delhi"
+            },
+            "required": true,
+            "name": "toStation",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "example": "2026-08-03"
+            },
+            "required": true,
+            "name": "date",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "RAJDHANI",
+                "SHATABDI",
+                "VANDE_BHARAT",
+                "DURONTO",
+                "SUPERFAST",
+                "PASSENGER",
+                "EXPRESS",
+                "DEMU",
+                "MEMU"
+              ],
+              "example": "RAJDHANI"
+            },
+            "required": false,
+            "name": "category",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 10,
+              "example": 10
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": ["integer", "null"],
+              "minimum": 0,
+              "default": 0,
+              "example": 0
+            },
+            "required": false,
+            "name": "offset",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Train search results retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [true],
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Train search results retrieved successfully"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/TrainSearchResponse"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "message", "data", "meta"],
+                  "description": "Success Response Envelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Validation or invalid input error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "One or both stations could not be resolved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "STATION_NOT_FOUND"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Station could not be resolved. Verify the code or id and try again."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (STATION_NOT_FOUND)",
                   "x-sdk-ref": "ErrorResponse"
                 }
               }
@@ -1924,6 +2229,272 @@
         "type": "object",
         "properties": {}
       },
+      "StationSuggestResponse": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "example": 3
+          },
+          "stations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StationSuggestion"
+            }
+          }
+        },
+        "required": ["count", "stations"]
+      },
+      "StationSuggestion": {
+        "type": "object",
+        "properties": {
+          "stationId": {
+            "type": "string",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "code": {
+            "type": "string",
+            "example": "NDLS"
+          },
+          "name": {
+            "type": "string",
+            "example": "New Delhi"
+          },
+          "zone": {
+            "type": ["string", "null"],
+            "example": "Northern Railway"
+          },
+          "state": {
+            "type": ["string", "null"],
+            "example": "Delhi"
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": ["stationId", "code", "name", "zone", "state", "isActive"]
+      },
+      "TrainSearchResponse": {
+        "type": "object",
+        "properties": {
+          "fromStation": {
+            "type": "object",
+            "properties": {
+              "stationId": {
+                "type": "string",
+                "example": "550e8400-e29b-41d4-a716-446655440013"
+              },
+              "code": {
+                "type": "string",
+                "example": "NDLS"
+              },
+              "name": {
+                "type": "string",
+                "example": "New Delhi"
+              }
+            },
+            "required": ["stationId", "code", "name"]
+          },
+          "toStation": {
+            "type": "object",
+            "properties": {
+              "stationId": {
+                "type": "string",
+                "example": "550e8400-e29b-41d4-a716-446655440014"
+              },
+              "code": {
+                "type": "string",
+                "example": "HWH"
+              },
+              "name": {
+                "type": "string",
+                "example": "Howrah"
+              }
+            },
+            "required": ["stationId", "code", "name"]
+          },
+          "date": {
+            "type": "string",
+            "example": "2026-09-15"
+          },
+          "count": {
+            "type": "integer",
+            "example": 4
+          },
+          "trains": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrainSearchResult"
+            }
+          }
+        },
+        "required": ["fromStation", "toStation", "date", "count", "trains"]
+      },
+      "TrainSearchResult": {
+        "type": "object",
+        "properties": {
+          "scheduleId": {
+            "type": "string",
+            "example": "550e8400-e29b-41d4-a716-446655440010"
+          },
+          "trainId": {
+            "type": "string",
+            "example": "550e8400-e29b-41d4-a716-446655440011"
+          },
+          "trainNumber": {
+            "type": "string",
+            "example": "12301"
+          },
+          "trainName": {
+            "type": "string",
+            "example": "Rajdhani Express"
+          },
+          "category": {
+            "type": "string",
+            "example": "RAJDHANI"
+          },
+          "from": {
+            "type": "object",
+            "properties": {
+              "stationId": {
+                "type": "string",
+                "example": "550e8400-e29b-41d4-a716-446655440013"
+              },
+              "code": {
+                "type": "string",
+                "example": "NDLS"
+              },
+              "name": {
+                "type": "string",
+                "example": "New Delhi"
+              },
+              "departureTime": {
+                "type": ["string", "null"],
+                "example": "2026-09-15T16:25:00.000Z"
+              },
+              "platform": {
+                "type": ["string", "null"],
+                "example": "9"
+              }
+            },
+            "required": [
+              "stationId",
+              "code",
+              "name",
+              "departureTime",
+              "platform"
+            ]
+          },
+          "to": {
+            "type": "object",
+            "properties": {
+              "stationId": {
+                "type": "string",
+                "example": "550e8400-e29b-41d4-a716-446655440014"
+              },
+              "code": {
+                "type": "string",
+                "example": "HWH"
+              },
+              "name": {
+                "type": "string",
+                "example": "Howrah"
+              },
+              "arrivalTime": {
+                "type": ["string", "null"],
+                "example": "2026-09-16T09:55:00.000Z"
+              },
+              "platform": {
+                "type": ["string", "null"],
+                "example": "9"
+              }
+            },
+            "required": ["stationId", "code", "name", "arrivalTime", "platform"]
+          },
+          "durationMinutes": {
+            "type": ["integer", "null"],
+            "example": 1050
+          },
+          "distanceKm": {
+            "type": "integer",
+            "example": 1447
+          },
+          "fareRange": {
+            "$ref": "#/components/schemas/FareRange"
+          },
+          "availableSeats": {
+            "$ref": "#/components/schemas/AvailableSeats"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["DRAFT", "ACTIVE", "CANCELLED"],
+            "example": "ACTIVE"
+          },
+          "operatingDays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"]
+          }
+        },
+        "required": [
+          "scheduleId",
+          "trainId",
+          "trainNumber",
+          "trainName",
+          "category",
+          "from",
+          "to",
+          "durationMinutes",
+          "distanceKm",
+          "fareRange",
+          "availableSeats",
+          "status",
+          "operatingDays"
+        ]
+      },
+      "FareRange": {
+        "type": "object",
+        "properties": {
+          "min": {
+            "type": "number",
+            "example": 850
+          },
+          "max": {
+            "type": "number",
+            "example": 4250
+          },
+          "currency": {
+            "type": "string",
+            "enum": ["INR"],
+            "example": "INR"
+          }
+        },
+        "required": ["min", "max", "currency"]
+      },
+      "AvailableSeats": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "example": 432
+          },
+          "byCoachType": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "example": {
+              "AC_2A": 48,
+              "AC_3A": 96,
+              "SL": 288
+            }
+          }
+        },
+        "required": ["total", "byCoachType"]
+      },
       "RegisterRequest": {
         "type": "object",
         "properties": {
@@ -2257,6 +2828,10 @@
     {
       "name": "Admin Service API",
       "tags": ["Admin"]
+    },
+    {
+      "name": "Search Service API",
+      "tags": ["Search"]
     },
     {
       "name": "User Service API",
