@@ -646,7 +646,7 @@ export class AuthService {
       // 1. Decode and verify JWT refresh token signature
       const decoded = verifyRefreshToken(refreshToken);
 
-      if (!decoded) {
+      if (!decoded?.sessionId) {
         throw new ApiError(
           statusCode.unauthorized,
           ERROR_CODES.INVALID_REFRESH_TOKEN,

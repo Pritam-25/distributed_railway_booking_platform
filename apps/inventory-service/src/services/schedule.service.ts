@@ -197,20 +197,6 @@ export class ScheduleService {
           );
         }
 
-        if (scheduleInventory.version >= parsed.version) {
-          logger.info(
-            {
-              module: "schedule-service",
-              scheduleId: parsed.scheduleId,
-              eventId: parsed.eventId,
-              existingVersion: scheduleInventory.version,
-              eventVersion: parsed.version,
-            },
-            "ScheduleStatusChangedEventV1 skipped: version is stale or already processed",
-          );
-          return;
-        }
-
         const newStatus =
           parsed.status === ScheduleInventoryStatus.CANCELLED
             ? ScheduleInventoryStatus.CANCELLED
@@ -224,14 +210,14 @@ export class ScheduleService {
         );
 
         if (!updated) {
-          logger.warn(
+          logger.info(
             {
               module: "schedule-service",
               scheduleId: parsed.scheduleId,
               eventId: parsed.eventId,
               eventVersion: parsed.version,
             },
-            "ScheduleStatusChangedEventV1 skipped: concurrent update already applied a newer version",
+            "ScheduleStatusChangedEventV1 skipped: version is stale or already processed",
           );
           return;
         }

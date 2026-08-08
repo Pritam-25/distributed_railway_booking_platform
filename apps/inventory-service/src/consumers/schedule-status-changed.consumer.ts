@@ -1,7 +1,14 @@
-import type { EachMessagePayload, KafkaConsumerRunner } from "@irctc/kafka";
+import {
+  isNonRetryableError,
+  type EachMessagePayload,
+  type KafkaConsumerRunner,
+} from "@irctc/kafka";
 import type { logger as irctcLogger } from "@irctc/logger";
 import type { ScheduleService } from "@services";
 import { KAFKA_TOPICS } from "@irctc/contracts";
+import { ApiError } from "@irctc/errors";
+import { statusCode } from "@irctc/http";
+import { ERROR_CODES } from "@utils/errors";
 
 /**
  * Kafka event consumer for the schedule status changed topic.
@@ -38,9 +45,15 @@ export class ScheduleStatusChangedConsumer {
       const event = JSON.parse(message.value.toString("utf8"));
       await this.service.processStatusChanged(event);
     } catch (err) {
-      const isParseError = err instanceof SyntaxError;
+      const isNonRetryable = isNonRetryableError(
+        err,
+        (e) =>
+          e instanceof ApiError &&
+          e.statusCode === statusCode.notFound &&
+          e.code === ERROR_CODES.SCHEDULE_INVENTORY_NOT_FOUND,
+      );
 
-      if (isParseError) {
+      if (isNonRetryable) {
         this.logger.error(
           {
             err:
@@ -49,7 +62,7 @@ export class ScheduleStatusChangedConsumer {
                 : err,
             messageKey: message.key?.toString("utf8"),
           },
-          "Failed to parse schedule status changed notification payload (non-retryable). Committing offset and discarding.",
+          "Failed to process schedule status changed notification (non-retryable). Committing offset and discarding.",
         );
       } else {
         this.logger.error(

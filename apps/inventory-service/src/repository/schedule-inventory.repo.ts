@@ -57,27 +57,32 @@ export class ScheduleInventoryRepository {
   }
 
   /**
-   * Updates the status and version of a schedule inventory record.
+   * Atomically updates the status and version of a schedule inventory record,
+   * ensuring the update only succeeds if the incoming version is strictly greater.
    *
    * @param scheduleId - The unique ID of the schedule.
    * @param status - The new status of the schedule inventory.
    * @param version - The new version of the schedule inventory.
    * @param tx - Optional Prisma transaction client.
-   * @returns A promise resolving to the updated schedule inventory record.
+   * @returns A promise resolving to true if the update succeeded, or false if the version was stale.
    */
   async updateStatus(
     scheduleId: string,
     status: ScheduleInventoryStatus,
     version: number,
     tx?: Prisma.TransactionClient,
-  ): Promise<ScheduleInventory> {
-    return this.getClient(tx).scheduleInventory.update({
-      where: { scheduleId },
+  ): Promise<boolean> {
+    const result = await this.getClient(tx).scheduleInventory.updateMany({
+      where: {
+        scheduleId,
+        version: { lt: version },
+      },
       data: {
         status,
         version,
       },
     });
+    return result.count > 0;
   }
 
   /**

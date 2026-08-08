@@ -17,7 +17,11 @@ export function verifyRefreshToken(token: string): RefreshTokenPayload | null {
     const decoded = jwt.verify(token, env.JWT_SECRET) as unknown as
       RefreshTokenPayload | undefined;
 
-    if (decoded?.type === "refresh" && decoded.sub) {
+    if (
+      decoded?.type === "refresh" &&
+      decoded.sub &&
+      typeof decoded.sessionId === "string"
+    ) {
       return decoded;
     }
     return null;

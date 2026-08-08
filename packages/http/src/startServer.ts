@@ -48,7 +48,7 @@ export interface StartServerOptions {
   /** NODE_ENV value `development`, `production`, `test`.*/
   environment: string;
   /** Runs after HTTP bind. Use for `Container.start()` (consumers, outbox worker). */
-  afterListen?: (server: Server) => Promise<void>;
+  afterListen?: (server?: Server) => Promise<void>;
   /** Runs during graceful shutdown, BEFORE HTTP close. Use to stop consumers. */
   beforeShutdown?: () => Promise<void>;
   /** Runs during graceful shutdown, AFTER HTTP close. Use to disconnect kafka/redis/prisma. */
@@ -57,8 +57,112 @@ export interface StartServerOptions {
   shutdownTimeoutMs?: number;
 }
 
-// Module-level idempotency guard. A second signal during shutdown is a no-op.
+interface ActiveShutdownContext {
+  beforeShutdown?: () => Promise<void>;
+  afterShutdown?: () => Promise<void>;
+  shutdownTimeoutMs: number;
+  mode: StartServerMode;
+  server?: Server;
+}
+
+// Module-level idempotency guard and active context for graceful shutdown.
 let isShuttingDown = false;
+let activeShutdownContext: ActiveShutdownContext | undefined;
+
+/**
+ * Shared graceful shutdown routine. Executes all hooks (`beforeShutdown`, HTTP close,
+ * `afterShutdown`, and `shutdownTelemetry`) before calling `process.exit`.
+ *
+ * @param signal - Signal or origin trigger.
+ * @param exitCode - Desired exit code.
+ */
+export const executeShutdown = async (
+  signal: NodeJS.Signals,
+  exitCode = 0,
+): Promise<void> => {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  let hadError = false;
+
+  logger.info(
+    { module: "server" },
+    `Received ${signal}, shutting down gracefully...`,
+  );
+
+  const ctx = activeShutdownContext;
+
+  // 1. Stop consumers / container before the HTTP server stops accepting
+  //    traffic (or in worker mode, before dependencies are disconnected).
+  if (ctx?.beforeShutdown) {
+    try {
+      await withTimeout(
+        "beforeShutdown",
+        ctx.beforeShutdown(),
+        ctx.shutdownTimeoutMs,
+      );
+      logger.info({ module: "server" }, "beforeShutdown done.");
+    } catch (error) {
+      logger.error({ module: "server", err: error }, "beforeShutdown failed.");
+      hadError = true;
+    }
+  }
+
+  // 2. Drain HTTP in server mode.
+  if (ctx?.mode === "http" && ctx.server) {
+    try {
+      await withTimeout(
+        "HTTP server close",
+        new Promise<void>((resolve, reject) => {
+          ctx.server!.close((err) => {
+            if (err) return reject(err);
+            resolve();
+          });
+        }),
+        ctx.shutdownTimeoutMs,
+      );
+      logger.info({ module: "server" }, "HTTP server closed.");
+    } catch (error) {
+      logger.error(
+        { module: "server", err: error },
+        "Error occurred while closing HTTP server.",
+      );
+      hadError = true;
+    }
+  }
+
+  // 3. Disconnect Kafka / Redis / Prisma / ES.
+  if (ctx?.afterShutdown) {
+    try {
+      await withTimeout(
+        "afterShutdown",
+        ctx.afterShutdown(),
+        ctx.shutdownTimeoutMs,
+      );
+      logger.info({ module: "server" }, "afterShutdown done.");
+    } catch (error) {
+      logger.error({ module: "server", err: error }, "afterShutdown failed.");
+      hadError = true;
+    }
+  }
+
+  // 4. Telemetry is always the last step.
+  try {
+    await withTimeout(
+      "Telemetry shutdown",
+      shutdownTelemetry(),
+      ctx?.shutdownTimeoutMs ?? 5000,
+    );
+    logger.info({ module: "server" }, "Telemetry shutdown successfully.");
+  } catch (error) {
+    logger.error(
+      { module: "server", err: error },
+      "Error occurred while shutting down telemetry.",
+    );
+    hadError = true;
+  }
+
+  process.exit(hadError ? Math.max(exitCode, 1) : exitCode);
+};
 
 /**
  * Bootstraps the service, binds the HTTP port (in `"http"` mode), wires
@@ -110,98 +214,18 @@ export const startServer = async (
   const numericPort: number | undefined =
     port === undefined ? undefined : Number(port);
 
-  let server: Server | undefined;
-
-  const shutdown = async (
-    signal: NodeJS.Signals,
-    exitCode = 0,
-  ): Promise<void> => {
-    if (isShuttingDown) return;
-    isShuttingDown = true;
-    let hadError = false;
-
-    logger.info(
-      { module: "server" },
-      `Received ${signal}, shutting down gracefully...`,
-    );
-
-    // 1. Stop consumers / container before the HTTP server stops accepting
-    //    traffic (or in worker mode, before dependencies are disconnected).
-    if (beforeShutdown) {
-      try {
-        await withTimeout(
-          "beforeShutdown",
-          beforeShutdown(),
-          shutdownTimeoutMs,
-        );
-        logger.info({ module: "server" }, "beforeShutdown done.");
-      } catch (error) {
-        logger.error(
-          { module: "server", err: error },
-          "beforeShutdown failed.",
-        );
-        hadError = true;
-      }
-    }
-
-    // 2. Drain HTTP in server mode.
-    if (mode === "http" && server) {
-      try {
-        await withTimeout(
-          "HTTP server close",
-          new Promise<void>((resolve, reject) => {
-            server!.close((err) => {
-              if (err) return reject(err);
-              resolve();
-            });
-          }),
-          shutdownTimeoutMs,
-        );
-        logger.info({ module: "server" }, "HTTP server closed.");
-      } catch (error) {
-        logger.error(
-          { module: "server", err: error },
-          "Error occurred while closing HTTP server.",
-        );
-        hadError = true;
-      }
-    }
-
-    // 3. Disconnect Kafka / Redis / Prisma / ES.
-    if (afterShutdown) {
-      try {
-        await withTimeout("afterShutdown", afterShutdown(), shutdownTimeoutMs);
-        logger.info({ module: "server" }, "afterShutdown done.");
-      } catch (error) {
-        logger.error({ module: "server", err: error }, "afterShutdown failed.");
-        hadError = true;
-      }
-    }
-
-    // 4. Telemetry is always the last step.
-    try {
-      await withTimeout(
-        "Telemetry shutdown",
-        shutdownTelemetry(),
-        shutdownTimeoutMs,
-      );
-      logger.info({ module: "server" }, "Telemetry shutdown successfully.");
-    } catch (error) {
-      logger.error(
-        { module: "server", err: error },
-        "Error occurred while shutting down telemetry.",
-      );
-      hadError = true;
-    }
-
-    process.exit(hadError ? Math.max(exitCode, 1) : exitCode);
+  activeShutdownContext = {
+    beforeShutdown,
+    afterShutdown,
+    shutdownTimeoutMs,
+    mode,
   };
 
   process.on("SIGINT", () => {
-    void shutdown("SIGINT", 0);
+    void executeShutdown("SIGINT", 0);
   });
   process.on("SIGTERM", () => {
-    void shutdown("SIGTERM", 0);
+    void executeShutdown("SIGTERM", 0);
   });
 
   process.on("unhandledRejection", (reason) => {
@@ -209,7 +233,7 @@ export const startServer = async (
       { module: "server", err: reason },
       "Unhandled Promise Rejection detected. Shutting down...",
     );
-    void shutdown("SIGTERM", 1);
+    void executeShutdown("SIGTERM", 1);
   });
 
   process.on("uncaughtException", (error) => {
@@ -217,8 +241,10 @@ export const startServer = async (
       { module: "server", err: error },
       "Uncaught Exception detected. Shutting down...",
     );
-    void shutdown("SIGTERM", 1);
+    void executeShutdown("SIGTERM", 1);
   });
+
+  let server: Server | undefined;
 
   // 1. HTTP bind (server mode only).
   if (mode === "http" && app && numericPort !== undefined) {
@@ -231,11 +257,12 @@ export const startServer = async (
         resolve(bound);
       });
     });
+    activeShutdownContext.server = server;
   }
 
   // 3. afterListen — Container.start() (consumers, outbox worker).
   if (afterListen) {
-    await afterListen(server as Server);
+    await afterListen(server);
   }
 
   logger.info(
@@ -262,11 +289,9 @@ export const triggerShutdown = async (
   signal: NodeJS.Signals,
   exitCode = 0,
 ): Promise<void> => {
-  if (isShuttingDown) return;
-  isShuttingDown = true;
   logger.info(
     { module: "server" },
     `triggerShutdown called with ${signal}, exitCode=${exitCode}`,
   );
-  process.exit(exitCode);
+  await executeShutdown(signal, exitCode);
 };

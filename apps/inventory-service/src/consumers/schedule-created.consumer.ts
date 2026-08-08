@@ -1,4 +1,8 @@
-import type { EachMessagePayload, KafkaConsumerRunner } from "@irctc/kafka";
+import {
+  isNonRetryableError,
+  type EachMessagePayload,
+  type KafkaConsumerRunner,
+} from "@irctc/kafka";
 import type { logger as irctcLogger } from "@irctc/logger";
 import type { ScheduleService } from "@services";
 import { KAFKA_TOPICS } from "@irctc/contracts";
@@ -38,9 +42,9 @@ export class ScheduleCreatedConsumer {
       const event = JSON.parse(message.value.toString("utf8"));
       await this.service.processCreated(event);
     } catch (err) {
-      const isParseError = err instanceof SyntaxError;
+      const isNonRetryable = isNonRetryableError(err);
 
-      if (isParseError) {
+      if (isNonRetryable) {
         this.logger.error(
           {
             err:
@@ -49,7 +53,7 @@ export class ScheduleCreatedConsumer {
                 : err,
             messageKey: message.key?.toString("utf8"),
           },
-          "Failed to parse schedule created notification payload (non-retryable). Committing offset and discarding.",
+          "Failed to process schedule created notification payload (non-retryable). Committing offset and discarding.",
         );
       } else {
         this.logger.error(
