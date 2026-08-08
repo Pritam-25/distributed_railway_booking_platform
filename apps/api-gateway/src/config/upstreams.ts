@@ -29,4 +29,9 @@ export const upstreams = {
     baseUrl: env.ADMIN_UPSTREAM,
     circuitName: "admin-service",
   },
+  search: {
+    name: "search",
+    baseUrl: UpstreamUrl.parse(env.SEARCH_UPSTREAM),
+    circuitName: "search-service",
+  },
 } satisfies Record<string, Upstream>;

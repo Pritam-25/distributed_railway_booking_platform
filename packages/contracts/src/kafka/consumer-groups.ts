@@ -4,4 +4,10 @@ export const CONSUMER_GROUPS = {
   INVENTORY_SCHEDULE_CREATED: "inventory-service-schedule-created-consumer",
   INVENTORY_SCHEDULE_STATUS_CHANGED:
     "inventory-service-schedule-status-change-consumer",
+  SEARCH_STATION_CREATED: "search-service-station-created-consumer",
+  SEARCH_STATION_UPDATED: "search-service-station-updated-consumer",
+  SEARCH_STATION_DEACTIVATED: "search-service-station-deactivated-consumer",
+  SEARCH_SCHEDULE_CREATED: "search-service-schedule-created-consumer",
+  SEARCH_SCHEDULE_STATUS_CHANGED:
+    "search-service-schedule-status-change-consumer",
 } as const;

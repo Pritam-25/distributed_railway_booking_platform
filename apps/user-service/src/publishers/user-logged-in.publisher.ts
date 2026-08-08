@@ -7,28 +7,38 @@ import { injectTraceContextToKafkaHeaders } from "@irctc/telemetry";
 const SCHEMA_VERSION = "1" as const;
 
 /**
- * Publishes the `user.logged-in.v1` event after a
- * successful login. The login HTTP path awaits this — but failures
- * are best-effort and the caller swallows them (see AuthService.login).
+ * ## UserLoggedInEventPublisher
  *
- * The OTP publisher owns the same header keys; we keep both classes
- * in sync by sharing the `HEADER_*` constants. If the headers ever
- * change in one place, update both — and the @irctc/kafka package
- * mirror in the notification service.
+ * Publishes `UserLoggedInV1` events to the user-service Kafka topic.
+ *
+ * @remarks
+ * ### Responsibilities
+ * - Serializes typed {@link UserLoggedInV1Type} payloads to JSON.
+ * - Injects schema version, event ID, and trace context into Kafka headers.
+ * - Logs publish success and failure outcomes.
+ *
+ * ### Side Effects
+ * - **Kafka**: Produces a single message to `KAFKA_TOPICS.USER_LOGGED_IN`.
+ *
+ * ### Failure Guarantees
+ * - Publish errors are logged and re-thrown; callers (e.g.
+ *   {@link AuthService.login}) treat them as best-effort and do not roll
+ *   back the session.
  */
 export class UserLoggedInEventPublisher {
   /**
    * Creates an instance of UserLoggedInEventPublisher.
+   *
    * @param producer - The Kafka Producer instance.
    */
   constructor(private readonly producer: Producer) {}
 
   /**
-   * Publishes a USER_LOGGED_IN event to the Kafka topic.
+   * Serializes and publishes a `UserLoggedInV1` event payload to Kafka.
    *
-   * @param input - The login event payload to publish.
-   * @returns A promise that resolves when the event is successfully published.
-   * @throws {Error} - If the Kafka send operation fails.
+   * @param input - Validated {@link UserLoggedInV1Type} payload.
+   * @returns Resolves once the Kafka producer acknowledges the send.
+   * @throws {Error} When the underlying `producer.send` operation fails.
    */
   async publishUserLoggedIn(input: UserLoggedInV1Type): Promise<void> {
     try {

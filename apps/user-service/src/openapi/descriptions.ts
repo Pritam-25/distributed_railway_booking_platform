@@ -1,4 +1,4 @@
-import { buildEndpointDoc } from "@irctc/openapi";
+import { buildEndpointDoc, type EndpointDoc } from "@irctc/openapi";
 
 export const userServiceOpenApiDescriptions = {
   auth: {
@@ -240,7 +240,10 @@ export const userServiceOpenApiDescriptions = {
       ],
     }),
   },
-} as const;
+} satisfies {
+  auth: Record<string, EndpointDoc>;
+  userProfile: Record<string, EndpointDoc>;
+};
 
 export const apiTitle = "User Service API";
 

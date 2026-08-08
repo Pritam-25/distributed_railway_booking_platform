@@ -1,5 +1,6 @@
 /**
  * Custom error class for API errors
+ *
  * @param statusCode HTTP status code.
  * @param code Error code.
  * @param message Error message.
@@ -10,6 +11,9 @@ export class ApiError extends Error {
   readonly code: string;
   readonly details?: unknown;
 
+  /**
+   *
+   */
   constructor(
     statusCode: number,
     code: string,

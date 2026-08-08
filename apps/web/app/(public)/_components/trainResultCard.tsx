@@ -1,0 +1,152 @@
+"use client"
+
+import { Train, Clock, MapPin, Wallet, Users, ChevronRight } from "lucide-react"
+
+import { Button } from "@/components/ui/button"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import type { TrainSearchResult } from "@/generated"
+
+/**
+ * ## TrainResultCard
+ *
+ * Presentational card that renders a single `TrainSearchResult` from
+ * the search-service response. Pure props-in, JSX-out — no I/O, no
+ * hooks. Lives inside `TrainResultsList`.
+ *
+ * @param train - The single train payload from the API response.
+ */
+export function TrainResultCard({
+  train,
+}: {
+  readonly train: TrainSearchResult
+}) {
+  const statusClass =
+    train.status === "ACTIVE"
+      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+      : train.status === "CANCELLED"
+        ? "border-destructive/40 bg-destructive/10 text-destructive"
+        : "border-muted-foreground/40 bg-muted text-muted-foreground"
+
+  const departure = train.from.departureTime
+    ? new Date(train.from.departureTime).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "—"
+  const arrival = train.to.arrivalTime
+    ? new Date(train.to.arrivalTime).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "—"
+
+  const duration = formatDuration(train.durationMinutes)
+  const fareRange = `${train.fareRange.currency} ${train.fareRange.min}–${train.fareRange.max}`
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <CardTitle className="font-mono">
+              {train.trainNumber} · {train.trainName}
+            </CardTitle>
+            <CardDescription>
+              <Train className="mr-1 inline h-3.5 w-3.5" />
+              {train.category} ·{" "}
+              {train.operatingDays.length === 7
+                ? "Daily"
+                : train.operatingDays.join(", ")}
+            </CardDescription>
+          </div>
+          <span
+            className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium ${statusClass}`}
+          >
+            {train.status}
+          </span>
+        </div>
+      </CardHeader>
+
+      <Separator />
+
+      <CardContent className="space-y-4">
+        {/* Departure / arrival */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="space-y-1">
+            <p className="text-xs tracking-wider text-muted-foreground uppercase">
+              Departure
+            </p>
+            <p className="text-lg font-semibold">{departure}</p>
+            <p className="text-sm text-muted-foreground">
+              {train.from.code} · {train.from.name}
+              {train.from.platform ? ` · Platform ${train.from.platform}` : ""}
+            </p>
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs tracking-wider text-muted-foreground uppercase">
+              Arrival
+            </p>
+            <p className="text-lg font-semibold">{arrival}</p>
+            <p className="text-sm text-muted-foreground">
+              {train.to.code} · {train.to.name}
+              {train.to.platform ? ` · Platform ${train.to.platform}` : ""}
+            </p>
+          </div>
+        </div>
+
+        {/* Meta row: duration, distance, fare, capacity */}
+        <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+          <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+            <Clock className="h-4 w-4" />
+            {duration}
+          </span>
+          <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+            <MapPin className="h-4 w-4" />
+            {train.distanceKm} km
+          </span>
+          <span className="inline-flex items-center gap-1.5 font-medium">
+            <Wallet className="h-4 w-4" />
+            {fareRange}
+          </span>
+          <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+            <Users className="h-4 w-4" />
+            {train.availableSeats.total} seats
+          </span>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled
+            className="cursor-not-allowed"
+            title="Booking is not enabled yet"
+          >
+            Book
+            <ChevronRight className="ml-1 h-4 w-4" />
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * Formats a duration in minutes as `Xh Ym` (e.g. `17h 30m`).
+ */
+function formatDuration(minutes: number | null): string {
+  if (minutes === null) return "—"
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  if (h === 0) return `${m}m`
+  if (m === 0) return `${h}h`
+  return `${h}h ${m}m`
+}

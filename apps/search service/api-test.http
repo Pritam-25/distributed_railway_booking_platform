@@ -1,0 +1,136 @@
+# ==============================================================================
+# Search Service REST API Test Collection (.http / REST Client)
+# ==============================================================================
+# All client requests route through the API Gateway on :4000 by default.
+# Direct requests to search-service on :4004 can be used for direct verification.
+#
+# - {{gateway}}        — API Gateway root + health probes (port 4000)
+# - {{baseUrl}}        — Gateway API base path (/api/v1)
+# - {{search}}         — Proxied search endpoints via Gateway (/api/v1/search)
+# - {{searchService}}  — Direct search-service URL (port 4004)
+
+@gateway = http://localhost:4000
+@baseUrl = http://localhost:4000/api/v1
+@search = {{baseUrl}}/search
+@searchService = http://localhost:4004
+
+# Fallback Variables for manual/isolated testing
+@fallbackStationCode = HWR
+@fallbackFromStation = HWR
+@fallbackToStation = SRC
+@fallbackFromStationId = b4445f32-d61d-45aa-a90c-a1d736e530c0
+@fallbackToStationId = 51c6e52c-0824-41e1-90f3-60f049b57732
+@fallbackSearchDate = 2026-08-21
+
+# Auto-captured response data from station suggest (if run sequentially)
+@suggestedStationCode = {{suggestStations.response.body.data[0].code}}
+@suggestedStationId = {{suggestStations.response.body.data[0].stationId}}
+
+# ==============================================================================
+# 1. Diagnostics & Health Checks
+# ==============================================================================
+
+### Root API Gateway Endpoint
+GET {{gateway}}/
+
+### Gateway Health Liveness Probe
+GET {{gateway}}/health/live
+
+### Gateway Health Readiness Probe
+GET {{gateway}}/health/ready
+
+### Search Service Direct Root Banner
+GET {{searchService}}/
+
+### Search Service Direct Health Probe
+GET {{searchService}}/health
+
+### Search Service Direct Liveness Probe
+GET {{searchService}}/health/live
+
+### Search Service Direct Readiness Probe
+GET {{searchService}}/health/ready
+
+
+# ==============================================================================
+# 2. Station Autocomplete & Suggest API (`/api/v1/search/stations/suggest`)
+# ==============================================================================
+
+### Station Suggest - Standard Query (Code / Prefix "DEL")
+# @name suggestStations
+GET {{search}}/stations/suggest?q=DEL
+Accept: application/json
+
+### Station Suggest - With Result Limit (q="MUM", limit=5)
+GET {{search}}/stations/suggest?q=MUM&limit=5
+Accept: application/json
+
+### Station Suggest - Search by Full/Partial City or Station Name (q="New Delhi")
+GET {{search}}/stations/suggest?q=New%20Delhi
+Accept: application/json
+
+### Station Suggest - FAIL Case: Query too short (q < 2 characters) -> 400 Bad Request
+GET {{search}}/stations/suggest?q=D
+Accept: application/json
+
+### Station Suggest - FAIL Case: Limit exceeds maximum allowable limit (limit > 20) -> 400 Bad Request
+GET {{search}}/stations/suggest?q=DEL&limit=50
+Accept: application/json
+
+### Station Suggest - FAIL Case: Invalid limit parameter type -> 400 Bad Request
+GET {{search}}/stations/suggest?q=DEL&limit=abc
+Accept: application/json
+
+
+# ==============================================================================
+# 3. Train Search API (`/api/v1/search/trains`)
+# ==============================================================================
+
+### Train Search - Standard Search by Station Codes & Date
+# @name searchTrains
+GET {{search}}/trains?fromStation={{fallbackFromStation}}&toStation={{fallbackToStation}}&date={{fallbackSearchDate}}
+Accept: application/json
+
+### Train Search - Search using Auto-Captured Station Code from Suggestion
+GET {{search}}/trains?fromStation={{suggestedStationCode}}&toStation={{fallbackToStation}}&date={{fallbackSearchDate}}
+Accept: application/json
+
+### Train Search - Search by Station UUIDs
+GET {{search}}/trains?fromStation={{fallbackFromStationId}}&toStation={{fallbackToStationId}}&date={{fallbackSearchDate}}
+Accept: application/json
+
+### Train Search - Filter by Category (RAJDHANI)
+GET {{search}}/trains?fromStation={{fallbackFromStation}}&toStation={{fallbackToStation}}&date={{fallbackSearchDate}}&category=RAJDHANI
+Accept: application/json
+
+### Train Search - Filter by Category (VANDE_BHARAT)
+GET {{search}}/trains?fromStation={{fallbackFromStation}}&toStation={{fallbackToStation}}&date={{fallbackSearchDate}}&category=VANDE_BHARAT
+Accept: application/json
+
+### Train Search - Filter by Category (SHATABDI)
+GET {{search}}/trains?fromStation={{fallbackFromStation}}&toStation={{fallbackToStation}}&date={{fallbackSearchDate}}&category=SHATABDI
+Accept: application/json
+
+### Train Search - Pagination Parameters (limit=10, offset=0)
+GET {{search}}/trains?fromStation={{fallbackFromStation}}&toStation={{fallbackToStation}}&date={{fallbackSearchDate}}&limit=10&offset=0
+Accept: application/json
+
+### Train Search - FAIL Case: Missing Required Query Parameters (missing date & toStation) -> 400 Bad Request
+GET {{search}}/trains?fromStation=NDLS
+Accept: application/json
+
+### Train Search - FAIL Case: Invalid Date Format (DD-MM-YYYY instead of YYYY-MM-DD) -> 400 Bad Request
+GET {{search}}/trains?fromStation={{fallbackFromStation}}&toStation={{fallbackToStation}}&date=21-08-2026
+Accept: application/json
+
+### Train Search - FAIL Case: Invalid Train Category -> 400 Bad Request
+GET {{search}}/trains?fromStation={{fallbackFromStation}}&toStation={{fallbackToStation}}&date={{fallbackSearchDate}}&category=BULLET_TRAIN
+Accept: application/json
+
+### Train Search - FAIL Case: Invalid Pagination Offset (negative offset) -> 400 Bad Request
+GET {{search}}/trains?fromStation={{fallbackFromStation}}&toStation={{fallbackToStation}}&date={{fallbackSearchDate}}&offset=-5
+Accept: application/json
+
+### Train Search - FAIL Case: Limit exceeds maximum allowed threshold (limit > 50) -> 400 Bad Request
+GET {{search}}/trains?fromStation={{fallbackFromStation}}&toStation={{fallbackToStation}}&date={{fallbackSearchDate}}&limit=100
+Accept: application/json

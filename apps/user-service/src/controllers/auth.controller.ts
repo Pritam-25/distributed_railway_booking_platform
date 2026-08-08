@@ -1,5 +1,4 @@
 import type { AuthService } from "@services";
-import type { RefreshTokenPayload } from "@irctc/middleware";
 import {
   type LoginRequestDto,
   type RegisterRequestDto,
@@ -11,34 +10,49 @@ import {
   type ActiveSessionDto,
   SessionParamSchema,
 } from "@dto";
-import { logger } from "@irctc/logger";
-import { env } from "@config";
 import { COOKIE_MAX_AGE, COOKIE_NAMES } from "@utils/constants";
+import { env } from "@config";
 import { statusCode, successResponse } from "@irctc/http";
 import type { Response, Request } from "express";
 import { getDeviceFingerprint } from "@utils";
 import { ApiError } from "@irctc/errors";
 import { ERROR_CODES } from "@utils/errors";
-import jwt from "jsonwebtoken";
 import { z } from "zod";
 
 /**
- * Controller handling authentication, session management, and password recovery HTTP requests.
+ * ## AuthController
+ *
+ * Thin HTTP adapter for authentication, session management, and password
+ * recovery endpoints.
+ *
+ * ### Responsibilities
+ * - Accepts schema-validated HTTP requests for authentication flows.
+ * - Manages HTTP-only authentication cookies (`access_token`,
+ *   `refresh_token`, `otp_session`).
+ * - Extracts device metadata (fingerprint, IP, User-Agent) from incoming
+ *   requests.
+ * - Delegates all core domain logic to {@link AuthService}.
+ * - Envelopes service results in standard {@link successResponse} payloads.
+ *
+ * ### Error Handling
+ * - Delegates exception handling to `asyncHandler` and global error middleware.
+ * - `refresh` explicitly catches errors to clear HTTP-only cookies on failure before re-throwing, ensuring the frontend never gets trapped in an infinite refresh loop.
  */
 export class AuthController {
   /**
    * Creates an instance of AuthController.
-   * @param service - The AuthService instance.
+   *
+   * @param service - Injected {@link AuthService} instance.
    */
   constructor(private readonly service: AuthService) {}
 
   /**
    * Sets a secure HTTP-only cookie on the Express Response.
    *
-   * @param res - The Express Response object.
-   * @param name - The name of the cookie.
-   * @param value - The value to store in the cookie.
-   * @param maxAge - The expiration time of the cookie in milliseconds.
+   * @param res - Express Response object.
+   * @param name - Cookie name.
+   * @param value - Value stored in the cookie.
+   * @param maxAge - Expiration time in milliseconds.
    */
   private setCookie(
     res: Response,
@@ -56,16 +70,21 @@ export class AuthController {
   }
 
   /**
-   * HTTP endpoint to initiate user registration by sending an OTP.
-   * Generates an OTP session, stores registration state in Redis, sets a short-lived
-   * HTTP-only `otp_session` cookie, and sends an email via Kafka notification event.
+   * Initiates user registration by sending an OTP to the user's email.
    *
-   * @param req - The Express Request object containing user registration details in body.
-   * @param res - The Express Response object used to set the OTP session cookie and JSON data.
-   * @returns A promise that resolves when the response is sent.
+   * `POST /api/v1/auth/send-otp`
+   *
+   * ### Access
+   * Public
+   *
+   * ### Cookies
+   * Sets HTTP-only `otp_session` cookie.
+   *
+   * @param req - Express request with validated {@link RegisterRequestDto} body.
+   * @param res - Express response object.
    */
   async sendOtp(req: Request, res: Response): Promise<void> {
-    const payload = req.body as RegisterRequestDto;
+    const payload: RegisterRequestDto = req.body;
     const sessionId = await this.service.sendOtp(payload);
 
     this.setCookie(
@@ -81,15 +100,19 @@ export class AuthController {
   }
 
   /**
-   * HTTP endpoint to verify registration OTP and complete account creation.
-   * Validates OTP against stored Redis session, creates user in PostgreSQL, creates active
-   * authentication session in Redis, sets `access_token` and `refresh_token` HTTP-only cookies,
-   * clears `otp_session` cookie, and publishes `UserRegisteredV1` Kafka event.
+   * Verifies the registration OTP and completes account creation.
    *
-   * @param req - The Express Request object containing OTP body and `otp_session` cookie.
-   * @param res - The Express Response object used to set authentication cookies and return user data.
-   * @returns A promise that resolves when the response is sent.
-   * @throws {ApiError} - If `otp_session` cookie is missing (400) or OTP verification fails (400/401).
+   * `POST /api/v1/auth/verify-otp`
+   *
+   * ### Access
+   * Public (Requires `otp_session` cookie)
+   *
+   * ### Cookies
+   * - Clears: `otp_session`
+   * - Sets: `access_token`, `refresh_token`
+   *
+   * @param req - Express request with validated {@link VerifyOtpRequestDto} body.
+   * @param res - Express response object.
    */
   async verifyOtp(req: Request, res: Response): Promise<void> {
     const sessionId = req.cookies[COOKIE_NAMES.OTP_SESSION];
@@ -100,7 +123,7 @@ export class AuthController {
       );
     }
 
-    const payload = req.body as VerifyOtpRequestDto;
+    const payload: VerifyOtpRequestDto = req.body;
     const fingerprint = getDeviceFingerprint(req);
     const authResponse = await this.service.verifyAndRegister(
       sessionId,
@@ -123,7 +146,6 @@ export class AuthController {
       COOKIE_MAX_AGE.REFRESH_TOKEN,
     );
 
-    // Clear the OTP session cookie after successful registration
     res.clearCookie(COOKIE_NAMES.OTP_SESSION, { path: "/" });
 
     res
@@ -132,17 +154,21 @@ export class AuthController {
   }
 
   /**
-   * HTTP endpoint to authenticate an existing user with email and password.
-   * Validates credentials against bcrypt password hash in PostgreSQL, creates a new active session
-   * in Redis, sets HTTP-only `access_token` and `refresh_token` cookies, and publishes `UserLoggedInV1` event.
+   * Authenticates an existing user with email and password credentials.
    *
-   * @param req - The Express Request object containing email and password in body.
-   * @param res - The Express Response object used to set authentication cookies and return user data.
-   * @returns A promise that resolves when the response is sent.
-   * @throws {ApiError} - If user is not found or password validation fails (401 INVALID_CREDENTIALS).
+   * `POST /api/v1/auth/login`
+   *
+   * ### Access
+   * Public
+   *
+   * ### Cookies
+   * Sets HTTP-only `access_token` and `refresh_token`.
+   *
+   * @param req - Express request with validated {@link LoginRequestDto} body.
+   * @param res - Express response object.
    */
   async login(req: Request, res: Response): Promise<void> {
-    const payload = req.body as LoginRequestDto;
+    const payload: LoginRequestDto = req.body;
     const fingerprint = getDeviceFingerprint(req);
 
     const authResponse = await this.service.login(
@@ -171,18 +197,20 @@ export class AuthController {
   }
 
   /**
-   * HTTP endpoint to refresh access and refresh tokens via Refresh Token Rotation (RTR).
+   * Refreshes access and refresh tokens via Refresh Token Rotation (RTR).
    *
-   * Security & Recovery Workflow:
-   * 1. Reads the HTTP-only `refresh_token` cookie.
-   * 2. Validates the session, token, and device context from Redis.
-   * 3. Issues a new rotated access/refresh token pair on success.
-   * 4. Clears authentication cookies and returns `401` if refresh fails.
+   * `POST /api/v1/auth/refresh`
    *
-   * @param req - Express request containing the refresh token cookie.
-   * @param res - Express response used to set or clear authentication cookies.
-   * @returns A promise that resolves when the response is sent.
-   * @throws {ApiError} If the refresh token is missing, invalid, expired, revoked, or reused.
+   * ### Access
+   * Authenticated (Requires `refresh_token` cookie)
+   *
+   * ### Cookies
+   * Rotates HTTP-only `access_token` and `refresh_token` cookies on success.
+   *
+   * Clears both cookies on failure to prevent frontend **infinite refresh** loops.
+   *
+   * @param req - Express request containing the `refresh_token` cookie.
+   * @param res - Express response object.
    */
   async refresh(req: Request, res: Response): Promise<void> {
     const refreshToken = req.cookies[COOKIE_NAMES.REFRESH_TOKEN];
@@ -229,12 +257,16 @@ export class AuthController {
   }
 
   /**
-   * HTTP endpoint to retrieve all active sessions for the currently authenticated user.
-   * Queries active session keys from Redis and marks `isCurrent: true` for the requesting device session.
+   * Retrieves all active sessions for the currently authenticated user.
    *
-   * @param req - The Express Request object containing authenticated user claims attached by middleware.
-   * @param res - The Express Response object used to return active session objects.
-   * @returns A promise that resolves when the response is sent.
+   * `GET /api/v1/auth/sessions`
+   *
+   * ### Access
+   * Authenticated
+   *
+   * @param req - Express request with user claims attached by auth middleware.
+   * @param res - Express response returning active session list with
+   *   `isCurrent` flag set on the current device session.
    */
   async getSessions(req: Request, res: Response): Promise<void> {
     const userId = req.user!.userId;
@@ -258,16 +290,18 @@ export class AuthController {
   }
 
   /**
-   * HTTP endpoint to revoke a specific active device session by session ID.
-   * Validates session ownership, deletes the session key from Redis, and updates the user's session index.
+   * Revokes a specific active device session by session ID.
    *
-   * @param req - The Express Request object containing `sessionId` parameter and user claims.
-   * @param res - The Express Response object used to return success response.
-   * @returns A promise that resolves when the response is sent.
-   * @throws {ApiError} - If `sessionId` param is missing or session does not belong to requesting user.
+   * `DELETE /api/v1/auth/sessions/:sessionId`
+   *
+   * ### Access
+   * Authenticated
+   *
+   * @param req - Express request containing `sessionId` path parameter and
+   *   user claims attached by auth middleware.
+   * @param res - Express response object.
    */
   async revokeSession(req: Request, res: Response): Promise<void> {
-    // Validate and parse the `sessionId` parameter using Zod schema
     const { sessionId } = z.parse(SessionParamSchema, req.params);
     const userId = req.user!.userId;
 
@@ -279,40 +313,25 @@ export class AuthController {
   }
 
   /**
-   * HTTP endpoint to log out the current device session.
-   * Decodes refresh token, deletes the corresponding session key from Redis, and explicitly sends
-   * `Set-Cookie` clearance headers (`Max-Age=0`) for both `access_token` and `refresh_token`.
+   * Logs out the current device session and clears authentication cookies.
    *
-   * @param req - The Express Request object containing current `refresh_token` cookie.
-   * @param res - The Express Response object used to issue cookie clearance headers.
-   * @returns A promise that resolves when the response is sent.
+   * `POST /api/v1/auth/logout`
+   *
+   * ### Access
+   * Authenticated
+   *
+   * ### Cookies
+   * Clears HTTP-only `access_token` and `refresh_token`.
+   *
+   * @param req - Express request containing the current `refresh_token` cookie.
+   * @param res - Express response object.
    */
   async logout(req: Request, res: Response): Promise<void> {
+    // 1. Delegate session revocation to AuthService (best-effort)
     const refreshToken = req.cookies[COOKIE_NAMES.REFRESH_TOKEN];
+    await this.service.logoutByRefreshToken(refreshToken);
 
-    if (refreshToken) {
-      let decoded: RefreshTokenPayload | undefined;
-      try {
-        decoded = jwt.verify(
-          refreshToken,
-          env.JWT_SECRET,
-        ) as RefreshTokenPayload;
-      } catch {
-        // Expired or invalid refresh token on logout is handled silently
-      }
-
-      if (decoded?.type === "refresh" && decoded.sub && decoded.sessionId) {
-        try {
-          await this.service.logout(decoded.sessionId, decoded.sub);
-        } catch (err) {
-          logger.error(
-            { module: "auth", err },
-            "Session revocation failed during logout",
-          );
-        }
-      }
-    }
-
+    // 2. Clear HTTP-only authentication cookies
     res.clearCookie(COOKIE_NAMES.ACCESS_TOKEN, { path: "/" });
     res.clearCookie(COOKIE_NAMES.REFRESH_TOKEN, { path: "/" });
 
@@ -322,40 +341,25 @@ export class AuthController {
   }
 
   /**
-   * HTTP endpoint to log out all active device sessions for the authenticated user.
-   * Deletes all session keys associated with the user in Redis, clears the session index,
-   * and issues `Set-Cookie` clearance headers for all authentication cookies.
+   * Revokes all active device sessions for the authenticated user.
    *
-   * @param req - The Express Request object containing `refresh_token` cookie.
-   * @param res - The Express Response object used to issue cookie clearance headers.
-   * @returns A promise that resolves when the response is sent.
+   * `POST /api/v1/auth/logout-all`
+   *
+   * ### Access
+   * Authenticated
+   *
+   * ### Cookies
+   * Clears HTTP-only `access_token` and `refresh_token`.
+   *
+   * @param req - Express request containing the current `refresh_token` cookie.
+   * @param res - Express response object.
    */
   async logoutAll(req: Request, res: Response): Promise<void> {
+    // 1. Delegate all-session revocation to AuthService (best-effort)
     const refreshToken = req.cookies[COOKIE_NAMES.REFRESH_TOKEN];
+    await this.service.logoutAllByRefreshToken(refreshToken);
 
-    if (refreshToken) {
-      let decoded: RefreshTokenPayload | undefined;
-      try {
-        decoded = jwt.verify(
-          refreshToken,
-          env.JWT_SECRET,
-        ) as RefreshTokenPayload;
-      } catch {
-        // Expired or invalid refresh token on logout-all is handled silently
-      }
-
-      if (decoded?.type === "refresh" && decoded.sub) {
-        try {
-          await this.service.logoutAll(decoded.sub);
-        } catch (err) {
-          logger.error(
-            { module: "auth", err },
-            "Session revocation failed during logoutAll",
-          );
-        }
-      }
-    }
-
+    // 2. Clear HTTP-only authentication cookies
     res.clearCookie(COOKIE_NAMES.ACCESS_TOKEN, { path: "/" });
     res.clearCookie(COOKIE_NAMES.REFRESH_TOKEN, { path: "/" });
 
@@ -365,16 +369,20 @@ export class AuthController {
   }
 
   /**
-   * HTTP endpoint to initiate password recovery by sending a reset OTP.
-   * Generates a password reset session in Redis, dispatches reset OTP via Kafka notification event,
-   * and returns a `sessionId` for the subsequent verification step.
+   * Initiates password recovery by sending a reset OTP to the user's
+   * registered email.
    *
-   * @param req - The Express Request object containing registered email address in body.
-   * @param res - The Express Response object used to return reset `sessionId`.
-   * @returns A promise that resolves when the response is sent.
+   * `POST /api/v1/auth/forgot-password`
+   *
+   * ### Access
+   * Public
+   *
+   * @param req - Express request with validated {@link ForgotPasswordRequestDto}
+   *   body.
+   * @param res - Express response returning the reset `sessionId`.
    */
   async forgotPassword(req: Request, res: Response): Promise<void> {
-    const data = req.body as ForgotPasswordRequestDto;
+    const data: ForgotPasswordRequestDto = req.body;
     const { sessionId } = await this.service.forgotPassword(data);
 
     res.status(statusCode.success).json(
@@ -385,17 +393,19 @@ export class AuthController {
   }
 
   /**
-   * HTTP endpoint to verify a password reset OTP.
-   * Validates OTP code against stored reset session in Redis, consumes OTP to prevent replay,
-   * and issues a short-lived, single-use `passwordResetToken`.
+   * Verifies a password reset OTP and issues a single-use password reset token.
    *
-   * @param req - The Express Request object containing reset `sessionId` and OTP in body.
-   * @param res - The Express Response object used to return `passwordResetToken`.
-   * @returns A promise that resolves when the response is sent.
-   * @throws {ApiError} - If OTP is invalid, expired, or locked due to too many failed attempts.
+   * `POST /api/v1/auth/verify-reset-otp`
+   *
+   * ### Access
+   * Public
+   *
+   * @param req - Express request with validated
+   *   {@link VerifyPasswordResetOtpRequestDto} body.
+   * @param res - Express response returning the issued `passwordResetToken`.
    */
   async VerifyPasswordResetOtp(req: Request, res: Response): Promise<void> {
-    const data = req.body as VerifyPasswordResetOtpRequestDto;
+    const data: VerifyPasswordResetOtpRequestDto = req.body;
     const { passwordResetToken } =
       await this.service.VerifyPasswordResetOtp(data);
 
@@ -407,20 +417,24 @@ export class AuthController {
   }
 
   /**
-   * HTTP endpoint to reset user password using a verified password reset token.
-   * Validates token signature, updates bcrypt password hash in PostgreSQL, revokes all existing Redis sessions,
-   * and clears all active authentication cookies forcing a fresh login.
+   * Resets the user password using a verified password reset token.
    *
-   * @param req - The Express Request object containing `passwordResetToken` and new password in body.
-   * @param res - The Express Response object used to issue cookie clearance headers and return response.
-   * @returns A promise that resolves when the response is sent.
-   * @throws {ApiError} - If `passwordResetToken` is invalid or expired.
+   * `POST /api/v1/auth/reset-password`
+   *
+   * ### Access
+   * Public
+   *
+   * ### Cookies
+   * Clears HTTP-only `access_token` and `refresh_token`.
+   *
+   * @param req - Express request with validated {@link ResetPasswordRequestDto}
+   *   body.
+   * @param res - Express response object.
    */
   async resetPassword(req: Request, res: Response): Promise<void> {
-    const data = req.body as ResetPasswordRequestDto;
+    const data: ResetPasswordRequestDto = req.body;
     await this.service.resetPassword(data);
 
-    // Clear authentication cookies upon successful password reset
     res.clearCookie(COOKIE_NAMES.ACCESS_TOKEN, { path: "/" });
     res.clearCookie(COOKIE_NAMES.REFRESH_TOKEN, { path: "/" });
 

@@ -25,7 +25,7 @@ router.use(requireAdmin);
 
 /**
  * @route POST /api/v1/trains
- * @desc Create a new train in the system
+ * @description Create a new train in the system
  */
 router.post(
   "/",
@@ -35,7 +35,7 @@ router.post(
 
 /**
  * @route GET /api/v1/trains/:trainId
- * @desc Retrieve a train by its unique ID
+ * @description Retrieve a train by its unique ID
  */
 router.get(
   "/:trainId",
@@ -45,7 +45,7 @@ router.get(
 
 /**
  * @route GET /api/v1/trains
- * @desc Retrieve a list of all trains with optional filtering and pagination
+ * @description Retrieve a list of all trains with optional filtering and pagination
  * @query {string} [trainNumber] - Filter by exact train number (e.g., "12002")
  * @query {string} [category] - Filter by train category (e.g., "RAJDHANI", "SHATABDI", "VANDE_BHARAT", etc.)
  * @query {boolean} [isActive] - Filter by active status ("true" or "false")
@@ -61,7 +61,7 @@ router.get(
 
 /**
  * @route PATCH /api/v1/trains/:trainId
- * @desc Update train details by its ID
+ * @description Update train details by its ID
  */
 router.patch(
   "/:trainId",
@@ -72,7 +72,7 @@ router.patch(
 
 /**
  * @route PATCH /api/v1/trains/:trainId/deactivate
- * @desc Deactivate a train by its ID
+ * @description Deactivate a train by its ID
  */
 router.patch(
   "/:trainId/deactivate",
@@ -82,7 +82,7 @@ router.patch(
 
 /**
  * @route POST /api/v1/trains/:trainId/routes
- * @desc Create a shell route for a train
+ * @description Create a shell route for a train
  */
 router.post(
   "/:trainId/routes",
@@ -92,7 +92,7 @@ router.post(
 
 /**
  * @route GET /api/v1/trains/:trainId/coaches
- * @desc Retrieve all coaches belonging to a train
+ * @description Retrieve all coaches belonging to a train
  */
 router.get(
   "/:trainId/coaches",
@@ -102,7 +102,7 @@ router.get(
 
 /**
  * @route POST /api/v1/trains/:trainId/coaches
- * @desc Add a new coach to a train
+ * @description Add a new coach to a train
  */
 router.post(
   "/:trainId/coaches",
@@ -113,7 +113,7 @@ router.post(
 
 /**
  * @route POST /api/v1/trains/:trainId/operating-days
- * @desc Update the operating days of a train
+ * @description Update the operating days of a train
  */
 router.post(
   "/:trainId/operating-days",

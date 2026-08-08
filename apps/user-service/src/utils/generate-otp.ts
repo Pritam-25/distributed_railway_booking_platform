@@ -1,7 +1,7 @@
 import otpGenerator from "otp-generator";
 
 /**
- * Generates a random 6-digit OTP.
+ * Generates a random 6-digit OTP as a numeric string.
  *
  * @returns A 6-digit numeric OTP string.
  */

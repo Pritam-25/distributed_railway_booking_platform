@@ -1,29 +1,47 @@
 import type { UserRepository } from "@repository";
-import type { UpdateProfileDto } from "@dto";
+import type { UpdateProfileDto, UserResponseDto } from "@dto";
+import { UserMapper } from "@mappers";
 import { redis } from "@config";
 import { logger } from "@irctc/logger";
 import { AUTH_DURATIONS, REDIS_KEYS } from "@utils/constants";
 
 /**
- * Service handling business logic related to Users.
+ * ## UserService
+ *
+ * Domain service managing the authenticated user's profile, with a
+ * Redis read-through cache layered in front of PostgreSQL.
+ *
+ * @remarks
+ * ### Responsibilities
+ * - Reads and updates user profile data via {@link UserRepository}.
+ * - Maintains a per-user profile cache in Redis.
+ *
+ * ### Storage & Persistence
+ * - **PostgreSQL**: `User` table via {@link UserRepository}.
+ * - **Redis**: `user:profile:<id>` profile cache with TTL.
  */
 export class UserService {
   /**
    * Creates an instance of UserService.
-   * @param repo - The UserRepository instance.
+   *
+   * @param repo - Injected {@link UserRepository} instance.
    */
   constructor(private readonly repo: UserRepository) {}
 
   /**
-   * Retrieves a user by their unique identifier.
-   * Checks Redis first for sub-millisecond response; falls back to PostgreSQL on cache miss or Redis error.
-   * @param id - The unique identifier of the user.
-   * @returns The user object if found, or null otherwise.
+   * Retrieves a user by primary key, reading the Redis profile cache first
+   * and falling back to PostgreSQL on cache miss.
+   *
+   * @remarks
+   * ### Failure Guarantees
+   * - Redis read and write errors are logged non-fatally and degrade gracefully to PostgreSQL.
+   * @param id - User UUID.
+   * @returns The user profile DTO, or `null` when not found.
    */
-  async getUserById(id: string) {
+  async getUserById(id: string): Promise<UserResponseDto | null> {
     const cacheKey = REDIS_KEYS.userProfile(id);
 
-    // 1. Check Redis cache first
+    // 1. Read-through cache lookup
     try {
       const cached = await redis.get(cacheKey);
       if (cached) {
@@ -36,16 +54,16 @@ export class UserService {
       );
     }
 
-    // 2. Cache miss or Redis error -> fetch from PostgreSQL database
+    // 2. Cache miss (or Redis error) — load from PostgreSQL
     const user = await this.repo.findById(id);
     if (!user) return null;
 
-    // 3. Populate Redis cache (redacting sensitive fields like password hash)
-    const sanitizedUser = { ...user, password: undefined };
+    // 3. Populate Redis cache using UserMapper.toCache
+    const cachedProfile = UserMapper.toCache(user);
     try {
       await redis.set(
         cacheKey,
-        JSON.stringify(sanitizedUser),
+        JSON.stringify(cachedProfile),
         "EX",
         AUTH_DURATIONS.PROFILE_CACHE_TTL_SECONDS,
       );
@@ -56,32 +74,32 @@ export class UserService {
       );
     }
 
-    return user;
+    return UserMapper.toUserResponseDto(user);
   }
 
   /**
-   * Updates a user's profile and synchronizes the Redis cache.
-   * @param id - The ID of the user to update.
-   * @param update - The data to update the user with.
-   * @returns The updated user object.
+   * Updates a user's profile and synchronizes the Redis profile cache.
+   *
+   * @remarks
+   * ### Failure Guarantees
+   * - Redis profile cache write errors are logged non-fatally; PostgreSQL write is the source of truth.
+   * @param id - User UUID to update.
+   * @param update - Profile DTO carrying the fields to update.
+   * @returns The updated user profile DTO.
    */
-  async updateProfile(id: string, update: UpdateProfileDto) {
-    const updateData: { firstName?: string; lastName?: string } = {};
-    if (update.firstName !== undefined) {
-      updateData.firstName = update.firstName;
-    }
-    if (update.lastName !== undefined) {
-      updateData.lastName = update.lastName;
-    }
-    const updatedUser = await this.repo.update(id, updateData);
+  async updateProfile(
+    id: string,
+    update: UpdateProfileDto,
+  ): Promise<UserResponseDto> {
+    const updatedUser = await this.repo.updateProfile(id, update);
 
-    // Synchronize Redis profile cache (redacting password hash)
+    // 1. Synchronize Redis profile cache with the freshly updated record
     if (updatedUser) {
-      const sanitizedUser = { ...updatedUser, password: undefined };
+      const cachedProfile = UserMapper.toCache(updatedUser);
       try {
         await redis.set(
           REDIS_KEYS.userProfile(id),
-          JSON.stringify(sanitizedUser),
+          JSON.stringify(cachedProfile),
           "EX",
           AUTH_DURATIONS.PROFILE_CACHE_TTL_SECONDS,
         );
@@ -93,6 +111,6 @@ export class UserService {
       }
     }
 
-    return updatedUser;
+    return UserMapper.toUserResponseDto(updatedUser);
   }
 }

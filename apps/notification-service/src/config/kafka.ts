@@ -7,6 +7,7 @@ import {
   type Producer,
 } from "@irctc/kafka";
 import { env } from "@config";
+import { logger } from "@irctc/logger";
 
 /**
  * Shared Kafka client instance for the notification service.
@@ -15,6 +16,7 @@ import { env } from "@config";
 const kafka: Kafka = createKafkaClient({
   clientId: env.KAFKA_CLIENT_ID,
   brokers: env.KAFKA_BROKERS,
+  logger: logger,
 });
 
 export { kafka };

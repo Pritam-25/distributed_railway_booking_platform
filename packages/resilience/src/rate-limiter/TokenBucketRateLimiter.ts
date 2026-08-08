@@ -3,9 +3,9 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Redis } from "ioredis";
 import {
-  LoggerLike,
-  RateLimitResult,
-  TokenBucketOptions,
+  type LoggerLike,
+  type RateLimitResult,
+  type TokenBucketOptions,
   TokenBucketOptionsSchema,
 } from "./types.js";
 
@@ -32,6 +32,9 @@ export class TokenBucketRateLimiter {
   private readonly logger?: LoggerLike;
   private scriptSha: string | null = null;
 
+  /**
+   *
+   */
   constructor(redis: Redis, logger?: LoggerLike) {
     this.redis = redis;
     this.logger = logger;

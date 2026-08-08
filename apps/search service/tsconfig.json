@@ -1,0 +1,23 @@
+{
+  "extends": "@repo/typescript-config/node.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "paths": {
+      "@config": ["./src/config/index.js"],
+      "@container": ["./src/container/index.js"],
+      "@routes": ["./src/api/v1/routes/index.js"],
+      "@services": ["./src/services/index.js"],
+      "@repository": ["./src/repository/index.js"],
+      "@controllers": ["./src/controllers/index.js"],
+      "@consumers": ["./src/consumers/index.js"],
+      "@dto": ["./src/dto/index.js"],
+      "@grpc": ["./src/grpc/index.js"],
+      "@utils/errors": ["./src/utils/errors/index.js"],
+      "@health": ["./src/health/index.js"],
+      "@generated/*": ["./src/generated/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"],
+  "exclude": ["node_modules", "dist", "prisma.config.ts", "vitest.config.ts"]
+}

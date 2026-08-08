@@ -1,14 +1,16 @@
-import { Router } from "express";
-import { liveCheck, readyCheck } from "@health";
-
 /**
- * Health routes for the api-gateway. Mounted at `/health` by
- * `src/routes/index.ts`.
+ * ## routes/health
  *
- * - `GET /health/live`  — liveness, no deps
- * - `GET /health/ready` — readiness, bounded Redis probe
+ * `api-gateway` Kubernetes-friendly liveness and readiness probe routes.
+ * Delegates to `createHealthRouter` from `@irctc/http` and the
+ * per-service adapters from `health/dependencies.ts`.
+ *
+ * Mounted at `/health` by `routes/index.ts`. Probes registered: redis
+ * (see `healthDependencies`).
  */
-export const healthRouter: Router = Router();
+import { createHealthRouter } from "@irctc/http";
+import { healthDependencies } from "../health/dependencies.js";
 
-healthRouter.get("/live", liveCheck);
-healthRouter.get("/ready", readyCheck);
+export const healthRouter = createHealthRouter({
+  dependencies: healthDependencies,
+});

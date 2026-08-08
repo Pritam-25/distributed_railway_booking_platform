@@ -1,107 +1,71 @@
-import express, { type Application } from "express";
-import cors from "cors";
-import helmet from "helmet";
-import cookieParser from "cookie-parser";
-import { env } from "@config";
+/**
+ * ## module/app
+ *
+ * `api-gateway` Express application. The framework boilerplate (helmet,
+ * CORS, cookie parser, request id, request logger, not-found handler,
+ * error handler) is wired by `createApp` from `@irctc/http`. Middleware
+ * is injected to avoid a cycle with `@irctc/middleware`.
+ *
+ * CORS is enabled because the gateway is the public edge; the framework
+ * defaults are overridden to match the gateway's existing allowed /
+ * exposed header set.
+ *
+ * Body parsers are registered by `createApp` but inert here — the
+ * gateway is a pure proxy and never reads `req.body`.
+ *
+ * The root banner and per-prefix proxy chains (`mountRoutes`) are
+ * appended after `createApp` so service-specific routing lives next to
+ * the route configuration.
+ */
+import type { Request, Response } from "express";
+import { successResponse, statusCode, createApp } from "@irctc/http";
 import {
   requestIdMiddleware,
   requestLoggerMiddleware,
   errorHandler,
   notFoundHandler,
 } from "@irctc/middleware";
-import { successResponse, statusCode } from "@irctc/http";
+import { env } from "@config";
 import routes from "@routes";
 import { mountRoutes } from "@routing";
 
-const app: Application = express();
+const app = createApp({
+  serviceName: "api-gateway",
+  router: routes,
+  corsOrigins: env.CORS_ORIGINS,
+  trustProxy: env.TRUST_PROXY === "true",
+  middleware: {
+    requestId: requestIdMiddleware,
+    requestLogger: requestLoggerMiddleware,
+    notFoundHandler,
+    errorHandler,
+  },
+  configure(app) {
+    /**
+     * Root endpoint — service banner.
+     */
+    app.get("/", (_req: Request, res: Response) => {
+      res.status(statusCode.success).json(
+        successResponse("Welcome to API Gateway", {
+          version: "1.0.0",
+          endpoints: {
+            docs: "/docs",
+            openapi: "/openapi.json",
+            health: "/health",
+            auth: "/api/v1/auth",
+            users: "/api/v1/users",
+            search: "/api/v1/search",
+            inventory: "/api/v1/inventory",
+          },
+        }),
+      );
+    });
 
-if (env.TRUST_PROXY === "true") {
-  // Trust the first hop (the immediate load balancer/proxy)
-  app.set("trust proxy", 1);
-}
-
-/**
- * Security headers
- */
-app.use(
-  helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'none'"],
-        frameAncestors: ["'none'"],
-      },
-    },
-  }),
-);
-
-/**
- * CORS (edge concern — only runs here, never on upstreams)
- */
-app.use(
-  cors({
-    origin: env.CORS_ORIGINS,
-    credentials: true,
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-      "X-Request-ID",
-      "traceparent",
-      "baggage",
-    ],
-    exposedHeaders: [
-      "X-Request-ID",
-      "X-RateLimit-Limit",
-      "X-RateLimit-Remaining",
-      "Retry-After",
-    ],
-  }),
-);
-
-/**
- * Cookie parser (needed to read JWT from cookies)
- */
-app.use(cookieParser());
-
-/**
- * Request ID + structured logging
- */
-app.use(requestIdMiddleware);
-app.use(requestLoggerMiddleware);
-
-/**
- * Health probes (before routes so k8s always sees them)
- * - /health/live
- * - /health/ready
- */
-app.use("/", routes);
-
-/**
- * Root endpoint
- */
-app.get("/", (_req, res) => {
-  res.status(statusCode.success).json(
-    successResponse("Welcome to API Gateway", {
-      version: "1.0.0",
-      endpoints: {
-        docs: "/docs",
-        openapi: "/openapi.json",
-        health: "/health",
-        auth: "/api/v1/auth",
-        users: "/api/v1/users",
-      },
-    }),
-  );
+    /**
+     * Per-prefix proxy chains (auth → rate limit → proxy).
+     */
+    mountRoutes(app);
+  },
 });
-
-/**
- * Per-prefix proxy chains (auth → rate limit → proxy)
- */
-mountRoutes(app);
-
-/**
- * 404 + central error handler (always last)
- */
-app.use(notFoundHandler);
-app.use(errorHandler);
 
 export default app;

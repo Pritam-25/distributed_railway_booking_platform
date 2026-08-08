@@ -28,7 +28,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: irctc-redis
-    restart: always
+    restart: unless-stopped
     profiles: ["prod"]
     ports:
       - "6379:6379"
@@ -41,6 +41,38 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.1.4
+    container_name: irctc-elasticsearch
+    restart: always
+    # `debug` is included so `kibana` / `elasticsearch-init` (which sit in
+    # both `dev` and `debug`) can resolve this service when only the debug
+    # profile is active. dev / prod pull it in via their own profiles.
+    profiles: ["dev", "prod", "debug"]
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=false
+      - ELASTIC_PASSWORD=${ELASTICSEARCH_PASSWORD:-password}
+      - ELASTICSEARCH_PASSWORD=${ELASTICSEARCH_PASSWORD:-password}
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -f -s -u elastic:${ELASTICSEARCH_PASSWORD:-password} http://localhost:9200/_cluster/health >/dev/null 2>&1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - irctc-network
 
   # --- Messaging Layer (KRaft Mode - Using Confluent Image for stability) ---
   # Two listeners because Kafka clients resolve advertised addresses against
@@ -77,11 +109,7 @@ services:
     networks:
       - irctc-network
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "kafka-broker-api-versions --bootstrap-server localhost:9092 || exit 1",
-        ]
+      test: ["CMD-SHELL", "nc -z localhost 9092"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -89,7 +117,7 @@ services:
   kafka-ui:
     image: ghcr.io/kafbat/kafka-ui:v1.5.0
     container_name: irctc-kafka-ui
-    restart: always
+    restart: unless-stopped
     profiles: ["dev"]
     depends_on:
       kafka:
@@ -107,7 +135,7 @@ services:
   pgadmin:
     image: dpage/pgadmin4:9.15.0
     container_name: irctc-pgadmin
-    restart: always
+    restart: unless-stopped
     profiles: ["debug"]
     ports:
       - "8081:80"
@@ -120,17 +148,61 @@ services:
   redis-insight:
     image: redis/redisinsight:3.4.2
     container_name: irctc-redis-insight
-    restart: always
+    restart: unless-stopped
     profiles: ["debug"]
     ports:
       - "8001:8001"
     networks:
       - irctc-network
 
+  kibana:
+    image: docker.elastic.co/kibana/kibana:9.1.4
+    container_name: irctc-kibana
+    restart: unless-stopped
+    profiles: ["dev", "debug"]
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      elasticsearch-init:
+        condition: service_completed_successfully
+    ports:
+      - "5601:5601"
+    environment:
+      # Match the elasticsearch service's `xpack.security.enabled=true`.
+      ELASTICSEARCH_HOSTS: '["http://irctc-elasticsearch:9200"]'
+      ELASTICSEARCH_USERNAME: kibana_system
+      ELASTICSEARCH_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-password}
+      # Disable telemetry banner + news so the dev UI stays clean.
+      TELEMETRY_OPTIMIZATION_ENABLED: "true"
+    networks:
+      - irctc-network
+
+  # Bootstrap Elasticsearch built-in users that ES 9 does not auto-configure
+  # (specifically `kibana_system`). Exits successfully after the password is
+  # set; `restart: "no"` prevents endless retries. Mirrors the `kafka-init`
+  # one-shot pattern. Required for Kibana to authenticate against ES.
+  elasticsearch-init:
+    build:
+      context: ./infra/elasticsearch-init
+      dockerfile: Dockerfile
+    container_name: irctc-elasticsearch-init
+    profiles: ["dev", "debug"]
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      ELASTICSEARCH_URL: http://irctc-elasticsearch:9200
+      ELASTICSEARCH_USERNAME: ${ELASTICSEARCH_USERNAME:-elastic}
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-password}
+      KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-password}
+    restart: "no"
+    networks:
+      - irctc-network
+
   tempo:
     image: grafana/tempo:latest
     container_name: irctc-tempo
-    restart: always
+    restart: unless-stopped
     profiles: ["dev", "prod"]
     ports:
       - "4317:4317" # OTLP gRPC
@@ -146,7 +218,7 @@ services:
   grafana:
     image: grafana/grafana:latest
     container_name: irctc-grafana
-    restart: always
+    restart: unless-stopped
     profiles: ["dev", "prod"]
     depends_on:
       - tempo
@@ -172,6 +244,8 @@ services:
     build:
       context: .
       dockerfile: infra/kafka-init/Dockerfile
+      args:
+        SERVICE: kafka-init
     container_name: irctc-kafka-init
     profiles: ["dev", "prod"]
     depends_on:
@@ -186,7 +260,9 @@ services:
   user-service:
     build:
       context: .
-      dockerfile: apps/user-service/Dockerfile
+      dockerfile: Dockerfile
+      args:
+        SERVICE: user-service
     container_name: irctc-user-service
     profiles: ["prod"]
     restart: always
@@ -232,7 +308,9 @@ services:
   admin-service:
     build:
       context: .
-      dockerfile: apps/admin-service/Dockerfile
+      dockerfile: Dockerfile
+      args:
+        SERVICE: admin-service
     container_name: irctc-admin-service
     profiles: ["prod"]
     restart: always
@@ -272,7 +350,9 @@ services:
   notification-service:
     build:
       context: .
-      dockerfile: apps/notification-service/Dockerfile
+      dockerfile: Dockerfile
+      args:
+        SERVICE: notification-service
     container_name: irctc-notification-service
     profiles: ["prod"]
     restart: always
@@ -297,10 +377,57 @@ services:
           memory: 512M
           cpus: "1.0"
 
+  search-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: search-service
+    container_name: irctc-search-service
+    profiles: ["prod"]
+    restart: always
+    environment:
+      PORT: 4004
+      REDIS_URL: redis://irctc-redis:6379
+      ELASTICSEARCH_NODE: http://irctc-elasticsearch:9200
+      ELASTICSEARCH_USERNAME: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-password}
+      KAFKA_BROKERS: irctc-kafka:29092
+      SERVICE_NAME: search-service
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
+    expose:
+      - "4004"
+    networks:
+      - irctc-network
+    depends_on:
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --quiet --tries=1 --spider http://localhost:4004/health/live || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+
   api-gateway:
     build:
       context: .
-      dockerfile: apps/api-gateway/Dockerfile
+      dockerfile: Dockerfile
+      args:
+        SERVICE: api-gateway
     container_name: irctc-api-gateway
     profiles: ["prod"]
     restart: always
@@ -320,10 +447,6 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-      user-service:
-        condition: service_started
-      admin-service:
-        condition: service_started
     healthcheck:
       test:
         [
@@ -350,3 +473,4 @@ volumes:
   kafka_data:
   tempo_data:
   grafana_data:
+  elasticsearch_data:

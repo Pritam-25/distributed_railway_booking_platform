@@ -99,4 +99,10 @@ export const routes: readonly RouteConfig[] = [
     auth: "admin",
     rateLimit: "default",
   },
+  {
+    prefix: "/api/v1/search",
+    upstream: upstreams.search,
+    auth: "none",
+    rateLimit: "default",
+  },
 ];

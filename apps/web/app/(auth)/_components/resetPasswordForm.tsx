@@ -10,7 +10,7 @@ import { ResetPasswordFormSchema } from "@/lib/schemas"
 import { PasswordInput } from "./passwordInput"
 import { Loader2 } from "lucide-react"
 import { useResetPasswordMutation } from "@/app/(auth)/_hooks"
-import { ResetPasswordRequest } from "@/generated"
+import type { ResetPasswordRequest } from "@/generated"
 
 interface ResetPasswordFormProps {
   token: string

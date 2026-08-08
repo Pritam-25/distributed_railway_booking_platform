@@ -12,6 +12,9 @@ import type {
  * Controller class orchestrating Train Route and RouteStation HTTP request mappings.
  */
 export class RouteController {
+  /**
+   *
+   */
   constructor(private readonly service: RouteService) {}
 
   /**

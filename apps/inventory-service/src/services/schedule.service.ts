@@ -11,10 +11,10 @@ import {
 } from "@repository";
 import { type OutboxRepository } from "@irctc/kafka";
 import {
+  KAFKA_TOPICS,
   ScheduleCreatedEventV1,
   ScheduleStatusChangedEventV1,
   EVENT_TYPES,
-  KAFKA_TOPICS,
 } from "@irctc/contracts";
 import { logger } from "@irctc/logger";
 import { ApiError } from "@irctc/errors";
@@ -197,20 +197,6 @@ export class ScheduleService {
           );
         }
 
-        if (scheduleInventory.version >= parsed.version) {
-          logger.info(
-            {
-              module: "schedule-service",
-              scheduleId: parsed.scheduleId,
-              eventId: parsed.eventId,
-              existingVersion: scheduleInventory.version,
-              eventVersion: parsed.version,
-            },
-            "ScheduleStatusChangedEventV1 skipped: version is stale or already processed",
-          );
-          return;
-        }
-
         const newStatus =
           parsed.status === ScheduleInventoryStatus.CANCELLED
             ? ScheduleInventoryStatus.CANCELLED
@@ -220,19 +206,18 @@ export class ScheduleService {
           parsed.scheduleId,
           newStatus,
           parsed.version,
-          scheduleInventory.version,
           tx,
         );
 
         if (!updated) {
-          logger.warn(
+          logger.info(
             {
               module: "schedule-service",
               scheduleId: parsed.scheduleId,
               eventId: parsed.eventId,
               eventVersion: parsed.version,
             },
-            "ScheduleStatusChangedEventV1 skipped: concurrent update already applied a newer version",
+            "ScheduleStatusChangedEventV1 skipped: version is stale or already processed",
           );
           return;
         }

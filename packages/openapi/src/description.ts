@@ -15,6 +15,7 @@ export const buildEndpointDoc = (input: {
   summary: string;
   overview: string;
   requestBodyFields?: string[];
+  queryFields?: string[];
   response: string;
   outcomes: string[];
   notes?: string[];
@@ -24,6 +25,9 @@ export const buildEndpointDoc = (input: {
     input.overview,
     input.requestBodyFields && input.requestBodyFields.length > 0
       ? `**Request Body Fields:**\n${bulletList(input.requestBodyFields)}`
+      : undefined,
+    input.queryFields && input.queryFields.length > 0
+      ? `**Query Parameters:**\n${bulletList(input.queryFields)}`
       : undefined,
     `**Response:**\n${input.response}`,
     `**Outcomes:**\n${bulletList(input.outcomes)}`,

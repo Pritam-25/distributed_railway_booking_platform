@@ -107,6 +107,8 @@ export class NotificationContainer {
       welcomeService,
       logger,
     );
+
+    logger.info({ module: "notification-container" }, "Dependencies wired.");
   }
 
   /**
@@ -123,8 +125,10 @@ export class NotificationContainer {
     logger.info(
       {
         module: "container",
-        otpConsumer: CONSUMER_GROUPS.NOTIFICATION_OTP,
-        welcomeConsumer: CONSUMER_GROUPS.NOTIFICATION_WELCOME,
+        consumerGroups: [
+          CONSUMER_GROUPS.NOTIFICATION_OTP,
+          CONSUMER_GROUPS.NOTIFICATION_WELCOME,
+        ],
       },
       "Notification service event consumer loops started successfully.",
     );

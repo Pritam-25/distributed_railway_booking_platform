@@ -6,6 +6,9 @@ import type { SeatService } from "@services";
  * Controller class orchestrating seat HTTP request mappings.
  */
 export class SeatController {
+  /**
+   *
+   */
   constructor(private readonly service: SeatService) {}
 
   /**

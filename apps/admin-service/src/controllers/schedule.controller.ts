@@ -11,10 +11,14 @@ import type {
  * Controller class orchestrating Train Schedule HTTP request mappings.
  */
 export class ScheduleController {
+  /**
+   *
+   */
   constructor(private readonly service: ScheduleService) {}
 
   /**
    * Handler for creating a new journey schedule for a train.
+   *
    * @param req Request object containing schedule creation details.
    * @param res Response object.
    */
@@ -28,6 +32,7 @@ export class ScheduleController {
 
   /**
    * Handler for retrieving a schedule by its ID.
+   *
    * @param req Request object containing schedule ID parameter.
    * @param res Response object.
    */
@@ -41,6 +46,7 @@ export class ScheduleController {
 
   /**
    * Handler for updating a schedule's status.
+   *
    * @param req Request object containing schedule ID parameter and status update details.
    * @param res Response object.
    */
@@ -55,6 +61,7 @@ export class ScheduleController {
 
   /**
    * Handler for retrieving a paginated list of all schedules.
+   *
    * @param req Request object containing query filter parameters.
    * @param res Response object.
    */

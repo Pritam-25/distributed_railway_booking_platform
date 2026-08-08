@@ -1,11 +1,16 @@
 import geoip from "geoip-lite";
 
 /**
- * Resolves a human-readable location string (e.g. "Mumbai, India") from an IP address.
- * Handles local development IP addresses (127.0.0.1, ::1) gracefully.
+ * Resolves a human-readable location string (e.g. `"Mumbai, IN"`) for an
+ * IP address.
  *
- * @param ip - IP address string
- * @returns Human-readable location string
+ * @remarks
+ * Treats loopback (`127.0.0.1`, `::1`), `localhost`, and common private
+ * network ranges (`192.168.0.0/16`, `10.0.0.0/8`) as `"Local Development"`.
+ * Returns `"Unknown Location"` when GeoIP cannot resolve the address.
+ * Strips the IPv4-in-IPv6 prefix (`::ffff:`) before lookup.
+ * @param ip - IP address string.
+ * @returns Human-readable location string.
  */
 export function getIpLocation(ip?: string): string {
   if (!ip) return "Unknown Location";

@@ -1,58 +1,61 @@
-import { logger } from "@irctc/logger";
+import { injectTraceContextToKafkaHeaders } from "@irctc/telemetry";
+import { KAFKA_HEADERS } from "../headers/kafka-headers.js";
+import type { LoggerLike } from "../consumer-runner/kafka-consumer-runner.js";
 import {
   type OutboxRepository,
   type OutboxPrismaClient,
   type OutboxEvent,
+  type CreateOutboxEventData,
   OutboxStatus,
 } from "./interfaces.js";
 
-/**
- * Maximum number of publication retries before marking an outbox event as DEAD.
- */
+/** Maximum publication retry attempt threshold before marking an outbox event record as DEAD (5). */
 const MAX_RETRY_COUNT = 5;
 
-/**
- * Threshold duration in minutes after which a PROCESSING outbox event is considered stuck.
- */
+/** Threshold duration in minutes (5) after which a PROCESSING outbox event is classified as stuck/orphaned. */
 const STUCK_THRESHOLD_MINUTES = 5;
 
-/**
- * Delays in milliseconds mapped to the retry attempt index.
- */
+/** Exponential backoff delay intervals in milliseconds mapped to retry attempt indices. */
 const BACKOFF_DELAY_MS = [60_000, 120_000, 240_000, 480_000, 960_000];
 
 /**
- * PostgreSQL outbox repository implementation using Prisma Client.
- *
- * Handles database operations for writing events, claiming pending events atomically
- * with locked-row skipping, and managing failed/stuck event states.
+ * PostgreSQL implementation of {@link OutboxRepository} using Prisma Client.
  */
 export class PostgresOutboxRepository implements OutboxRepository {
   /**
    * Creates an instance of PostgresOutboxRepository.
    *
-   * @param prisma - The Prisma Client instance used for database actions.
+   * @param prisma - Prisma database client satisfying {@link OutboxPrismaClient}.
+   * @param logger - Optional diagnostic logger satisfying {@link LoggerLike}.
    */
-  constructor(private readonly prisma: OutboxPrismaClient) {}
+  constructor(
+    private readonly prisma: OutboxPrismaClient,
+    private readonly logger?: LoggerLike,
+  ) {}
 
   /**
-   * Appends a new event record to the database outbox queue within the context of an existing transaction.
+   * Appends a new outbox event record within an active database transaction.
    *
-   * @param tx - The active Prisma transaction client.
-   * @param data - The outbox event routing properties and payloads.
+   * Must be called using the active transaction handle (`tx`) associated with aggregate updates.
+   *
+   * @param tx - Active database transaction handle satisfying {@link OutboxPrismaClient}.
+   * @param data - {@link CreateOutboxEventData} containing event attributes and body payload.
    * @returns A promise resolving when the record is saved.
    */
   async insert(
     tx: OutboxPrismaClient,
-    data: {
-      aggregateType: string;
-      aggregateId: string;
-      eventType: string;
-      topic: string;
-      payload: unknown;
-      headers?: unknown;
-    },
+    data: CreateOutboxEventData,
   ): Promise<void> {
+    const rawHeaders =
+      data.headers && typeof data.headers === "object"
+        ? (data.headers as Record<string, string>)
+        : {};
+
+    const headers = injectTraceContextToKafkaHeaders({
+      [KAFKA_HEADERS.EVENT_TYPE]: data.eventType,
+      ...rawHeaders,
+    });
+
     await tx.outboxEvent.create({
       data: {
         aggregateType: data.aggregateType,
@@ -60,17 +63,18 @@ export class PostgresOutboxRepository implements OutboxRepository {
         eventType: data.eventType,
         topic: data.topic,
         payload: data.payload,
-        headers: data.headers,
+        headers,
       },
     });
   }
 
   /**
-   * Atomically claims a batch of pending outbox events, shifting their status to PROCESSING.
-   * Uses SQL `FOR UPDATE SKIP LOCKED` to prevent duplicate processing by concurrent worker instances.
+   * Atomically claims a batch of pending outbox events, shifting status to `PROCESSING`.
    *
-   * @param limit - Maximum size of the batch.
-   * @returns A promise resolving to an array of claimed OutboxEvent records.
+   * Uses SQL `FOR UPDATE SKIP LOCKED` inside a transaction to prevent duplicate processing by concurrent workers.
+   *
+   * @param limit - Maximum size of the batch to claim.
+   * @returns Array of claimed {@link OutboxEvent} records.
    */
   async claimPendingEvents(limit: number): Promise<OutboxEvent[]> {
     return this.prisma.$transaction(
@@ -118,10 +122,10 @@ export class PostgresOutboxRepository implements OutboxRepository {
   }
 
   /**
-   * Marks an outbox event as successfully PUBLISHED and records the processing timestamp.
+   * Marks an outbox event record as successfully `PUBLISHED`.
    *
-   * @param id - UUID of the outbox record.
-   * @returns A promise resolving when updated.
+   * @param id - UUID primary key of the outbox record.
+   * @returns A promise resolving when the update completes.
    */
   async markPublished(id: string): Promise<void> {
     const updated = await this.prisma.outboxEvent.updateMany({
@@ -133,30 +137,29 @@ export class PostgresOutboxRepository implements OutboxRepository {
     });
 
     if (updated.count === 0) {
-      logger.warn(
+      this.logger?.warn(
         { module: "outbox-repo", eventId: id },
         "Skipped stale markPublished transition",
       );
       return;
     }
 
-    logger.info(
+    this.logger?.info(
       { module: "outbox-repo", eventId: id },
       "Outbox event marked as PUBLISHED",
     );
   }
 
   /**
-   * Handles outbox publication failure.
+   * Handles outbox publication failure state transitions.
    *
-   * Increments the retry count. If it exceeds the maximum retries, the event is marked
-   * as DEAD for manual attention. Otherwise, it calculates a backoff delay, computes the next
-   * retry timestamp, and transitions the status to FAILED.
+   * Increments `retryCount`. If the attempt count reaches `MAX_RETRY_COUNT` (5), transitions status to `DEAD`.
+   * Otherwise, calculates backoff delay using {@link BACKOFF_DELAY_MS} and sets status to `FAILED` with `nextRetryAt`.
    *
-   * @param id - UUID of the outbox record.
-   * @param error - Diagnostic message explaining the failure.
-   * @param currentRetryCount - Current count of retry attempts before this failure.
-   * @returns A promise resolving to an object indicating if the event has been classified as DEAD.
+   * @param id - UUID primary key of the outbox record.
+   * @param error - Diagnostic error description string.
+   * @param currentRetryCount - Retry count prior to this failure.
+   * @returns Object indicating whether the record became `DEAD`.
    */
   async markFailed(
     id: string,
@@ -182,7 +185,7 @@ export class PostgresOutboxRepository implements OutboxRepository {
 
       if (updated.count === 0) return { becameDead: false };
 
-      logger.error(
+      this.logger?.error(
         {
           module: "outbox-repo",
           eventId: id,
@@ -220,8 +223,7 @@ export class PostgresOutboxRepository implements OutboxRepository {
   }
 
   /**
-   * Requeues failed outbox events back to PENDING once their scheduled backoff retry interval
-   * has elapsed.
+   * Requeues failed outbox events back to `PENDING` once their backoff delay timestamp has passed.
    *
    * @returns A promise resolving when the scan update is complete.
    */
@@ -241,7 +243,7 @@ export class PostgresOutboxRepository implements OutboxRepository {
     });
 
     if (result.count > 0) {
-      logger.info(
+      this.logger?.info(
         { module: "outbox-repo", count: result.count },
         "Re-queued failed events for retry (backoff delay elapsed)",
       );
@@ -249,10 +251,11 @@ export class PostgresOutboxRepository implements OutboxRepository {
   }
 
   /**
-   * Scans and resets events stuck in the PROCESSING state for longer than the defined threshold
-   * back to PENDING. This recovers events lost during sudden worker pod restarts or node crashes.
+   * Scans and resets events stuck in `PROCESSING` state for longer than 5 minutes back to `PENDING`.
    *
-   * @returns A promise resolving when the scan update is complete.
+   * Recovers events abandoned due to unexpected node crashes or process exits.
+   *
+   * @returns A promise resolving when the scan update completes.
    */
   async resetStuckProcessingEvents(): Promise<void> {
     const threshold = new Date(
@@ -270,7 +273,7 @@ export class PostgresOutboxRepository implements OutboxRepository {
     });
 
     if (result.count > 0) {
-      logger.warn(
+      this.logger?.warn(
         {
           module: "outbox-repo",
           count: result.count,
@@ -283,7 +286,7 @@ export class PostgresOutboxRepository implements OutboxRepository {
   /**
    * Aggregates and returns count statistics for outbox records grouped by status.
    *
-   * @returns A promise resolving to a status-to-count mapping object.
+   * @returns Status-to-count mapping dictionary object.
    */
   async getStatusCounts(): Promise<Record<OutboxStatus, number>> {
     const counts = (await this.prisma.outboxEvent.groupBy({

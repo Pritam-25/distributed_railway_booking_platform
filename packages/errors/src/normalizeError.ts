@@ -28,6 +28,7 @@ const ERROR_STATUS_MAP: Record<CommonErrorCode, number> = {
 
 /**
  * Normalizes an error from a code.
+ *
  * @param code Error code.
  * @param message Error message.
  * @param details Error details.
@@ -60,6 +61,7 @@ const normalizeFromCode = (
 
 /**
  * Normalizes an error into a NormalizedError object.
+ *
  * @param error The error to normalize.
  * @returns Normalized error object.
  */

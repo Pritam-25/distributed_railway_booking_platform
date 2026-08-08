@@ -133,4 +133,4 @@ This package uses `@confluentinc/kafka-javascript`, which has strict configurati
 
 - Producer, consumer, and client options must be defined under the `kafkaJS` nested object block.
 - **Subscribe properties** like `fromBeginning` are set at **creation-time** inside `kafka.consumer({ kafkaJS: { fromBeginning } })` instead of `.subscribe()`.
-- Immutable settings like `factor` and `multiplier` are automatically sanitized from retry options prior to initialization to prevent `ERR__INVALID_ARG` (code `-186`) validation errors.
+- **Retry policy alignment**: Retry configurations are typed directly against `KafkaJS.RetryOptions` (`retries`, `initialRetryTime`, `maxRetryTime`), ensuring full compatibility with `@confluentinc/kafka-javascript`.

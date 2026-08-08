@@ -65,8 +65,7 @@ Content-Type: application/json
   "firstName": "John",
   "lastName": "Doe",
   "email": "{{fallbackEmail}}",
-  "password": "Password@123",
-  "confirmPassword": "Password@123"
+  "password": "Password@123"
 }
 
 ### Step 2: Verify OTP & Complete Registration

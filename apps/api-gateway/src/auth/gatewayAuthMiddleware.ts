@@ -5,7 +5,7 @@ import { statusCode } from "@irctc/http";
 import { env } from "@config";
 import { verifyAccessToken } from "./jwtVerifier.js";
 import { COOKIE_NAMES } from "./cookieNames.js";
-import { ERROR_MESSAGES, ERROR_CODES } from "@utils";
+import { ERROR_MESSAGES, ERROR_CODES } from "@utils/error";
 
 /**
  * Headers injected by the gateway from a verified JWT.

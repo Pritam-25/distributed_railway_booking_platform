@@ -12,6 +12,9 @@ import { ApiError, COMMON_ERROR_CODES } from "@irctc/errors";
  * Service class for Admin authentication processes.
  */
 export class AdminAuthService {
+  /**
+   *
+   */
   constructor(private readonly adminRepo: AdminAuthRepository) {}
 
   /**

@@ -35,13 +35,16 @@ let isLoggingOut = false
  */
 let isRedirecting = false
 
+const rawApiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"
+const baseURL = rawApiUrl.replace(/\/api\/v1\/?$/, "")
+
 /**
  * Production-Grade Axios Instance configured for the API Gateway.
  * Configured with `withCredentials: true` to automatically forward HTTP-only cookies
  * (e.g. `access_token` and `refresh_token`) to and from the backend.
  */
 export const AXIOS_INSTANCE = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1",
+  baseURL,
   timeout: 15000,
   withCredentials: true,
   headers: {
@@ -93,8 +96,8 @@ const handleRedirectToLogin = (): void => {
  * Helper function to orchestrate the silent refresh of tokens and retry the original request.
  * Resolves race conditions by checking if the user logged out while refresh was in-flight.
  *
- * @param {RetryAxiosRequestConfig} originalRequest - The configuration of the request that failed.
- * @returns {Promise<AxiosResponse<unknown>>} Resolves with the retried request's response.
+ * @param originalRequest - The configuration of the request that failed.
+ * @returns Resolves with the retried request's response.
  */
 const handleTokenRefresh = async (
   originalRequest: RetryAxiosRequestConfig
@@ -102,11 +105,11 @@ const handleTokenRefresh = async (
   originalRequest._retry = true
 
   // Initialize the refresh request only if there isn't one already running.
-  refreshPromise ??= AXIOS_INSTANCE.post<unknown>("/auth/refresh").finally(
-    () => {
-      refreshPromise = null
-    }
-  )
+  refreshPromise ??= AXIOS_INSTANCE.post<unknown>(
+    "/api/v1/auth/refresh"
+  ).finally(() => {
+    refreshPromise = null
+  })
 
   try {
     // Await the active refresh request (concurrency queueing)
@@ -179,9 +182,9 @@ AXIOS_INSTANCE.interceptors.response.use(
  * Integrates AbortController signal logic to handle React Query query cancellation signals.
  *
  * @template T The expected type of the response data.
- * @param {string | AxiosRequestConfig} urlOrConfig - Endpoint URL path or full Axios request configuration object.
- * @param {AxiosRequestConfig | RequestInit} [config] - Optional supplementary configuration options.
- * @returns {Promise<T>} Promise resolving to the response body data.
+ * @param urlOrConfig - Endpoint URL path or full Axios request configuration object.
+ * @param [config] - Optional supplementary configuration options.
+ * @returns Promise resolving to the response body data.
  */
 export const customInstance = <T>(
   urlOrConfig: string | AxiosRequestConfig,

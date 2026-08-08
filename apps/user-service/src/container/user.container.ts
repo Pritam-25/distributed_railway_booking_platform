@@ -46,6 +46,9 @@ export class UserContainer {
     );
   }
 
+  /**
+   *
+   */
   static getInstance(): UserContainer {
     if (!UserContainer.instance) {
       UserContainer.instance = new UserContainer();

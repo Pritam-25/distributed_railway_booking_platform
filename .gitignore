@@ -42,4 +42,5 @@ yarn-error.log*
 # Generated files
 apps/*/src/generated/prisma
 
-api.test.http
+# VSCode
+.vscode
