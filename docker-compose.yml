@@ -169,9 +169,9 @@ services:
       - "5601:5601"
     environment:
       # Match the elasticsearch service's `xpack.security.enabled=true`.
-      ELASTICSEARCH_HOSTS: http://irctc-elasticsearch:9200
+      ELASTICSEARCH_HOSTS: '["http://irctc-elasticsearch:9200"]'
       ELASTICSEARCH_USERNAME: kibana_system
-      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-password}
+      ELASTICSEARCH_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-password}
       # Disable telemetry banner + news so the dev UI stays clean.
       TELEMETRY_OPTIMIZATION_ENABLED: "true"
     networks:
@@ -194,6 +194,7 @@ services:
       ELASTICSEARCH_URL: http://irctc-elasticsearch:9200
       ELASTICSEARCH_USERNAME: ${ELASTICSEARCH_USERNAME:-elastic}
       ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-password}
+      KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-password}
     restart: "no"
     networks:
       - irctc-network

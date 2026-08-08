@@ -166,11 +166,10 @@ export class TrainSearchService {
   ): Promise<StationSuggestion> {
     const trimmed = value.trim();
 
-    // 1. UUID path — verify it exists in the stations index
+    // 1. UUID path — direct document lookup by _id in the stations index
     if (isUuid(trimmed)) {
-      const matches = await this.stationRepository.suggest(trimmed, 1);
-      const hit = matches.find((s) => s.stationId === trimmed);
-      if (hit?.isActive) return hit;
+      const station = await this.stationRepository.findById(trimmed);
+      if (station?.isActive) return station;
       throw new ApiError(
         statusCode.notFound,
         ERROR_CODES.STATION_NOT_FOUND,
@@ -178,12 +177,9 @@ export class TrainSearchService {
       );
     }
 
-    // 2. Code path — case-insensitive suggestion lookup
-    const suggestions = await this.stationRepository.suggest(trimmed, 1);
-    const codeMatch = suggestions.find(
-      (s) => s.code.toLowerCase() === trimmed.toLowerCase() && s.isActive,
-    );
-    if (codeMatch) return codeMatch;
+    // 2. Code path — exact code lookup (case-insensitive)
+    const codeMatch = await this.stationRepository.findByCode(trimmed);
+    if (codeMatch?.isActive) return codeMatch;
 
     throw new ApiError(
       statusCode.notFound,

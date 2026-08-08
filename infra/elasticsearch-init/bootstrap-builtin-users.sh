@@ -17,6 +17,7 @@ set -eu
 ES_URL="${ELASTICSEARCH_URL:-http://elasticsearch:9200}"
 ES_USER="${ELASTICSEARCH_USERNAME:-elastic}"
 ES_PASS="${ELASTICSEARCH_PASSWORD:-password}"
+KIBANA_SYS_PASS="${KIBANA_SYSTEM_PASSWORD:-${ES_PASS}}"
 
 # 1. Wait for the cluster to become reachable (max ~60s)
 attempt=0
@@ -33,11 +34,14 @@ echo "Elasticsearch is reachable. Setting password for kibana_system user..."
 
 # 2. Reset kibana_system password via the /_security/user API. The
 #    bootstrap `elastic` user has the cluster privilege to do this.
+#    Use jq to safely serialize the password into JSON.
+PAYLOAD=$(jq -n --arg pw "$KIBANA_SYS_PASS" '{"password": $pw}')
+
 http_code=$(curl -sS -o /tmp/kibana_pw.json -w "%{http_code}" \
   -X POST "${ES_URL}/_security/user/kibana_system/_password" \
   -u "${ES_USER}:${ES_PASS}" \
   -H "Content-Type: application/json" \
-  -d "{\"password\":\"${ES_PASS}\"}")
+  -d "$PAYLOAD")
 
 if [ "$http_code" -ne 200 ]; then
   echo "Failed to set kibana_system password (HTTP ${http_code}):" >&2

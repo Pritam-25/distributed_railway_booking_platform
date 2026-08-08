@@ -215,19 +215,26 @@ export class SearchContainer {
   async disconnect(): Promise<void> {
     logger.info(
       { module: "search-container" },
-      "stopping schedule event consumers...",
+      "stopping schedule and station event consumers...",
     );
-    await this.scheduleConsumer.stop();
+
+    const results = await Promise.allSettled([
+      this.scheduleConsumer.stop(),
+      this.stationConsumer.stop(),
+    ]);
+
+    for (const result of results) {
+      if (result.status === "rejected") {
+        logger.error(
+          { module: "search-container", err: result.reason },
+          "consumer shutdown failed",
+        );
+      }
+    }
 
     logger.info(
       { module: "search-container" },
-      "stopping station event consumers...",
-    );
-    await this.stationConsumer.stop();
-
-    logger.info(
-      { module: "search-container" },
-      "all event consumers shut down successfully.",
+      "all event consumers shut down completed.",
     );
   }
 

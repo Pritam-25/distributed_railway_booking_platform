@@ -17,7 +17,7 @@ FROM alpine:3.20
 # arbitrary commands with unrestricted host access.
 RUN addgroup -S init && adduser -S init -G init
 
-RUN apk add --no-cache curl bash
+RUN apk add --no-cache curl bash jq
 
 COPY --chown=init:init bootstrap-builtin-users.sh /usr/local/bin/bootstrap-builtin-users.sh
 RUN chmod +x /usr/local/bin/bootstrap-builtin-users.sh

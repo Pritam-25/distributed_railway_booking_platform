@@ -15,25 +15,29 @@ export interface TrainSearchInput {
   toStationId: string;
   date: string;
   category?: string;
-  limit: number;
-  offset: number;
+  limit: number; // <--- number of records to return
+  offset: number; // <--- number of records to skip
 }
+
+/**
+ * Discriminated union representing the result of a status update attempt.
+ */
+export type UpdateStatusResult =
+  { applied: true } | { applied: false; reason: "NOT_FOUND" | "STALE" };
 
 /**
  * ## TrainSearchRepository
  *
- * Elasticsearch-backed repository for the schedule search read-model.
+ * Data access repository managing train schedule search index operations in Elasticsearch.
  *
  * @remarks
  * ### Responsibilities
- * - Manages the `train_schedules` index lifecycle (idempotent `ensureIndex`).
- * - Upserts schedule documents projected from `ScheduleCreatedEventV1`.
- * - Partially updates `status`/`version` on `ScheduleStatusChangedEventV1`.
- * - Executes the `fromStation/toStation/date` bool query that backs
- *   `GET /api/v1/search/trains`.
+ * - Manages index creation with custom analyzers and mappings for `train_schedules`.
+ * - Handles document upserts and partial status updates for schedule read projections.
+ * - Executes nested station filtering and fare range queries for train search.
  *
  * ### Storage & Persistence
- * - **Elasticsearch**: Target index defined by `env.TRAIN_INDEX_NAME`.
+ * - **Elasticsearch**: Target index defined by `env.TRAIN_SCHEDULE_INDEX_NAME`.
  */
 export class TrainSearchRepository {
   private readonly indexName: string;
@@ -48,20 +52,22 @@ export class TrainSearchRepository {
   }
 
   /**
-   * Ensures the `train_schedules` index exists with mappings for
-   * schedule identity, departure date, status, and the nested `stops`
-   * sub-document used to enforce `fromSeq < toSeq` ordering at query time.
+   * Ensures the `train_schedules` index exists with custom mappings and analyzers.
    *
    * @remarks
+   * ### Responsibilities
+   * - Checks index existence in Elasticsearch.
+   * - Creates index with settings and field mappings if missing.
+   * - Optionally drops existing index when `env.TRAIN_INDEX_RECREATE` is true (local testing).
+   *
    * ### Side Effects
-   * - **Elasticsearch**: Optionally drops the index when
-   *   `env.TRAIN_INDEX_RECREATE` is true; otherwise creates it on first boot.
+   * - **Elasticsearch**: Creates or drops `train_schedules` index.
    *
    * ### Consistency Guarantees
-   * - Idempotent: skips index creation if it already exists.
+   * - Idempotent operation: skips index creation if index already exists.
    */
   async ensureIndex(): Promise<void> {
-    // 1. Optionally drop the index for local sandbox testing
+    // 1. Optionally drop index if TRAIN_INDEX_RECREATE is enabled for sandbox testing
     if (env.TRAIN_INDEX_RECREATE) {
       const exists = await this.esClient.indices.exists({
         index: this.indexName,
@@ -75,7 +81,7 @@ export class TrainSearchRepository {
       }
     }
 
-    // 2. Skip work if the index is already in place
+    // 2. Verify if train_schedules index already exists in Elasticsearch
     const exists = await this.esClient.indices.exists({
       index: this.indexName,
     });
@@ -86,8 +92,7 @@ export class TrainSearchRepository {
       "Creating Elasticsearch train_schedules index",
     );
 
-    // 3. Create the index with mappings — nested `stops` is the key for
-    //    the from-station < to-station sequence-ordering filter at query time.
+    // 3. Create train_schedules index with custom mappings
     await this.esClient.indices.create({
       index: this.indexName,
       settings: {
@@ -99,16 +104,13 @@ export class TrainSearchRepository {
           scheduleId: { type: "keyword" },
           trainId: { type: "keyword" },
           trainNumber: { type: "keyword" },
-          trainName: {
-            type: "text",
-            fields: { keyword: { type: "keyword" } },
-          },
+          trainName: { type: "text" },
           trainCategory: { type: "keyword" },
           routeId: { type: "keyword" },
-          departureDate: { type: "date", format: "yyyy-MM-dd" },
+          departureDate: { type: "date" },
           status: { type: "keyword" },
-          version: { type: "long" },
-          operatingDays: { type: "integer" },
+          version: { type: "integer" },
+          operatingDays: { type: "keyword" },
           fromStationId: { type: "keyword" },
           toStationId: { type: "keyword" },
           totalDistance: { type: "integer" },
@@ -132,20 +134,20 @@ export class TrainSearchRepository {
               coachNumber: { type: "keyword" },
               coachType: { type: "keyword" },
               totalSeats: { type: "integer" },
-              pricePerKm: { type: "double" },
+              pricePerKm: { type: "float" },
             },
           },
           fareRange: {
             properties: {
-              min: { type: "double" },
-              max: { type: "double" },
+              min: { type: "integer" },
+              max: { type: "integer" },
               currency: { type: "keyword" },
             },
           },
           capacity: {
             properties: {
               total: { type: "integer" },
-              byCoachType: { type: "object", enabled: false },
+              byCoachType: { type: "object", enabled: true },
             },
           },
           createdAt: { type: "date" },
@@ -161,22 +163,23 @@ export class TrainSearchRepository {
   }
 
   /**
-   * Upserts a schedule document into Elasticsearch using `scheduleId` as `_id`.
+   * Upserts a schedule document into Elasticsearch using scripted update
+   * with a version guard to prevent redelivered create events from overwriting
+   * newer status projections.
    *
-   * @remarks
-   * ### Side Effects
-   * - **Elasticsearch**: Replaces or inserts a document in `train_schedules`
-   *   with `refresh: "wait_for"` for read-your-write semantics.
-   *
-   * ### Consistency Guarantees
-   * - `_id = scheduleId` ensures replays replace rather than duplicate records.
    * @param doc - Persisted schedule snapshot.
    */
   async upsert(doc: TrainScheduleDocument): Promise<void> {
-    await this.esClient.index({
+    await this.esClient.update({
       index: this.indexName,
       id: doc.scheduleId,
-      document: doc,
+      script: {
+        source:
+          "if (ctx._source.version == null || ctx._source.version <= params.doc.version) " +
+          "{ ctx._source = params.doc; } else { ctx.op = 'noop'; }",
+        params: { doc },
+      },
+      upsert: doc,
       refresh: "wait_for",
     });
   }
@@ -184,24 +187,20 @@ export class TrainSearchRepository {
   /**
    * Updates the `status`, `version`, and `updatedAt` fields of a schedule document.
    *
-   * Missing-document errors (HTTP 404) are caught and logged non-fatally to
-   * tolerate out-of-order event delivery (e.g. a `ScheduleStatusChangedEventV1`
-   * arriving before the `ScheduleCreatedEventV1` for the same schedule).
-   *
    * @param scheduleId - Schedule UUID, also the document `_id`.
    * @param status - New lifecycle status.
    * @param version - New version number; writes are skipped if the stored
    *   document already has a strictly-greater version.
-   * @returns `true` if the update was applied, `false` if skipped (stale or missing).
+   * @returns Detailed result object indicating whether applied or skipped (NOT_FOUND / STALE).
    */
   async updateStatus(
     scheduleId: string,
     status: TrainScheduleDocument["status"],
     version: number,
-  ): Promise<boolean> {
+  ): Promise<UpdateStatusResult> {
     try {
       // 1. Use painless scripted update to guard against out-of-order events
-      await this.esClient.update({
+      const response = await this.esClient.update({
         index: this.indexName,
         id: scheduleId,
         script: {
@@ -217,7 +216,12 @@ export class TrainSearchRepository {
         },
         refresh: "wait_for",
       });
-      return true;
+
+      if (response.result === "noop") {
+        return { applied: false, reason: "STALE" };
+      }
+
+      return { applied: true };
     } catch (err) {
       const statusCode = (err as { meta?: { statusCode?: number } })?.meta
         ?.statusCode;
@@ -226,7 +230,7 @@ export class TrainSearchRepository {
           { module: "train-search-repository", scheduleId },
           "Status update skipped: schedule document not found yet",
         );
-        return false;
+        return { applied: false, reason: "NOT_FOUND" };
       }
       throw err;
     }
@@ -322,9 +326,12 @@ export class TrainSearchRepository {
       },
       sort: [
         {
-          "stops.sequenceNumber": {
+          "stops.departureMinutes": {
             order: "asc",
-            nested: { path: "stops" },
+            nested: {
+              path: "stops",
+              filter: { term: { "stops.stationId": input.fromStationId } },
+            },
           },
         },
         { trainNumber: { order: "asc" } },

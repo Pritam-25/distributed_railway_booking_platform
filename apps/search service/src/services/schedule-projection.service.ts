@@ -136,19 +136,33 @@ export class ScheduleProjectionService {
       event.eventId,
       event.scheduleId,
       async () => {
-        const applied = await this.repository.updateStatus(
+        const result = await this.repository.updateStatus(
           event.scheduleId,
           event.status,
           event.version,
         );
-        if (!applied) {
+        if (!result.applied) {
+          if (result.reason === "NOT_FOUND") {
+            logger.info(
+              {
+                module: "schedule-projection-service",
+                scheduleId: event.scheduleId,
+                eventId: event.eventId,
+              },
+              "schedule status update deferred: document not found yet",
+            );
+            throw new Error(
+              `Schedule status update deferred: document not found yet for schedule ${event.scheduleId}`,
+            );
+          }
           logger.info(
             {
               module: "schedule-projection-service",
               scheduleId: event.scheduleId,
               eventId: event.eventId,
+              version: event.version,
             },
-            "schedule status update skipped: document not found yet",
+            "schedule status update skipped: stored document has newer version",
           );
         }
       },

@@ -260,4 +260,51 @@ export class StationSearchRepository {
       ];
     });
   }
+
+  /**
+   * Fetches a station document directly by its unique stationId (Elasticsearch _id).
+   *
+   * @param stationId - Unique station UUID.
+   * @returns Station suggestion DTO or null if not found.
+   */
+  async findById(stationId: string): Promise<StationSuggestion | null> {
+    try {
+      const response = await this.esClient.get<StationDocument>({
+        index: this.indexName,
+        id: stationId,
+      });
+
+      if (!response._source) return null;
+
+      return {
+        stationId: response._source.stationId,
+        code: response._source.code,
+        name: response._source.name,
+        zone: response._source.zone,
+        state: response._source.state,
+        isActive: response._source.isActive,
+      };
+    } catch (err) {
+      const status = (err as { meta?: { statusCode?: number } })?.meta
+        ?.statusCode;
+      if (status === 404) return null;
+      throw err;
+    }
+  }
+
+  /**
+   * Resolves a station document by exact station code (case-insensitive).
+   *
+   * @param code - Raw station code (e.g. "NDLS").
+   * @returns Matching active station suggestion DTO or null if not found.
+   */
+  async findByCode(code: string): Promise<StationSuggestion | null> {
+    const candidates = await this.suggest(code, 10);
+    const upperCode = code.toUpperCase();
+    return (
+      candidates.find(
+        (s) => s.code.toUpperCase() === upperCode && s.isActive,
+      ) ?? null
+    );
+  }
 }
