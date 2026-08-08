@@ -7,9 +7,9 @@
 // ─── Direction of merging ────────────────────────────────────────────────────
 //
 //   apps/user-service/openapi.yaml      ─┐
-//                                       │
+//                                        │
 //   apps/admin-service/openapi.yaml     ─┼──>  redocly join  ──>  apps/api-gateway/openapi.yaml
-//                                       │       (multi-input, deep-merge)
+//                                        │       (multi-input, deep-merge)
 //   (any future service)                ─┘
 //
 //   Output is byte-faithful to what redocly produces for the YAML/JSON body,
@@ -58,11 +58,13 @@
 
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
 import { SERVICES } from "../../../scripts/services.config.js";
 
+const require = createRequire(import.meta.url);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -90,7 +92,7 @@ const GATEWAY_INFO = {
   - **User Service** — Authentication, identity, and profile management.
   - **Admin Service** — Administrator authentication and administrative operations.
   - **Search Service** — Train and station search.
-  - **Inventy Service** - Inventory Schedule Management. *(future)*
+  - **Inventory Service** - Inventory Schedule Management.
   - **Booking Service** — Seat reservation and booking lifecycle. *(future)*
   - **Payment Service** — Payment processing. *(future)*
   - **Notification Service** — User-facing notifications. *(internal)*
@@ -154,16 +156,36 @@ const collectMergeInputs = (): ServiceSpecSource[] => {
 // the gateway's target YAML path. Output is the merged YAML; we'll read it
 // back as JSON for the .json sibling.
 //
-// We invoke the binary via `pnpm exec` with `cwd` set to the api-gateway
-// workspace (where `@redocly/cli` is declared as a dependency). The
-// input and output paths in `redoclyArgs` are still relative to the repo
-// root so we pass them through unchanged — redocly resolves them against
-// its own `cwd` first, but we then use absolute paths below instead.
+const resolveRedoclyBin = (): string => {
+  try {
+    const pkgJsonPath = require.resolve("@redocly/cli/package.json");
+    const pkgDir = path.dirname(pkgJsonPath);
+    const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, "utf-8")) as {
+      bin?: string | Record<string, string>;
+    };
+    const binRel =
+      typeof pkgJson.bin === "string"
+        ? pkgJson.bin
+        : (pkgJson.bin?.redocly ?? "bin/cli.js");
+    return path.resolve(pkgDir, binRel);
+  } catch {
+    return path.join(
+      TARGET_DIR,
+      "node_modules",
+      "@redocly",
+      "cli",
+      "bin",
+      "cli.js",
+    );
+  }
+};
+
+// Invokes `redocly join` directly through Node.
 const runRedoclyJoin = (sources: ServiceSpecSource[]): void => {
-  const API_GATEWAY_DIR = path.resolve(__dirname, "..");
+  const inputFiles = sources.map((s) => path.resolve(REPO_ROOT, s.specPath));
   const redoclyArgs = [
     "join",
-    ...sources.map((s) => path.resolve(REPO_ROOT, s.specPath)),
+    ...inputFiles,
     "--output",
     path.resolve(REPO_ROOT, TARGET_YAML),
   ];
@@ -179,17 +201,10 @@ const runRedoclyJoin = (sources: ServiceSpecSource[]): void => {
     //      and fails with ENOENT.
     // Going through Node + cli.js avoids both problems and saves a layer
     // of process overhead.
-    const redoclyBin = path.join(
-      API_GATEWAY_DIR,
-      "node_modules",
-      "@redocly",
-      "cli",
-      "bin",
-      "cli.js",
-    );
+    const redoclyBin = resolveRedoclyBin();
     execFileSync(process.execPath, [redoclyBin, ...redoclyArgs], {
       stdio: ["ignore", "inherit", "inherit"],
-      cwd: API_GATEWAY_DIR,
+      cwd: TARGET_DIR,
     });
   } catch (err) {
     console.error("❌ redocly join failed");

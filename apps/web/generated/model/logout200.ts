@@ -14,7 +14,7 @@
  *   - **User Service** — Authentication, identity, and profile management.
  *   - **Admin Service** — Administrator authentication and administrative operations.
  *   - **Search Service** — Train and station search.
- *   - **Inventy Service** - Inventory Schedule Management. *(future)*
+ *   - **Inventory Service** - Inventory Schedule Management.
  *   - **Booking Service** — Seat reservation and booking lifecycle. *(future)*
  *   - **Payment Service** — Payment processing. *(future)*
  *   - **Notification Service** — User-facing notifications. *(internal)*

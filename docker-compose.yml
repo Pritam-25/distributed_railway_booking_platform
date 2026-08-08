@@ -447,10 +447,6 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-      user-service:
-        condition: service_started
-      admin-service:
-        condition: service_started
     healthcheck:
       test:
         [

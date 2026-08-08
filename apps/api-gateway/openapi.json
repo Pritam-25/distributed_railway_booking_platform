@@ -3,7 +3,7 @@
   "info": {
     "title": "Railway Booking Platform API",
     "version": "1.0.0",
-    "description": "\n  # Railway Booking Platform API\n\n  Welcome to the **Railway Booking Platform API**. This document is the\n  unified public API contract for the IRCTC Railway Booking Platform,\n  combining every public endpoint exposed through the API Gateway.\n\n  ## Services\n\n  - **User Service** — Authentication, identity, and profile management.\n  - **Admin Service** — Administrator authentication and administrative operations.\n  - **Search Service** — Train and station search.\n  - **Inventy Service** - Inventory Schedule Management. *(future)*\n  - **Booking Service** — Seat reservation and booking lifecycle. *(future)*\n  - **Payment Service** — Payment processing. *(future)*\n  - **Notification Service** — User-facing notifications. *(internal)*\n"
+    "description": "\n  # Railway Booking Platform API\n\n  Welcome to the **Railway Booking Platform API**. This document is the\n  unified public API contract for the IRCTC Railway Booking Platform,\n  combining every public endpoint exposed through the API Gateway.\n\n  ## Services\n\n  - **User Service** — Authentication, identity, and profile management.\n  - **Admin Service** — Administrator authentication and administrative operations.\n  - **Search Service** — Train and station search.\n  - **Inventory Service** - Inventory Schedule Management.\n  - **Booking Service** — Seat reservation and booking lifecycle. *(future)*\n  - **Payment Service** — Payment processing. *(future)*\n  - **Notification Service** — User-facing notifications. *(internal)*\n"
   },
   "tags": [
     {
