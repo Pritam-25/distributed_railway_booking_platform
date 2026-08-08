@@ -89,10 +89,28 @@ export class ScheduleProjectionService {
   async applyCreated(
     event: ScheduleCreatedEventV1Type,
   ): Promise<ScheduleProjectionOutcome> {
-    return this.dispatch(event.eventId, event.scheduleId, async () => {
-      const doc = toDocument(event);
-      await this.repository.upsert(doc);
-    });
+    const outcome = await this.dispatch(
+      event.eventId,
+      event.scheduleId,
+      async () => {
+        const doc = toDocument(event);
+        await this.repository.upsert(doc);
+      },
+    );
+
+    if (outcome.kind === "APPLIED") {
+      logger.info(
+        {
+          module: "schedule-projection-service",
+          scheduleId: event.scheduleId,
+          version: event.version,
+          eventId: event.eventId,
+        },
+        "Successfully processed ScheduleCreatedEventV1 and projected search document",
+      );
+    }
+
+    return outcome;
   }
 
   /**
@@ -114,23 +132,42 @@ export class ScheduleProjectionService {
   async applyStatusChange(
     event: ScheduleStatusChangedEventV1Type,
   ): Promise<ScheduleProjectionOutcome> {
-    return this.dispatch(event.eventId, event.scheduleId, async () => {
-      const applied = await this.repository.updateStatus(
-        event.scheduleId,
-        event.status,
-        event.version,
-      );
-      if (!applied) {
-        logger.info(
-          {
-            module: "schedule-projection-service",
-            scheduleId: event.scheduleId,
-            eventId: event.eventId,
-          },
-          "schedule status update skipped: document not found yet",
+    const outcome = await this.dispatch(
+      event.eventId,
+      event.scheduleId,
+      async () => {
+        const applied = await this.repository.updateStatus(
+          event.scheduleId,
+          event.status,
+          event.version,
         );
-      }
-    });
+        if (!applied) {
+          logger.info(
+            {
+              module: "schedule-projection-service",
+              scheduleId: event.scheduleId,
+              eventId: event.eventId,
+            },
+            "schedule status update skipped: document not found yet",
+          );
+        }
+      },
+    );
+
+    if (outcome.kind === "APPLIED") {
+      logger.info(
+        {
+          module: "schedule-projection-service",
+          scheduleId: event.scheduleId,
+          newStatus: event.status,
+          version: event.version,
+          eventId: event.eventId,
+        },
+        "Successfully processed ScheduleStatusChangedEventV1 and updated status",
+      );
+    }
+
+    return outcome;
   }
 
   /**
@@ -200,6 +237,79 @@ const pricePerKmForCategory = (category: string): number => {
  * - `fareRange` is min/max of `pricePerKm × totalDistance` across seats.
  * - `capacity` aggregates `totalSeats` per `coachType` and overall.
  */
+/**
+ * Computes the flat `routesServed` list of `fromId:toId` station pairs for searching.
+ */
+const computeRoutesServed = (stops: Array<{ stationId: string }>): string[] => {
+  const routesServed: string[] = [];
+  for (let i = 0; i < stops.length; i += 1) {
+    const fromId = stops[i]?.stationId;
+    if (!fromId) continue;
+    for (let j = i + 1; j < stops.length; j += 1) {
+      const toId = stops[j]?.stationId;
+      if (!toId) continue;
+      routesServed.push(`${fromId}:${toId}`);
+    }
+  }
+  return routesServed;
+};
+
+/**
+ * Computes minimum and maximum seat fare range across all coaches for total distance.
+ */
+const computeFareRange = (
+  coaches: CoachDocument[],
+  totalDistance: number,
+): FareRangeDto => {
+  let minFare = Number.POSITIVE_INFINITY;
+  let maxFare = 0;
+  for (const coach of coaches) {
+    const seatFare = coach.pricePerKm * totalDistance;
+    if (seatFare < minFare) minFare = seatFare;
+    if (seatFare > maxFare) maxFare = seatFare;
+  }
+  if (!Number.isFinite(minFare)) minFare = 0;
+  return {
+    min: Math.round(minFare),
+    max: Math.round(maxFare),
+    currency: "INR",
+  };
+};
+
+/**
+ * Aggregates total and per-coach-type seat capacity.
+ */
+const computeCapacity = (coaches: CoachDocument[]): AvailableSeatsDto => {
+  return {
+    total: coaches.reduce((acc, c) => acc + c.totalSeats, 0),
+    byCoachType: coaches.reduce<Record<string, number>>((acc, c) => {
+      acc[c.coachType] = (acc[c.coachType] ?? 0) + c.totalSeats;
+      return acc;
+    }, {}),
+  };
+};
+
+/**
+ * Formats a Date instance or ISO date string to a ISO string.
+ */
+const toIsoString = (dateVal: Date | string): string => {
+  return dateVal instanceof Date
+    ? dateVal.toISOString()
+    : new Date(dateVal).toISOString();
+};
+
+/**
+ * Flattens a parsed `ScheduleCreatedEventV1` event into the
+ * `TrainScheduleDocument` shape stored in Elasticsearch.
+ *
+ * Side computations:
+ * - `fromStationId` / `toStationId` are denormalized from first/last
+ *   stops for cheap filtering.
+ * - `routesServed` is the flat list of every (fromId, toId) pair the
+ *   train serves (so a query for `A→C` matches `A→B→C` schedules).
+ * - `fareRange` is min/max of `pricePerKm × totalDistance` across seats.
+ * - `capacity` aggregates `totalSeats` per `coachType` and overall.
+ */
 const toDocument = (
   event: ScheduleCreatedEventV1Type,
 ): TrainScheduleDocument => {
@@ -219,22 +329,9 @@ const toDocument = (
 
   const firstStop = sortedStops.at(0);
   const lastStop = sortedStops.at(-1);
+  const totalDistance = lastStop?.distanceFromStart ?? 0;
+  const routesServed = computeRoutesServed(sortedStops);
 
-  // Build flat `routesServed` list: every (i, j) pair where i < j.
-  const routesServed: string[] = [];
-  for (let i = 0; i < sortedStops.length; i += 1) {
-    const fromId = sortedStops[i]?.stationId;
-    if (!fromId) continue;
-    for (let j = i + 1; j < sortedStops.length; j += 1) {
-      const toId = sortedStops[j]?.stationId;
-      if (!toId) continue;
-      routesServed.push(`${fromId}:${toId}`);
-    }
-  }
-
-  // Build coach documents with per-coach pricing (the train category
-  // drives pricePerKm in the MVP; per-coach pricing is layered later
-  // when the booking-service owns the seat-level fare resolution).
   const basePricePerKm = pricePerKmForCategory(event.trainCategory);
   const coaches: CoachDocument[] = event.coaches.map((coach) => ({
     coachId: coach.coachId,
@@ -244,43 +341,10 @@ const toDocument = (
     pricePerKm: basePricePerKm,
   }));
 
-  // Compute fare range — min/max over coaches × totalDistance. We keep
-  // pricing at the coach level here; live per-seat pricing is fetched
-  // by the booking-service from inventory-service when needed.
-  const totalDistance = lastStop?.distanceFromStart ?? 0;
-  let minFare = Number.POSITIVE_INFINITY;
-  let maxFare = 0;
-  for (const coach of coaches) {
-    const seatFare = coach.pricePerKm * totalDistance;
-    if (seatFare < minFare) minFare = seatFare;
-    if (seatFare > maxFare) maxFare = seatFare;
-  }
-  if (!Number.isFinite(minFare)) minFare = 0;
-  const fareRange: FareRangeDto = {
-    min: Math.round(minFare),
-    max: Math.round(maxFare),
-    currency: "INR",
-  };
-
-  // Capacity aggregates.
-  const capacity: AvailableSeatsDto = {
-    total: coaches.reduce((acc, c) => acc + c.totalSeats, 0),
-    byCoachType: coaches.reduce<Record<string, number>>((acc, c) => {
-      acc[c.coachType] = (acc[c.coachType] ?? 0) + c.totalSeats;
-      return acc;
-    }, {}),
-  };
-
-  // Format departureDate as YYYY-MM-DD for the ES `date` mapping.
-  const departureDate =
-    event.departureDate instanceof Date
-      ? event.departureDate.toISOString().slice(0, 10)
-      : new Date(event.departureDate).toISOString().slice(0, 10);
-
-  const createdAt =
-    event.createdAt instanceof Date
-      ? event.createdAt.toISOString()
-      : new Date(event.createdAt).toISOString();
+  const fareRange = computeFareRange(coaches, totalDistance);
+  const capacity = computeCapacity(coaches);
+  const departureDate = toIsoString(event.departureDate).slice(0, 10);
+  const createdAt = toIsoString(event.createdAt);
 
   return {
     scheduleId: event.scheduleId,

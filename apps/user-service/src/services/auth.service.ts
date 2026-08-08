@@ -701,7 +701,17 @@ export class AuthService {
       }
 
       // 5. Generate NEW rotated access and refresh token pair
-      const user = await this.requireUser(session.userId);
+      const user = await this.repo.findById(session.userId);
+      if (!user) {
+        logger.warn(
+          { module: "auth", userId: session.userId },
+          "Refresh failed: user record not found",
+        );
+        throw new ApiError(
+          statusCode.unauthorized,
+          ERROR_CODES.INVALID_REFRESH_TOKEN,
+        );
+      }
 
       const accessToken = this.generateAccessToken(
         user.id,

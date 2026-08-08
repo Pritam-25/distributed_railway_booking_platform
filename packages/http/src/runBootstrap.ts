@@ -24,20 +24,9 @@ export const runBootstrap = async (
   } catch (error) {
     logger.error(
       { module: "server", err: error },
-      `Bootstrap failed during startup. Executing failure cleanup...`,
+      `Bootstrap failed during startup. Triggering graceful shutdown...`,
     );
 
-    if (onFailure) {
-      try {
-        await onFailure();
-      } catch (cleanupError) {
-        logger.error(
-          { module: "server", err: cleanupError },
-          "Error occurred during bootstrap failure cleanup.",
-        );
-      }
-    }
-
-    await triggerShutdown("SIGTERM", 1);
+    await triggerShutdown("SIGTERM", 1, onFailure);
   }
 };

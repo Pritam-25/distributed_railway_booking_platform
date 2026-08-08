@@ -1,3 +1,5 @@
+import { injectTraceContextToKafkaHeaders } from "@irctc/telemetry";
+import { KAFKA_HEADERS } from "../headers/kafka-headers.js";
 import type { LoggerLike } from "../consumer-runner/kafka-consumer-runner.js";
 import {
   type OutboxRepository,
@@ -44,6 +46,16 @@ export class PostgresOutboxRepository implements OutboxRepository {
     tx: OutboxPrismaClient,
     data: CreateOutboxEventData,
   ): Promise<void> {
+    const rawHeaders =
+      data.headers && typeof data.headers === "object"
+        ? (data.headers as Record<string, string>)
+        : {};
+
+    const headers = injectTraceContextToKafkaHeaders({
+      [KAFKA_HEADERS.EVENT_TYPE]: data.eventType,
+      ...rawHeaders,
+    });
+
     await tx.outboxEvent.create({
       data: {
         aggregateType: data.aggregateType,
@@ -51,7 +63,7 @@ export class PostgresOutboxRepository implements OutboxRepository {
         eventType: data.eventType,
         topic: data.topic,
         payload: data.payload,
-        headers: data.headers,
+        headers,
       },
     });
   }

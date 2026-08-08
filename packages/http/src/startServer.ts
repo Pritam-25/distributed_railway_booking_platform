@@ -53,7 +53,7 @@ export interface StartServerOptions {
   beforeShutdown?: () => Promise<void>;
   /** Runs during graceful shutdown, AFTER HTTP close. Use to disconnect kafka/redis/prisma. */
   afterShutdown?: () => Promise<void>;
-  /** Per-step timeout during shutdown in ms. Default `5000`. */
+  /** Per-step timeout during shutdown in ms. Default `15000`. */
   shutdownTimeoutMs?: number;
 }
 
@@ -79,6 +79,7 @@ let activeShutdownContext: ActiveShutdownContext | undefined;
 export const executeShutdown = async (
   signal: NodeJS.Signals,
   exitCode = 0,
+  fallbackCleanup?: () => Promise<void>,
 ): Promise<void> => {
   if (isShuttingDown) return;
   isShuttingDown = true;
@@ -86,7 +87,7 @@ export const executeShutdown = async (
 
   logger.info(
     { module: "server" },
-    `Received ${signal}, shutting down gracefully...`,
+    `Received ${signal} (exitCode=${exitCode}), shutting down gracefully...`,
   );
 
   const ctx = activeShutdownContext;
@@ -131,12 +132,13 @@ export const executeShutdown = async (
   }
 
   // 3. Disconnect Kafka / Redis / Prisma / ES.
-  if (ctx?.afterShutdown) {
+  const cleanupFn = ctx?.afterShutdown ?? fallbackCleanup;
+  if (cleanupFn) {
     try {
       await withTimeout(
         "afterShutdown",
-        ctx.afterShutdown(),
-        ctx.shutdownTimeoutMs,
+        cleanupFn(),
+        ctx?.shutdownTimeoutMs ?? 15000,
       );
       logger.info({ module: "server" }, "afterShutdown done.");
     } catch (error) {
@@ -150,7 +152,7 @@ export const executeShutdown = async (
     await withTimeout(
       "Telemetry shutdown",
       shutdownTelemetry(),
-      ctx?.shutdownTimeoutMs ?? 5000,
+      ctx?.shutdownTimeoutMs ?? 15000,
     );
     logger.info({ module: "server" }, "Telemetry shutdown successfully.");
   } catch (error) {
@@ -202,7 +204,7 @@ export const startServer = async (
     afterListen,
     beforeShutdown,
     afterShutdown,
-    shutdownTimeoutMs = 5000,
+    shutdownTimeoutMs = 15000,
   } = options;
 
   if (mode === "http" && (!app || port === undefined)) {
@@ -288,10 +290,7 @@ export const startServer = async (
 export const triggerShutdown = async (
   signal: NodeJS.Signals,
   exitCode = 0,
+  fallbackCleanup?: () => Promise<void>,
 ): Promise<void> => {
-  logger.info(
-    { module: "server" },
-    `triggerShutdown called with ${signal}, exitCode=${exitCode}`,
-  );
-  await executeShutdown(signal, exitCode);
+  await executeShutdown(signal, exitCode, fallbackCleanup);
 };

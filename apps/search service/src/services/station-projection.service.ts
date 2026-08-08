@@ -63,10 +63,24 @@ export class StationProjectionService {
   async applyUpsert(
     event: StationCreatedEventV1Type | StationUpdatedEventV1Type,
   ): Promise<StationProjectionOutcome> {
-    return this.dispatch(event.eventId, event.stationId, () => {
+    const outcome = await this.dispatch(event.eventId, event.stationId, () => {
       const doc = toDocument(event);
       return this.repository.upsert(doc);
     });
+
+    if (outcome.kind === "APPLIED") {
+      logger.info(
+        {
+          module: "station-projection-service",
+          stationId: event.stationId,
+          stationCode: event.stationCode,
+          eventId: event.eventId,
+        },
+        "Successfully processed station event and projected search document",
+      );
+    }
+
+    return outcome;
   }
 
   /**
@@ -89,9 +103,22 @@ export class StationProjectionService {
   async applyDeactivated(
     event: StationDeactivatedEventV1Type,
   ): Promise<StationProjectionOutcome> {
-    return this.dispatch(event.eventId, event.stationId, () => {
+    const outcome = await this.dispatch(event.eventId, event.stationId, () => {
       return this.repository.updateActiveStatus(event.stationId, false);
     });
+
+    if (outcome.kind === "APPLIED") {
+      logger.info(
+        {
+          module: "station-projection-service",
+          stationId: event.stationId,
+          eventId: event.eventId,
+        },
+        "Successfully processed StationDeactivatedEventV1 and updated station document status",
+      );
+    }
+
+    return outcome;
   }
 
   /**

@@ -130,11 +130,8 @@ export class AdminContainer {
     logger.info({ module: "admin-container" }, "Dependencies wired.");
   }
 
-  /**y
-   * Starts background outbox publisher worker polling loop.
-   */
   /**
-   *
+   * Starts background outbox publisher worker polling loop.
    */
   start(): void {
     this.outboxWorker.start();

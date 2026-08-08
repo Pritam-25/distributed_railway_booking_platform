@@ -1,4 +1,5 @@
 import { KafkaJS } from "@confluentinc/kafka-javascript";
+import { injectTraceContextToKafkaHeaders } from "@irctc/telemetry";
 import type { LoggerLike } from "../consumer-runner/kafka-consumer-runner.js";
 import { KAFKA_HEADERS } from "../headers/kafka-headers.js";
 import type { OutboxRepository, OutboxEvent } from "./interfaces.js";
@@ -30,6 +31,10 @@ export class OutboxPublisherWorker {
   private retryTimer: ReturnType<typeof setInterval> | null = null;
   /** Promise tracking the currently executing poll and publish iteration. */
   private inFlightPoll: Promise<void> | null = null;
+  /** Promise tracking the currently executing recovery sweep operation. */
+  private inFlightRecovery: Promise<void> | null = null;
+  /** Promise tracking the currently executing retry requeue operation. */
+  private inFlightRetry: Promise<void> | null = null;
 
   /**
    * Creates an instance of OutboxPublisherWorker.
@@ -55,27 +60,37 @@ export class OutboxPublisherWorker {
     this.schedulePoll();
 
     // Sweep database for events stuck in PROCESSING due to ungraceful worker crashes.
-    this.recoveryTimer = setInterval(async () => {
-      try {
-        await this.outboxRepository.resetStuckProcessingEvents();
-      } catch (error) {
-        this.logger?.error(
-          { module: "outbox-worker", error },
-          "Recovery sweep failed",
-        );
-      }
+    this.recoveryTimer = setInterval(() => {
+      if (!this.running) return;
+      this.inFlightRecovery = (async () => {
+        try {
+          await this.outboxRepository.resetStuckProcessingEvents();
+        } catch (error) {
+          this.logger?.error(
+            { module: "outbox-worker", error },
+            "Recovery sweep failed",
+          );
+        } finally {
+          this.inFlightRecovery = null;
+        }
+      })();
     }, RECOVERY_INTERVAL_MS);
 
     // Requeue failed events whose exponential backoff delays have elapsed.
-    this.retryTimer = setInterval(async () => {
-      try {
-        await this.outboxRepository.requeueFailedEvents();
-      } catch (error) {
-        this.logger?.error(
-          { module: "outbox-worker", error },
-          "Retry requeue failed",
-        );
-      }
+    this.retryTimer = setInterval(() => {
+      if (!this.running) return;
+      this.inFlightRetry = (async () => {
+        try {
+          await this.outboxRepository.requeueFailedEvents();
+        } catch (error) {
+          this.logger?.error(
+            { module: "outbox-worker", error },
+            "Retry requeue failed",
+          );
+        } finally {
+          this.inFlightRetry = null;
+        }
+      })();
     }, RETRY_INTERVAL_MS);
 
     this.logger?.info(
@@ -87,7 +102,7 @@ export class OutboxPublisherWorker {
   /**
    * Gracefully stops the worker loop and clears all active scheduler timers.
    *
-   * Awaits completion of any active in-flight database polling cycles before returning.
+   * Awaits completion of any active in-flight database polling, recovery, or retry cycles before returning.
    *
    * @returns A promise resolving when the worker cycle has safely terminated.
    */
@@ -98,9 +113,15 @@ export class OutboxPublisherWorker {
     if (this.recoveryTimer) clearInterval(this.recoveryTimer);
     if (this.retryTimer) clearInterval(this.retryTimer);
 
-    if (this.inFlightPoll) {
-      await this.inFlightPoll;
-    }
+    await Promise.allSettled([
+      this.inFlightPoll,
+      this.inFlightRecovery,
+      this.inFlightRetry,
+    ]);
+
+    this.inFlightPoll = null;
+    this.inFlightRecovery = null;
+    this.inFlightRetry = null;
 
     this.logger?.info(
       { module: "outbox-worker" },
@@ -170,18 +191,34 @@ export class OutboxPublisherWorker {
     event: OutboxEvent,
   ): Promise<void> {
     try {
+      const headers = this.buildHeaders(event);
+
       await producer.send({
         topic: event.topic,
         messages: [
           {
             key: event.aggregateId,
             value: JSON.stringify(event.payload),
-            headers: this.buildHeaders(event),
+            headers,
           },
         ],
       });
 
       await this.outboxRepository.markPublished(event.id);
+
+      const payloadObj =
+        event.payload && typeof event.payload === "object"
+          ? (event.payload as Record<string, unknown>)
+          : {};
+
+      this.logger?.info(
+        {
+          module: "outbox-worker",
+          eventId:
+            headers[KAFKA_HEADERS.EVENT_ID] ?? payloadObj.eventId ?? event.id,
+        },
+        `Outbox event successfully published to topic ${event.topic}`,
+      );
     } catch (error) {
       await this.handlePublishFailure(event, error);
     }
@@ -190,8 +227,7 @@ export class OutboxPublisherWorker {
   /**
    * Constructs the Kafka message headers dictionary for an outbox event.
    *
-   * Merges event-type and schema-version metadata from stored event headers and extracts
-   * the event ID from the payload body.
+   * Merges event-type, schema-version, trace context, and metadata from stored event headers.
    *
    * @param event - The {@link OutboxEvent} containing headers and payload metadata.
    * @returns A key-value dictionary of string headers for the Kafka message.
@@ -202,11 +238,18 @@ export class OutboxPublisherWorker {
     this.copyStoredHeaders(event.headers, headers);
     this.addEventIdHeader(event, headers);
 
+    if (!headers["traceparent"]) {
+      return injectTraceContextToKafkaHeaders(headers) as Record<
+        string,
+        string
+      >;
+    }
+
     return headers;
   }
 
   /**
-   * Copies stored metadata headers (`x-event-type`, `x-schema-version`) into the target headers object.
+   * Copies stored metadata headers into the target headers object.
    *
    * @param storedHeaders - Raw stored header object from the outbox record.
    * @param headers - Target header key-value dictionary to mutate.
@@ -219,10 +262,13 @@ export class OutboxPublisherWorker {
       return;
     }
 
-    const stored = storedHeaders as Record<string, string | undefined>;
+    const stored = storedHeaders as Record<string, unknown>;
 
-    this.copyHeader(stored, headers, KAFKA_HEADERS.EVENT_TYPE);
-    this.copyHeader(stored, headers, KAFKA_HEADERS.SCHEMA_VERSION);
+    for (const [key, value] of Object.entries(stored)) {
+      if (value != null) {
+        headers[key] = String(value);
+      }
+    }
   }
 
   /**
