@@ -54,6 +54,14 @@ export const stationSuggestionSchema = z
 export type StationSuggestionDto = z.infer<typeof stationSuggestionSchema>;
 
 /**
+ * Single-station suggestion row consumed by services and the repository.
+ *
+ * Mirrors `stationSuggestionSchema`. The DTO suffix is reserved for the
+ * envelope-level type below.
+ */
+export type StationSuggestion = z.infer<typeof stationSuggestionSchema>;
+
+/**
  * ## StationSuggestResponse
  *
  * Top-level `data` shape inside the success envelope for
@@ -68,4 +76,6 @@ export const stationSuggestResponseSchema = z
   })
   .openapi("StationSuggestResponse");
 
-export type StationSuggestion = z.infer<typeof stationSuggestResponseSchema>;
+export type StationSuggestResponseDto = z.infer<
+  typeof stationSuggestResponseSchema
+>;
