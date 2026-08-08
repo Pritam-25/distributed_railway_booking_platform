@@ -1,5 +1,9 @@
-import { prisma } from "@config";
-import { PostgresOutboxRepository, type OutboxRepository } from "@irctc/kafka";
+import { prisma, getProducerSync } from "@config";
+import {
+  PostgresOutboxRepository,
+  OutboxPublisherWorker,
+  type OutboxRepository,
+} from "@irctc/kafka";
 import { logger } from "@irctc/logger";
 
 /**
@@ -21,24 +25,31 @@ export class BookingContainer {
    */
   public readonly outboxRepository: OutboxRepository;
 
+  /**
+   * Outbox publisher worker instance.
+   */
+  private readonly outboxWorker: OutboxPublisherWorker;
+
   private constructor() {
     // 1. Repositories
     this.outboxRepository = new PostgresOutboxRepository(prisma);
+    this.outboxWorker = new OutboxPublisherWorker(
+      this.outboxRepository,
+      getProducerSync,
+      logger,
+    );
 
     // 2. Services
+    logger.info({ module: "booking-container" }, "Dependencies wired.");
   }
 
   /**
-   * Starts both consumer subscription loops on their respective Kafka topics.
+   * Starts outbox publisher worker and event consumer loops.
    *
-   * @returns A promise that resolves when both consumers have started.
+   * @returns A promise that resolves when worker and consumers have started.
    */
   async start(): Promise<void> {
-    logger.info({ module: "container" }, "Starting booking event consumers...");
-    logger.info(
-      { module: "container" },
-      "Booking service event consumer loops started successfully.",
-    );
+    this.outboxWorker.start();
   }
 
   /**
@@ -55,18 +66,11 @@ export class BookingContainer {
   }
 
   /**
-   * Gracefully shuts down the consumer loops and releases network resources.
+   * Gracefully shuts down the outbox worker and consumer loops and releases resources.
    *
-   * @returns A promise that resolves when all consumers have stopped.
+   * @returns A promise that resolves when all workers and consumers have stopped.
    */
   async disconnect(): Promise<void> {
-    logger.info(
-      { module: "container" },
-      "Initiating graceful shutdown of event consumers...",
-    );
-    logger.info(
-      { module: "container" },
-      "All event consumers shut down successfully.",
-    );
+    await this.outboxWorker.stop();
   }
 }

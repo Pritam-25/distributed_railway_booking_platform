@@ -3,7 +3,7 @@ import {
   type GetSeatDetailsRequest,
   type GetSeatDetailsResponse,
 } from "@irctc/contracts";
-import { ApiError, ERROR_CODES } from "@irctc/errors";
+import { ApiError, COMMON_ERROR_CODES } from "@irctc/errors";
 import { prisma } from "@config";
 import { statusCode } from "@irctc/http";
 
@@ -20,7 +20,7 @@ export const inventoryHandler: InventoryServiceImplementation = {
     if (!scheduleId || !seatId) {
       throw new ApiError(
         statusCode.badRequest,
-        ERROR_CODES.BAD_REQUEST,
+        COMMON_ERROR_CODES.INVALID_INPUT,
         "Both scheduleId and seatId are required.",
       );
     }
@@ -37,7 +37,7 @@ export const inventoryHandler: InventoryServiceImplementation = {
     if (!seat) {
       throw new ApiError(
         statusCode.notFound,
-        ERROR_CODES.NOT_FOUND,
+        COMMON_ERROR_CODES.NOT_FOUND,
         `Seat inventory record not found for scheduleId=${scheduleId}, seatId=${seatId}`,
       );
     }

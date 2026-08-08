@@ -31,7 +31,7 @@ export const upstreams = {
   },
   search: {
     name: "search",
-    baseUrl: UpstreamUrl.parse(env.SEARCH_UPSTREAM),
+    baseUrl: env.SEARCH_UPSTREAM,
     circuitName: "search-service",
   },
 } satisfies Record<string, Upstream>;

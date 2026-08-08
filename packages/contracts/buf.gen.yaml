@@ -1,7 +1,7 @@
 version: v2
 plugins:
   - local: protoc-gen-ts_proto
-    out: generated
+    out: src/generated
     strategy: all
     opt:
       - outputServices=nice-grpc

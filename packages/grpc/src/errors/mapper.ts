@@ -1,4 +1,4 @@
-import { ApiError, ERROR_CODES } from "@irctc/errors";
+import { ApiError, COMMON_ERROR_CODES } from "@irctc/errors";
 import { ServerError, Status } from "nice-grpc";
 
 /**
@@ -30,24 +30,22 @@ export function mapApiCodeToGrpcStatus(
   statusCode?: number,
 ): Status {
   switch (code) {
-    case ERROR_CODES.NOT_FOUND:
+    case COMMON_ERROR_CODES.NOT_FOUND:
       return Status.NOT_FOUND;
-    case ERROR_CODES.VALIDATION_ERROR:
-    case ERROR_CODES.INVALID_INPUT:
-    case ERROR_CODES.BAD_REQUEST:
+    case COMMON_ERROR_CODES.INVALID_INPUT:
       return Status.INVALID_ARGUMENT;
-    case ERROR_CODES.UNAUTHORIZED:
+    case COMMON_ERROR_CODES.UNAUTHORIZED:
       return Status.UNAUTHENTICATED;
-    case ERROR_CODES.FORBIDDEN:
+    case COMMON_ERROR_CODES.FORBIDDEN:
       return Status.PERMISSION_DENIED;
-    case ERROR_CODES.CONFLICT:
+    case COMMON_ERROR_CODES.CONFLICT:
       return Status.ALREADY_EXISTS;
-    case ERROR_CODES.RATE_LIMIT_EXCEEDED:
+    case COMMON_ERROR_CODES.RATE_LIMIT_EXCEEDED:
       return Status.RESOURCE_EXHAUSTED;
-    case ERROR_CODES.SERVICE_UNAVAILABLE:
-    case ERROR_CODES.KAFKA_PUBLISH_FAILED:
+    case COMMON_ERROR_CODES.SERVICE_UNAVAILABLE:
+    case COMMON_ERROR_CODES.KAFKA_PUBLISH_FAILED:
       return Status.UNAVAILABLE;
-    case ERROR_CODES.INTERNAL_ERROR:
+    case COMMON_ERROR_CODES.INTERNAL_ERROR:
     default:
       if (statusCode === 404) return Status.NOT_FOUND;
       if (statusCode === 400 || statusCode === 422)
