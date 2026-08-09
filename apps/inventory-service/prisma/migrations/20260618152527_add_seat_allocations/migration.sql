@@ -76,3 +76,7 @@ EXCLUDE USING gist (
 )
 WHERE ("status" IN ('HELD', 'CONFIRMED'));
 
+ALTER TABLE "seat_allocations"
+  ADD CONSTRAINT "seat_allocations_valid_segment"
+  CHECK ("from_sequence" < "to_sequence");
+

@@ -1,1 +1,1 @@
-export * from "./health.controller.js";
+// Export booking domain controllers here as they are added

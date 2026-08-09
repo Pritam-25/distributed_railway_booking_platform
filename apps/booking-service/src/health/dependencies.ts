@@ -1,17 +1,17 @@
-import { prisma, kafka, redis } from "@config";
-import { logger } from "@irctc/logger";
-
 /**
- * Result of each dependency probe.
+ * ## module/health/dependencies
+ *
+ * `booking-service` readiness probes. Each adapter is a `HealthDependency`
+ * that `createHealthRouter` runs in parallel, bounded by a 5s timeout per probe.
+ *
+ * `booking-service` probes `database` (Prisma), `redis`, and `kafka`.
  */
-export interface ReadinessCheck {
-  name: string;
-  ok: boolean;
-  latencyMs: number;
-  error?: string;
-}
 
-export type HealthChecks = Record<string, ReadinessCheck>;
+import { logger } from "@irctc/logger";
+import type { HealthCheckResult, HealthDependency } from "@irctc/http";
+import { prisma, kafka, redis } from "@config";
+
+// --- Database probe ---------------------------------------------------------
 
 let activeDbProbe: Promise<void> | null = null;
 
@@ -24,30 +24,24 @@ const runDbProbe = async (): Promise<void> => {
 };
 
 /**
- * Probe Database with a bounded 5s timeout and deduplicated query promise.
+ * Probes PostgreSQL with a bounded 5s timeout and a deduplicated in-flight
+ * promise.
  */
-const probeDatabase = async (): Promise<ReadinessCheck> => {
+const probeDatabase = async (): Promise<HealthCheckResult> => {
   const start = Date.now();
-  let timeoutId: NodeJS.Timeout | undefined;
-
+  let timer: NodeJS.Timeout | undefined;
   try {
     activeDbProbe ??= runDbProbe();
-
     await Promise.race([
       activeDbProbe,
       new Promise<void>((_, reject) => {
-        timeoutId = setTimeout(
+        timer = setTimeout(
           () => reject(new Error("database probe timeout")),
           5000,
         );
       }),
     ]);
-
-    return {
-      name: "database",
-      ok: true,
-      latencyMs: Date.now() - start,
-    };
+    return { name: "database", ok: true, latencyMs: Date.now() - start };
   } catch (error) {
     logger.warn(
       { module: "health", err: error },
@@ -60,9 +54,11 @@ const probeDatabase = async (): Promise<ReadinessCheck> => {
       error: "database probe failed",
     };
   } finally {
-    if (timeoutId) clearTimeout(timeoutId);
+    if (timer) clearTimeout(timer);
   }
 };
+
+// --- Redis probe ------------------------------------------------------------
 
 let activeRedisProbe: Promise<string> | null = null;
 
@@ -75,12 +71,13 @@ const runRedisProbe = async (): Promise<string> => {
 };
 
 /**
- * Probe Redis with a bounded 5s timeout and deduplicated query promise.
+ * Probes Redis with a bounded 5s timeout and a deduplicated in-flight
+ * promise. Returns `ok: false` immediately if the client is not in the
+ * `"ready"` state.
  */
-const probeRedis = async (): Promise<ReadinessCheck> => {
+const probeRedis = async (): Promise<HealthCheckResult> => {
   const start = Date.now();
-  let timeoutId: NodeJS.Timeout | undefined;
-
+  let timer: NodeJS.Timeout | undefined;
   try {
     if (redis.status !== "ready") {
       logger.warn(
@@ -100,7 +97,7 @@ const probeRedis = async (): Promise<ReadinessCheck> => {
     const pong = await Promise.race([
       activeRedisProbe,
       new Promise<string>((_, reject) => {
-        timeoutId = setTimeout(
+        timer = setTimeout(
           () => reject(new Error("redis probe timeout")),
           5000,
         );
@@ -111,11 +108,7 @@ const probeRedis = async (): Promise<ReadinessCheck> => {
       throw new Error(`Unexpected Redis ping response: ${pong}`);
     }
 
-    return {
-      name: "redis",
-      ok: true,
-      latencyMs: Date.now() - start,
-    };
+    return { name: "redis", ok: true, latencyMs: Date.now() - start };
   } catch (error) {
     logger.warn(
       { module: "health", err: error },
@@ -128,9 +121,11 @@ const probeRedis = async (): Promise<ReadinessCheck> => {
       error: "redis probe failed",
     };
   } finally {
-    if (timeoutId) clearTimeout(timeoutId);
+    if (timer) clearTimeout(timer);
   }
 };
+
+// --- Kafka probe ------------------------------------------------------------
 
 let activeKafkaProbe: Promise<boolean> | null = null;
 
@@ -155,25 +150,23 @@ const runKafkaProbe = async (): Promise<boolean> => {
 };
 
 /**
- * Probe Kafka with a bounded 5s timeout and deduplicated query promise.
+ * Probes Kafka with a bounded 5s timeout and a deduplicated in-flight
+ * promise.
  */
-const probeKafka = async (): Promise<ReadinessCheck> => {
+const probeKafka = async (): Promise<HealthCheckResult> => {
   const start = Date.now();
-  let timeoutId: NodeJS.Timeout | undefined;
-
+  let timer: NodeJS.Timeout | undefined;
   try {
     activeKafkaProbe ??= runKafkaProbe();
-
     const ok = await Promise.race([
       activeKafkaProbe,
       new Promise<boolean>((_, reject) => {
-        timeoutId = setTimeout(
+        timer = setTimeout(
           () => reject(new Error("kafka probe timeout")),
           5000,
         );
       }),
     ]);
-
     return {
       name: "kafka",
       ok,
@@ -192,18 +185,16 @@ const probeKafka = async (): Promise<ReadinessCheck> => {
       error: "kafka probe timeout",
     };
   } finally {
-    if (timeoutId) clearTimeout(timeoutId);
+    if (timer) clearTimeout(timer);
   }
 };
 
-export class HealthService {
-  static async runReadinessChecks(): Promise<HealthChecks> {
-    const [database, kafka, redis] = await Promise.all([
-      probeDatabase(),
-      probeKafka(),
-      probeRedis(),
-    ]);
-
-    return { database, kafka, redis };
-  }
-}
+/**
+ * Readiness probes registered with `createHealthRouter` for
+ * `booking-service`.
+ */
+export const healthDependencies: HealthDependency[] = [
+  { name: "database", check: probeDatabase },
+  { name: "redis", check: probeRedis },
+  { name: "kafka", check: probeKafka },
+];

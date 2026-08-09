@@ -1,8 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -12,30 +10,13 @@ datasource db {
   provider = "postgresql"
 }
 
+// ============================================================
+// Enums
+// ============================================================
+
 enum ScheduleInventoryStatus {
   ACTIVE
   CANCELLED
-}
-
-model ScheduleInventory {
-  id            String                  @id @default(uuid())
-  scheduleId    String                  @unique
-  trainId       String
-  trainNumber   String
-  trainName     String
-  departureDate DateTime
-  status        ScheduleInventoryStatus @default(ACTIVE)
-  version       Int                     @default(0)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  seats SeatInventory[]
-  stops RouteStop[]
-
-  @@index([trainId])
-  @@index([departureDate])
-  @@map("schedule_inventory")
 }
 
 enum SeatType {
@@ -46,49 +27,6 @@ enum SeatType {
   SIDE_UPPER
 }
 
-model SeatInventory {
-  id          String   @id @default(uuid())
-  scheduleId  String
-  trainId     String
-  coachId     String
-  coachNumber String
-  seatId      String
-  seatNumber  Int
-  seatType    SeatType
-  pricePerKm  Decimal  @default(0.0) @db.Decimal(10, 4)
-  version     Int      @default(0)
-
-  schedule  ScheduleInventory @relation(fields: [scheduleId], references: [scheduleId], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([scheduleId, seatId])
-  @@index([scheduleId])
-  @@index([coachId])
-  @@map("seat_inventory")
-}
-
-model RouteStop {
-  id             String @id @default(uuid())
-  scheduleId     String
-  stationId      String
-  stationCode    String
-  stationName    String
-  sequenceNumber Int
-  distanceFromStart Int @default(0)
-
-  schedule  ScheduleInventory @relation(fields: [scheduleId], references: [scheduleId], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([scheduleId, stationId])
-  @@unique([scheduleId, sequenceNumber])
-  @@index([scheduleId, sequenceNumber])
-  @@map("route_stops")
-}
-
 enum OutboxStatus {
   PENDING
   PROCESSING
@@ -97,6 +35,133 @@ enum OutboxStatus {
   DEAD
 }
 
+enum AllocationStatus {
+  HELD
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+}
+
+// ============================================================
+// Models
+// ============================================================
+
+/* Inventory projection of a scheduled train journey. */
+model ScheduleInventory {
+  id            String                  @id @default(uuid())
+  scheduleId    String                  @unique @map("schedule_id")
+  trainId       String                  @map("train_id")
+  trainNumber   String                  @map("train_number")
+  trainName     String                  @map("train_name")
+  departureDate DateTime                @map("departure_date")
+  status        ScheduleInventoryStatus @default(ACTIVE)
+  version       Int                     @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  seats SeatInventory[]
+  stops RouteStop[]
+
+  @@index([trainId])
+  @@index([departureDate])
+  @@map("schedule_inventory")
+}
+
+/* Inventory projection of individual seats for a schedule. */
+model SeatInventory {
+  id          String   @id @default(uuid())
+  scheduleId  String   @map("schedule_id")
+  trainId     String   @map("train_id")
+  coachId     String   @map("coach_id")
+  coachNumber String   @map("coach_number")
+  seatId      String   @map("seat_id")
+  seatNumber  Int      @map("seat_number")
+  seatType    SeatType @map("seat_type")
+  pricePerKm  Decimal  @default(0.0) @map("price_per_km") @db.Decimal(10, 4)
+  version     Int      @default(0)
+
+  schedule ScheduleInventory @relation(fields: [scheduleId], references: [scheduleId], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([scheduleId, seatId])
+  @@index([scheduleId])
+  @@index([coachId])
+  @@map("seat_inventory")
+}
+
+/* Ordered route stop projection for distance and station sequence calculations. */
+model RouteStop {
+  id                String @id @default(uuid())
+  scheduleId        String @map("schedule_id")
+  stationId         String @map("station_id")
+  stationCode       String @map("station_code")
+  stationName       String @map("station_name")
+  sequenceNumber    Int    @map("sequence_number")
+  distanceFromStart Int    @default(0) @map("distance_from_start")
+
+  schedule ScheduleInventory @relation(fields: [scheduleId], references: [scheduleId], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([scheduleId, stationId])
+  @@unique([scheduleId, sequenceNumber])
+  @@index([scheduleId, sequenceNumber])
+  @@map("route_stops")
+}
+
+/* Active seat allocation holding or confirming seat segments for a booking. */
+model SeatAllocation {
+  id              String           @id @default(uuid())
+  scheduleId      String           @map("schedule_id")
+  seatInventoryId String           @map("seat_inventory_id")
+  bookingId       String           @map("booking_id")
+  fromStationId   String           @map("from_station_id")
+  toStationId     String           @map("to_station_id")
+  fromSequence    Int              @map("from_sequence")
+  toSequence      Int              @map("to_sequence")
+  status          AllocationStatus
+  holdExpiresAt   DateTime?        @map("hold_expires_at")
+  price           Decimal          @default(0.0) @db.Decimal(10, 2)
+  version         Int              @default(0)
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  @@unique([bookingId, seatInventoryId])
+  @@index([scheduleId, seatInventoryId])
+  @@index([bookingId])
+  @@index([status])
+  @@index([holdExpiresAt])
+  @@map("seat_allocations")
+}
+
+/* Audit log of seat allocation status transitions. */
+model SeatAllocationHistory {
+  id           String           @id @default(uuid())
+  allocationId String           @map("allocation_id")
+  oldStatus    AllocationStatus @map("old_status")
+  newStatus    AllocationStatus @map("new_status")
+  reason       String?
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  @@index([allocationId])
+  @@map("seat_allocation_history")
+}
+
+/* Idempotency tracking record for event processing. */
+model IdempotencyRecord {
+  id          String   @id @default(uuid())
+  eventKey    String   @unique @map("event_key")
+  processedAt DateTime @default(now()) @map("processed_at")
+
+  @@index([eventKey])
+  @@map("idempotency")
+}
+
+/* Transactional outbox event for event-driven architecture. */
 model OutboxEvent {
   id            String       @id @default(uuid())
   aggregateType String       @map("aggregate_type")

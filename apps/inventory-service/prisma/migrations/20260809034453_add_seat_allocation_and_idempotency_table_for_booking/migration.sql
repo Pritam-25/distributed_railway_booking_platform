@@ -11,9 +11,6 @@
   - You are about to drop the column `originStationName` on the `schedule_inventory` table. All the data in the column will be lost.
   - You are about to drop the column `trainCategory` on the `schedule_inventory` table. All the data in the column will be lost.
   - You are about to drop the column `coachType` on the `seat_inventory` table. All the data in the column will be lost.
-  - You are about to drop the `idempotency` table. If the table is not empty, all the data it contains will be lost.
-  - You are about to drop the `seat_allocation_history` table. If the table is not empty, all the data it contains will be lost.
-  - You are about to drop the `seat_allocations` table. If the table is not empty, all the data it contains will be lost.
 
 */
 -- AlterTable
@@ -31,15 +28,3 @@ DROP COLUMN "trainCategory";
 
 -- AlterTable
 ALTER TABLE "seat_inventory" DROP COLUMN "coachType";
-
--- DropTable
-DROP TABLE "idempotency";
-
--- DropTable
-DROP TABLE "seat_allocation_history";
-
--- DropTable
-DROP TABLE "seat_allocations";
-
--- DropEnum
-DROP TYPE "AllocationStatus";

@@ -1,8 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -12,123 +10,23 @@ datasource db {
   provider = "postgresql"
 }
 
-/**
- * Master railway station.
- * Examples:
- * - NDLS (New Delhi)
- * - HWH (Howrah)
- * - PNBE (Patna)
- * Used by:
- * - Search Service
- * - Route Management
- * - Booking Service
- */
-model Station {
-  id        String   @id @default(uuid())
-  name      String   @unique // "New Delhi"
-  code      String   @unique // "NDLS"
-  zone      String? // "Delhi"
-  state     String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  routeStation RouteStation[]
-
-  @@index([name])
-  @@index([code])
-  @@index([zone])
-  @@map("stations")
-}
+// ============================================================
+// Enums
+// ============================================================
 
 enum TrainCategory {
+  EXPRESS
+  SUPERFAST
+  MAIL
+  PASSENGER
+  VANDE_BHARAT
   RAJDHANI
   SHATABDI
-  VANDE_BHARAT
   DURONTO
-  SUPERFAST
-  PASSENGER
-  EXPRESS
+  JAN_SHATABDI
+  GARIB_RATH
   DEMU
   MEMU
-}
-
-/**
- * Master train record.
- * Represents train identity independent of
- * any particular journey date.
- * Examples:
- * - 12301 Rajdhani Express
- * - 12002 Shatabdi Express
- */
-model Train {
-  id          String        @id @default(uuid())
-  trainNumber String        @unique @db.Char(5)
-  trainName   String // "Rajdhani Express"
-  category    TrainCategory @default(PASSENGER)
-  isActive    Boolean       @default(true)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-
-  coaches       Coach[]
-  route         Route?
-  operatingDays OperatingDay[]
-  schedules     Schedule[]
-
-  @@index([trainNumber])
-  @@index([trainName])
-  @@map("trains")
-}
-
-/**
- * Route assigned to a train.
- * A route contains an ordered list
- * of stations through RouteStation.
- */
-model Route {
-  id        String   @id @default(uuid())
-  trainId   String   @unique
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  train        Train          @relation(fields: [trainId], references: [id], onDelete: Cascade)
-  routeStation RouteStation[]
-
-  @@map("routes")
-}
-
-/**
- * Station stop inside a train route.
- * Stores:
- * - stop order
- * - arrival offset
- * - departure offset
- * - distance from source station
- * Used for:
- * - fare calculation
- * - route search
- * - timetable generation
- */
-model RouteStation {
-  id                String   @id @default(uuid())
-  routeId           String
-  stationId         String
-  stopNumber        Int // 1 for the first stop, 2 for the second, etc.
-  arrivalMinutes    Int?
-  departureMinutes  Int?
-  distanceFromStart Int      @default(0) // in kilometers, for pricing calculation
-  platformNumber    String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  route   Route   @relation(fields: [routeId], references: [id], onDelete: Cascade)
-  station Station @relation(fields: [stationId], references: [id], onDelete: Cascade)
-
-  @@unique([routeId, stationId])
-  @@unique([routeId, stopNumber])
-  @@index([stopNumber])
-  @@map("route_stations")
 }
 
 enum CoachType {
@@ -142,31 +40,6 @@ enum CoachType {
   EC // Executive Chair Car
 }
 
-/**
- * Coach attached to a train.
- * Examples:
- * - S1
- * - S2
- * - A1
- * - B1
- */
-model Coach {
-  id          String    @id @default(uuid())
-  trainId     String
-  coachNumber String
-  coachType   CoachType
-  totalSeats  Int
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  train Train  @relation(fields: [trainId], references: [id], onDelete: Cascade)
-  seats Seat[]
-
-  @@unique([trainId, coachNumber])
-  @@map("coaches")
-}
-
 enum SeatType {
   LOWER
   MIDDLE
@@ -175,90 +48,13 @@ enum SeatType {
   SIDE_UPPER
 }
 
-/**
- * Physical seat inside a coach.
- * Unique only within a coach.
- * Examples:
- * - S1 Seat 1
- * - S1 Seat 2
- * - A1 Seat 12
- */
-
-model Seat {
-  id         String   @id @default(uuid())
-  coachId    String
-  seatNumber Int
-  seatType   SeatType
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  coach Coach @relation(fields: [coachId], references: [id], onDelete: Cascade)
-
-  @@unique([coachId, seatNumber])
-  @@index([seatNumber])
-  @@map("seats")
-}
-
-/**
- * Weekly operating day for a train.
- * 0 = Sunday
- * 6 = Saturday
- */
-model OperatingDay {
-  id        String   @id @default(uuid())
-  trainId   String
-  dayOfWeek Int // 0 (Sunday) to 6 (Saturday)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  train Train @relation(fields: [trainId], references: [id], onDelete: Cascade)
-
-  @@unique([trainId, dayOfWeek])
-  @@map("operating_days")
-}
-
 enum ScheduleStatus {
   DRAFT
   ACTIVE
+  SCHEDULED
   CANCELLED
+  COMPLETED
 }
-
-model Schedule {
-  id            String         @id @default(uuid())
-  trainId       String
-  departureDate DateTime
-  status        ScheduleStatus @default(ACTIVE)
-  version       Int            @default(1)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-
-  train Train @relation(fields: [trainId], references: [id], onDelete: Restrict)
-
-  @@unique([trainId, departureDate])
-  @@index([departureDate])
-  @@index([status])
-  @@map("schedules")
-}
-
-/**
- * Administrative user.
- * Can manage:
- * - stations
- * - trains
- * - routes
- * - coaches
- * - seats
- */
-model Admin {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  @@map("admins")
-}
-
 
 enum OutboxStatus {
   PENDING
@@ -268,15 +64,210 @@ enum OutboxStatus {
   DEAD
 }
 
-/**
- * Transactional outbox event.
- * Guarantees eventual delivery
- * of domain events to Kafka.
- * Used for:
- * - StationCreated
- * - TrainCreated
- * - RouteCreated
- */
+// ============================================================
+// Station
+// ============================================================
+
+/* Master railway station. Examples: NDLS (New Delhi), HWH (Howrah), PNBE (Patna). */
+model Station {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  code      String   @unique
+  zone      String?
+  state     String?
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  routeStation RouteStation[]
+
+  @@index([name])
+  @@index([code])
+  @@index([zone])
+  @@index([isActive])
+  @@map("stations")
+}
+
+// ============================================================
+// Train
+// ============================================================
+
+/* Master train record independent of journey dates. */
+model Train {
+  id          String        @id @default(uuid())
+  trainNumber String        @unique @map("train_number") @db.Char(5)
+  trainName   String        @map("train_name")
+  category    TrainCategory @default(PASSENGER)
+  isActive    Boolean       @default(true) @map("is_active")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  route         Route?
+  coaches       Coach[]
+  operatingDays OperatingDay[]
+  schedules     Schedule[]
+
+  @@index([trainNumber])
+  @@index([trainName])
+  @@index([category])
+  @@index([isActive])
+  @@map("trains")
+}
+
+// ============================================================
+// Route
+// ============================================================
+
+/* Route assigned to a train, containing ordered station stops. */
+model Route {
+  id        String   @id @default(uuid())
+  trainId   String   @unique @map("train_id")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  train        Train          @relation(fields: [trainId], references: [id], onDelete: Cascade)
+  routeStation RouteStation[]
+
+  @@index([isActive])
+  @@map("routes")
+}
+
+// ============================================================
+// Route Station
+// ============================================================
+
+/* Station stop inside a train route. */
+model RouteStation {
+  id                String   @id @default(uuid())
+  routeId           String   @map("route_id")
+  stationId         String   @map("station_id")
+  stopNumber        Int      @map("stop_number")
+  arrivalMinutes    Int?     @map("arrival_minutes")
+  departureMinutes  Int?     @map("departure_minutes")
+  distanceFromStart Int      @default(0) @map("distance_from_start")
+  platformNumber    String?  @map("platform_number")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  route   Route   @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  station Station @relation(fields: [stationId], references: [id], onDelete: Cascade)
+
+  @@unique([routeId, stopNumber])
+  @@unique([routeId, stationId])
+  @@index([routeId])
+  @@index([stationId])
+  @@index([stopNumber])
+  @@map("route_stations")
+}
+
+// ============================================================
+// Coach
+// ============================================================
+
+/* Coach attached to a train (e.g. S1, A1, B1). */
+model Coach {
+  id          String    @id @default(uuid())
+  trainId     String    @map("train_id")
+  coachNumber String    @map("coach_number")
+  coachType   CoachType @map("coach_type")
+  totalSeats  Int       @map("total_seats")
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  train Train  @relation(fields: [trainId], references: [id], onDelete: Cascade)
+  seats Seat[]
+
+  @@unique([trainId, coachNumber])
+  @@index([trainId])
+  @@index([isActive])
+  @@map("coaches")
+}
+
+// ============================================================
+// Seat
+// ============================================================
+
+/* Physical seat inside a coach. */
+model Seat {
+  id         String   @id @default(uuid())
+  coachId    String   @map("coach_id")
+  seatNumber Int      @map("seat_number")
+  seatType   SeatType @map("seat_type")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  coach Coach @relation(fields: [coachId], references: [id], onDelete: Cascade)
+
+  @@unique([coachId, seatNumber])
+  @@index([coachId])
+  @@index([seatNumber])
+  @@map("seats")
+}
+
+// ============================================================
+// Operating Day
+// ============================================================
+
+/* Weekly operating day for a train (0 = Sunday ... 6 = Saturday). */
+model OperatingDay {
+  id        String   @id @default(uuid())
+  trainId   String   @map("train_id")
+  dayOfWeek Int      @map("day_of_week")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  train Train @relation(fields: [trainId], references: [id], onDelete: Cascade)
+
+  @@unique([trainId, dayOfWeek])
+  @@index([trainId])
+  @@map("operating_days")
+}
+
+// ============================================================
+// Schedule
+// ============================================================
+
+/* Concrete train-run journey schedule for a specific date. */
+model Schedule {
+  id            String         @id @default(uuid())
+  trainId       String         @map("train_id")
+  departureDate DateTime       @map("departure_date")
+  status        ScheduleStatus @default(ACTIVE)
+  version       Int            @default(1)
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  train Train @relation(fields: [trainId], references: [id], onDelete: Restrict)
+
+  @@unique([trainId, departureDate])
+  @@index([trainId, departureDate])
+  @@index([departureDate])
+  @@index([status, departureDate])
+  @@map("schedules")
+}
+
+// ============================================================
+// Admin
+// ============================================================
+
+/* Administrative system user. */
+model Admin {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("admins")
+}
+
+// ============================================================
+// Outbox Event
+// ============================================================
+
+/* Transactional outbox event for Kafka domain events. */
 model OutboxEvent {
   id            String       @id @default(uuid())
   aggregateType String       @map("aggregate_type")
@@ -297,5 +288,3 @@ model OutboxEvent {
   @@index([status, nextRetryAt])
   @@map("outbox_events")
 }
-
-
