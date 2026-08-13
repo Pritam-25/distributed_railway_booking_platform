@@ -31,6 +31,8 @@ import type {
 
 import type {
   ErrorResponse,
+  GetSeatMap200,
+  GetSeatMapParams,
   SearchTrains200,
   SearchTrainsParams,
   SuggestStations200,
@@ -246,4 +248,114 @@ export const useSearchTrains = <TError = ErrorResponse, TContext = unknown>(
   TContext
 > => {
   return useMutation(getSearchTrainsMutationOptions(options), queryClient)
+}
+/**
+ * Returns the per-coach seat layout for a schedule, with a live `isBooked` overlay for seats whose booking overlaps the requested `(fromStation, toStation)` segment. Backed by the inventory-service `getSeatMap` gRPC call with a Redis read-through cache (60s TTL by default).
+ *
+ * **Query Parameters:**
+ * - `scheduleId` (path) - The schedule UUID.
+ * - `fromStationId` (query) - Origin station UUID. Must differ from `toStationId`.
+ * - `toStationId` (query) - Destination station UUID. Must differ from `fromStationId`.
+ *
+ * **Response:**
+ * Returns a `SeatMapResponse` whose `status` is one of `OK`, `SCHEDULE_NOT_FOUND`, or `SCHEDULE_INACTIVE`. On `OK` the `coaches[]` array lists each coach with `coachNumber`, `coachType`, `totalSeats`, and a `seats[]` array of `SeatMapSeat` rows (`seatNumber`, `seatType`, `berthType`, `price`, `isBooked`, `quota`).
+ *
+ * **Outcomes:**
+ * - 200 OK - Seat-map returned with booking overlay applied for the segment.
+ * - 400 Bad Request - Path or query failed schema validation.
+ * - 404 Not Found - The `scheduleId` does not exist.
+ * - 409 Conflict - The schedule is cancelled or the requested segment is invalid.
+ * - 429 Too Many Requests - Caller exceeded the platform rate limit.
+ * - 500 Internal Server Error - Inventory gRPC returned an unexpected error.
+ *
+ * **Notes:**
+ * - The endpoint is public — no authentication is required.
+ * - Cache TTL is bounded by `SEAT_MAP_CACHE_TTL_SECONDS`; the booking-service pre-flight `CheckAvailability` closes the race window for stale reads.
+ * - Only `CONFIRMED` allocations mark a seat `isBooked`. `HELD` allocations are intentionally hidden for a stable UI.
+ * - `coachType`, `berthType`, `quota` are best-effort defaults until those columns land on the seat inventory model.
+ *
+ * @summary Retrieve the seat-map for a schedule segment
+ */
+export const getSeatMap = (
+  scheduleId: string,
+  params: GetSeatMapParams,
+  options?: SecondParameter<typeof customInstance>,
+  signal?: AbortSignal
+) => {
+  return customInstance<GetSeatMap200>(
+    {
+      url: `/api/v1/search/schedules/${scheduleId}/seat-map`,
+      method: "GET",
+      params,
+      signal,
+    },
+    options
+  )
+}
+
+export const getGetSeatMapMutationOptions = <
+  TError = ErrorResponse,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof getSeatMap>>,
+    TError,
+    { scheduleId: string; params: GetSeatMapParams },
+    TContext
+  >
+  request?: SecondParameter<typeof customInstance>
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof getSeatMap>>,
+  TError,
+  { scheduleId: string; params: GetSeatMapParams },
+  TContext
+> => {
+  const mutationKey = ["getSeatMap"]
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined }
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof getSeatMap>>,
+    { scheduleId: string; params: GetSeatMapParams }
+  > = (props) => {
+    const { scheduleId, params } = props ?? {}
+
+    return getSeatMap(scheduleId, params, requestOptions)
+  }
+
+  return { mutationFn, ...mutationOptions }
+}
+
+export type GetSeatMapMutationResult = NonNullable<
+  Awaited<ReturnType<typeof getSeatMap>>
+>
+
+export type GetSeatMapMutationError = ErrorResponse
+
+/**
+ * @summary Retrieve the seat-map for a schedule segment
+ */
+export const useGetSeatMap = <TError = ErrorResponse, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof getSeatMap>>,
+      TError,
+      { scheduleId: string; params: GetSeatMapParams },
+      TContext
+    >
+    request?: SecondParameter<typeof customInstance>
+  },
+  queryClient?: QueryClient
+): UseMutationResult<
+  Awaited<ReturnType<typeof getSeatMap>>,
+  TError,
+  { scheduleId: string; params: GetSeatMapParams },
+  TContext
+> => {
+  return useMutation(getGetSeatMapMutationOptions(options), queryClient)
 }

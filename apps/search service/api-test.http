@@ -18,8 +18,9 @@
 @fallbackStationCode = HWR
 @fallbackFromStation = HWR
 @fallbackToStation = SRC
-@fallbackFromStationId = b4445f32-d61d-45aa-a90c-a1d736e530c0
-@fallbackToStationId = 51c6e52c-0824-41e1-90f3-60f049b57732
+@fallbackFromStationId = 85e5a4b9-d365-4096-8349-3675d914c911
+@fallbackToStationId = b4445f32-d61d-45aa-a90c-a1d736e530c0
+@fallbackScheduleId = 694f399e-45a1-432b-97c6-d9c5664bd0f8
 @fallbackSearchDate = 2026-08-21
 
 # Auto-captured response data from station suggest (if run sequentially)
@@ -41,9 +42,6 @@ GET {{gateway}}/health/ready
 
 ### Search Service Direct Root Banner
 GET {{searchService}}/
-
-### Search Service Direct Health Probe
-GET {{searchService}}/health
 
 ### Search Service Direct Liveness Probe
 GET {{searchService}}/health/live
@@ -134,3 +132,35 @@ Accept: application/json
 ### Train Search - FAIL Case: Limit exceeds maximum allowed threshold (limit > 50) -> 400 Bad Request
 GET {{search}}/trains?fromStation={{fallbackFromStation}}&toStation={{fallbackToStation}}&date={{fallbackSearchDate}}&limit=100
 Accept: application/json
+
+
+# ==============================================================================
+# 4. Seat Map API (`/api/v1/search/schedules/:scheduleId/seat-map`)
+# ==============================================================================
+
+### Seat Map - Standard Request via Gateway
+# @name getSeatMap
+GET {{search}}/schedules/{{fallbackScheduleId}}/seat-map?fromStationId={{fallbackFromStationId}}&toStationId={{fallbackToStationId}}
+Accept: application/json
+
+### Direct search-service test (bypasses Gateway 5s timeout)
+GET http://localhost:4004/search/schedules/{{fallbackScheduleId}}/seat-map?fromStationId={{fallbackFromStationId}}&toStationId={{fallbackToStationId}}
+Accept: application/json
+
+
+### Seat Map - FAIL Case: Invalid scheduleId format (non-UUID) -> 400 Bad Request
+GET {{search}}/schedules/invalid-schedule-uuid/seat-map?fromStationId={{fallbackFromStationId}}&toStationId={{fallbackToStationId}}
+Accept: application/json
+
+### Seat Map - FAIL Case: Invalid fromStationId format (non-UUID) -> 400 Bad Request
+GET {{search}}/schedules/{{fallbackScheduleId}}/seat-map?fromStationId=invalid-uuid&toStationId={{fallbackToStationId}}
+Accept: application/json
+
+### Seat Map - FAIL Case: Identical fromStationId and toStationId -> 400 Bad Request
+GET {{search}}/schedules/{{fallbackScheduleId}}/seat-map?fromStationId={{fallbackFromStationId}}&toStationId={{fallbackFromStationId}}
+Accept: application/json
+
+### Seat Map - FAIL Case: Missing required query parameters (missing toStationId) -> 400 Bad Request
+GET {{search}}/schedules/{{fallbackScheduleId}}/seat-map?fromStationId={{fallbackFromStationId}}
+Accept: application/json
+

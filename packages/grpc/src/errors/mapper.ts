@@ -1,5 +1,5 @@
 import { ApiError, COMMON_ERROR_CODES } from "@irctc/errors";
-import { ServerError, Status } from "nice-grpc";
+import { ClientError, ServerError, Status } from "nice-grpc";
 
 /**
  * Maps a domain ApiError (or generic Error) to a canonical gRPC ServerError.
@@ -20,6 +20,64 @@ export function mapToGrpcError(error: unknown): ServerError {
   const message =
     error instanceof Error ? error.message : "Internal server error";
   return new ServerError(Status.INTERNAL, message);
+}
+
+/**
+ * Translates a gRPC ClientError thrown by gRPC client calls into a domain ApiError.
+ *
+ * @param error - The error caught from a gRPC client call.
+ * @param defaultMessage - Optional user-facing error message override.
+ * @returns An {@link ApiError} ready for HTTP response handling.
+ */
+export function mapGrpcClientErrorToApiError(
+  error: unknown,
+  defaultMessage = "Upstream gRPC service call failed. Please retry shortly.",
+): ApiError {
+  if (error instanceof ApiError) {
+    return error;
+  }
+
+  if (error instanceof ClientError) {
+    const httpStatusCode = mapGrpcStatusToHttpStatus(error.code);
+    return new ApiError(
+      httpStatusCode,
+      COMMON_ERROR_CODES.INTERNAL_ERROR,
+      defaultMessage,
+    );
+  }
+
+  if (error instanceof Error) {
+    return new ApiError(500, COMMON_ERROR_CODES.INTERNAL_ERROR, error.message);
+  }
+
+  return new ApiError(500, COMMON_ERROR_CODES.INTERNAL_ERROR, defaultMessage);
+}
+
+/**
+ * Translates a gRPC Status code to an HTTP status code integer.
+ */
+export function mapGrpcStatusToHttpStatus(status: Status): number {
+  switch (status) {
+    case Status.NOT_FOUND:
+      return 404;
+    case Status.INVALID_ARGUMENT:
+      return 400;
+    case Status.UNAUTHENTICATED:
+      return 401;
+    case Status.PERMISSION_DENIED:
+      return 403;
+    case Status.ALREADY_EXISTS:
+      return 409;
+    case Status.RESOURCE_EXHAUSTED:
+      return 429;
+    case Status.UNAVAILABLE:
+      return 503;
+    case Status.DEADLINE_EXCEEDED:
+      return 504;
+    case Status.INTERNAL:
+    default:
+      return 500;
+  }
 }
 
 /**

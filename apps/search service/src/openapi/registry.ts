@@ -7,6 +7,9 @@ import {
   registerGatewayAuth,
 } from "@irctc/openapi";
 import {
+  seatMapParamsSchema,
+  seatMapQuerySchema,
+  seatMapResponseSchema,
   stationSuggestQuerySchema,
   stationSuggestResponseSchema,
   trainSearchQuerySchema,
@@ -38,6 +41,7 @@ registerGatewayAuth(registry);
  */
 registry.register("StationSuggestResponse", stationSuggestResponseSchema);
 registry.register("TrainSearchResponse", trainSearchResponseSchema);
+registry.register("SeatMapResponse", seatMapResponseSchema);
 
 // ─── Search Endpoints ───────────────────────────────────────────────────────
 
@@ -108,6 +112,51 @@ registry.registerPath({
       createErrorResponseSchema(
         ERROR_CODES.STATION_NOT_FOUND,
         ERROR_MESSAGES.STATION_NOT_FOUND,
+      ),
+    ),
+  },
+});
+
+/**
+ * GET /api/v1/search/schedules/:scheduleId/seat-map
+ *
+ * Returns the seat-map (coaches + seats) for a schedule with a live
+ * booking overlay for the requested `(fromStation, toStation)` segment.
+ * Public endpoint — no auth required.
+ */
+registry.registerPath({
+  method: "get",
+  path: "/api/v1/search/schedules/{scheduleId}/seat-map",
+  operationId: "getSeatMap",
+  tags: ["Search"],
+  summary: searchServiceOpenApiDescriptions.search.getSeatMap.summary,
+  description: searchServiceOpenApiDescriptions.search.getSeatMap.description,
+  security: [],
+  request: {
+    params: seatMapParamsSchema,
+    query: seatMapQuerySchema,
+  },
+  responses: {
+    200: createOpenApiResponse(
+      "Seat map retrieved successfully",
+      SuccessResponseSchema(
+        seatMapResponseSchema,
+        "Seat map retrieved successfully",
+      ),
+    ),
+    ...CommonErrorResponses,
+    404: createOpenApiResponse(
+      "Schedule not found.",
+      createErrorResponseSchema(
+        ERROR_CODES.SCHEDULE_NOT_FOUND,
+        ERROR_MESSAGES.SCHEDULE_NOT_FOUND,
+      ),
+    ),
+    409: createOpenApiResponse(
+      "Schedule is not active or the requested segment is invalid.",
+      createErrorResponseSchema(
+        ERROR_CODES.SCHEDULE_INACTIVE,
+        ERROR_MESSAGES.SCHEDULE_INACTIVE,
       ),
     ),
   },

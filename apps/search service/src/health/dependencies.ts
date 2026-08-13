@@ -13,6 +13,7 @@
 import { logger } from "@irctc/logger";
 import type { HealthCheckResult, HealthDependency } from "@irctc/http";
 import { elasticsearch, kafka, redis } from "@config";
+import { getInventoryGrpcClient } from "@grpc";
 
 // --- Elasticsearch probe ----------------------------------------------------
 
@@ -195,6 +196,64 @@ const probeKafka = async (): Promise<HealthCheckResult> => {
   }
 };
 
+// --- Inventory gRPC probe ---------------------------------------------------
+
+let activeInventoryGrpcProbe: Promise<void> | null = null;
+
+const runInventoryGrpcProbe = async (): Promise<void> => {
+  try {
+    // Use a sentinel UUID; the gRPC layer will return NOT_FOUND, which counts
+    // as a successful round-trip — the channel is up and inventory-service
+    // is reachable.
+    await getInventoryGrpcClient().getSeatDetails({
+      scheduleId: "00000000-0000-0000-0000-000000000000",
+      seatId: "00000000-0000-0000-0000-000000000000",
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    // NOT_FOUND is the expected outcome for a sentinel id — treat as ok.
+    if (/NOT_FOUND|not found/i.test(message)) return;
+    throw err;
+  } finally {
+    activeInventoryGrpcProbe = null;
+  }
+};
+
+const probeInventoryGrpc = async (): Promise<HealthCheckResult> => {
+  const start = Date.now();
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    activeInventoryGrpcProbe ??= runInventoryGrpcProbe();
+    await Promise.race([
+      activeInventoryGrpcProbe,
+      new Promise<void>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error("inventoryGrpc probe timeout")),
+          5000,
+        );
+      }),
+    ]);
+    return {
+      name: "inventoryGrpc",
+      ok: true,
+      latencyMs: Date.now() - start,
+    };
+  } catch (error) {
+    logger.warn(
+      { module: "health", err: error },
+      "Inventory gRPC readiness probe failed",
+    );
+    return {
+      name: "inventoryGrpc",
+      ok: false,
+      latencyMs: Date.now() - start,
+      error: "inventoryGrpc probe failed",
+    };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+};
+
 /**
  * Readiness probes registered with `createHealthRouter` for
  * `search-service`.
@@ -203,4 +262,5 @@ export const healthDependencies: HealthDependency[] = [
   { name: "elasticsearch", check: probeElasticsearch },
   { name: "redis", check: probeRedis },
   { name: "kafka", check: probeKafka },
+  { name: "inventoryGrpc", check: probeInventoryGrpc },
 ];

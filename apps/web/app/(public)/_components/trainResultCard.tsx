@@ -1,8 +1,9 @@
 "use client"
 
+import Link from "next/link"
 import { Train, Clock, MapPin, Wallet, Users, ChevronRight } from "lucide-react"
 
-import { Button } from "@/components/ui/button"
+import { buttonVariants } from "@/components/ui/button"
 import {
   Card,
   CardContent,
@@ -123,16 +124,13 @@ export function TrainResultCard({
 
         {/* Footer */}
         <div className="flex items-center justify-end">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled
-            className="cursor-not-allowed"
-            title="Booking is not enabled yet"
+          <Link
+            href={`/trains/${train.scheduleId}/seat-map?fromStationId=${train.from.code}&toStationId=${train.to.code}`}
+            className={buttonVariants({ variant: "outline", size: "sm" })}
           >
-            Book
-            <ChevronRight className="ml-1 h-4 w-4" />
-          </Button>
+            View seats
+            <ChevronRight className="h-4 w-4" />
+          </Link>
         </div>
       </CardContent>
     </Card>

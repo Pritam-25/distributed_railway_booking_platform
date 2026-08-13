@@ -292,6 +292,81 @@ components:
       required:
         - total
         - byCoachType
+    SeatMapResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - OK
+            - SCHEDULE_NOT_FOUND
+            - SCHEDULE_INACTIVE
+          example: OK
+          description: OK | SCHEDULE_NOT_FOUND | SCHEDULE_INACTIVE
+        coaches:
+          type: array
+          items:
+            $ref: "#/components/schemas/SeatMapCoach"
+      required:
+        - status
+        - coaches
+    SeatMapCoach:
+      type: object
+      properties:
+        coachId:
+          type: string
+          example: 550e8400-e29b-41d4-a716-446655440001
+        coachNumber:
+          type: string
+          example: A1
+        coachType:
+          type: string
+          example: AC_2A
+        totalSeats:
+          type: integer
+          example: 48
+        seats:
+          type: array
+          items:
+            $ref: "#/components/schemas/SeatMapSeat"
+      required:
+        - coachId
+        - coachNumber
+        - coachType
+        - totalSeats
+        - seats
+    SeatMapSeat:
+      type: object
+      properties:
+        seatId:
+          type: string
+          example: 550e8400-e29b-41d4-a716-446655440020
+        seatNumber:
+          type: integer
+          example: 12
+        seatType:
+          type: string
+          example: LOWER
+        berthType:
+          type: string
+          example: SEATER
+        price:
+          type: string
+          example: "2.5000"
+        isBooked:
+          type: boolean
+          example: false
+        quota:
+          type: string
+          example: GENERAL
+      required:
+        - seatId
+        - seatNumber
+        - seatType
+        - berthType
+        - price
+        - isBooked
+        - quota
     ResponseMeta:
       type: object
       properties:
@@ -693,6 +768,196 @@ paths:
                   - error
                   - meta
                 description: Error Response Envelope (STATION_NOT_FOUND)
+                x-sdk-ref: ErrorResponse
+        "429":
+          description: Too Many Requests - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitErrorResponse"
+        "500":
+          description: Internal Server Error - Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponse"
+  /api/v1/search/schedules/{scheduleId}/seat-map:
+    get:
+      operationId: getSeatMap
+      tags:
+        - Search
+      summary: Retrieve the seat-map for a schedule segment
+      description: >-
+        Returns the per-coach seat layout for a schedule, with a live `isBooked` overlay for seats whose booking
+        overlaps the requested `(fromStation, toStation)` segment. Backed by the inventory-service `getSeatMap` gRPC
+        call with a Redis read-through cache (60s TTL by default).
+
+
+        **Query Parameters:**
+
+        - `scheduleId` (path) - The schedule UUID.
+
+        - `fromStationId` (query) - Origin station UUID. Must differ from `toStationId`.
+
+        - `toStationId` (query) - Destination station UUID. Must differ from `fromStationId`.
+
+
+        **Response:**
+
+        Returns a `SeatMapResponse` whose `status` is one of `OK`, `SCHEDULE_NOT_FOUND`, or `SCHEDULE_INACTIVE`. On `OK`
+        the `coaches[]` array lists each coach with `coachNumber`, `coachType`, `totalSeats`, and a `seats[]` array of
+        `SeatMapSeat` rows (`seatNumber`, `seatType`, `berthType`, `price`, `isBooked`, `quota`).
+
+
+        **Outcomes:**
+
+        - 200 OK - Seat-map returned with booking overlay applied for the segment.
+
+        - 400 Bad Request - Path or query failed schema validation.
+
+        - 404 Not Found - The `scheduleId` does not exist.
+
+        - 409 Conflict - The schedule is cancelled or the requested segment is invalid.
+
+        - 429 Too Many Requests - Caller exceeded the platform rate limit.
+
+        - 500 Internal Server Error - Inventory gRPC returned an unexpected error.
+
+
+        **Notes:**
+
+        - The endpoint is public — no authentication is required.
+
+        - Cache TTL is bounded by `SEAT_MAP_CACHE_TTL_SECONDS`; the booking-service pre-flight `CheckAvailability`
+        closes the race window for stale reads.
+
+        - Only `CONFIRMED` allocations mark a seat `isBooked`. `HELD` allocations are intentionally hidden for a stable
+        UI.
+
+        - `coachType`, `berthType`, `quota` are best-effort defaults until those columns land on the seat inventory
+        model.
+      security: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            example: 550e8400-e29b-41d4-a716-446655440010
+          required: true
+          name: scheduleId
+          in: path
+        - schema:
+            type: string
+            format: uuid
+            example: 550e8400-e29b-41d4-a716-446655440013
+          required: true
+          name: fromStationId
+          in: query
+        - schema:
+            type: string
+            format: uuid
+            example: 550e8400-e29b-41d4-a716-446655440014
+          required: true
+          name: toStationId
+          in: query
+      responses:
+        "200":
+          description: Seat map retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                    example: true
+                  message:
+                    type: string
+                    example: Seat map retrieved successfully
+                  data:
+                    $ref: "#/components/schemas/SeatMapResponse"
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - message
+                  - data
+                  - meta
+                description: Success Response Envelope
+        "400":
+          description: Bad Request - Validation or invalid input error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "404":
+          description: Schedule not found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: SCHEDULE_NOT_FOUND
+                      message:
+                        type: string
+                        example: Schedule could not be found. Verify the scheduleId and try again.
+                      details: {}
+                    required:
+                      - code
+                      - message
+                    description: Error Detail Payload
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - error
+                  - meta
+                description: Error Response Envelope (SCHEDULE_NOT_FOUND)
+                x-sdk-ref: ErrorResponse
+        "409":
+          description: Schedule is not active or the requested segment is invalid.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: SCHEDULE_INACTIVE
+                      message:
+                        type: string
+                        example: Schedule is not active or the requested segment is invalid.
+                      details: {}
+                    required:
+                      - code
+                      - message
+                    description: Error Detail Payload
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - error
+                  - meta
+                description: Error Response Envelope (SCHEDULE_INACTIVE)
                 x-sdk-ref: ErrorResponse
         "429":
           description: Too Many Requests - Rate limit exceeded

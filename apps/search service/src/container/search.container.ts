@@ -13,9 +13,11 @@ import {
   StationProjectionService,
   ScheduleProjectionService,
   TrainSearchService,
+  SeatMapService,
 } from "@services";
 import { SearchController } from "@controllers";
 import { StationConsumer, ScheduleConsumer } from "@consumers";
+import { getInventoryGrpcClient, closeInventoryGrpcChannel } from "@grpc";
 
 /**
  * ## SearchContainer
@@ -46,6 +48,7 @@ export class SearchContainer {
   public readonly trainSearchService: TrainSearchService;
   public readonly stationProjectionService: StationProjectionService;
   public readonly scheduleProjectionService: ScheduleProjectionService;
+  public readonly seatMapService: SeatMapService;
   public readonly searchController: SearchController;
   public readonly stationConsumer: StationConsumer;
   public readonly scheduleConsumer: ScheduleConsumer;
@@ -90,11 +93,17 @@ export class SearchContainer {
       this.stationSearchRepository,
       redis,
     );
+    this.seatMapService = new SeatMapService(
+      getInventoryGrpcClient(),
+      this.trainSearchRepository,
+      redis,
+    );
 
     // 3. Create Controllers (Search HTTP controller)
     this.searchController = new SearchController(
       this.stationSearchService,
       this.trainSearchService,
+      this.seatMapService,
     );
 
     // 4. Create Kafka Consumers and Consumer Runners
@@ -231,6 +240,8 @@ export class SearchContainer {
         );
       }
     }
+
+    await closeInventoryGrpcChannel();
 
     logger.info(
       { module: "search-container" },

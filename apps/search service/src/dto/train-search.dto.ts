@@ -27,7 +27,7 @@ const SCHEDULE_STATUS = ["DRAFT", "ACTIVE", "CANCELLED"] as const;
  * Query schema for `GET /api/v1/search/trains`.
  *
  * `fromStation` and `toStation` accept either an uppercase station code
- * (e.g. `NDLS`) or a UUID. The service resolves them against the
+ * (e.g. `NDLS`). The service resolves them against the
  * existing `stations` Elasticsearch index before issuing the schedule
  * query.
  *

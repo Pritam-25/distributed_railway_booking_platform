@@ -29,6 +29,48 @@ export interface GetSeatDetailsResponse {
   version: number;
 }
 
+/** GetSeatMapRequest contains the parameters for fetching a full seat-map. */
+export interface GetSeatMapRequest {
+  scheduleId: string;
+  fromStationId: string;
+  toStationId: string;
+}
+
+/**
+ * GetSeatMapResponse contains the seat-map for a schedule.
+ *
+ * `status` is a simple string discriminator:
+ *   - "OK"                : seats returned; see `coaches[]`.
+ *   - "SCHEDULE_NOT_FOUND": no schedule with `schedule_id` exists.
+ *   - "SCHEDULE_INACTIVE" : schedule exists but is cancelled, or the
+ *                            (from_station, to_station) segment is invalid.
+ */
+export interface GetSeatMapResponse {
+  status: string;
+  coaches: Coach[];
+}
+
+/** Coach is a single railway coach with its seats in seat-number order. */
+export interface Coach {
+  coachId: string;
+  coachNumber: string;
+  coachType: string;
+  totalSeats: number;
+  seats: SeatMapSeat[];
+}
+
+/** SeatMapSeat is a single seat within a coach, with a live booking flag. */
+export interface SeatMapSeat {
+  seatId: string;
+  seatNumber: number;
+  seatType: string;
+  berthType: string;
+  /** decimal string, e.g. "2.5000" */
+  price: string;
+  isBooked: boolean;
+  quota: string;
+}
+
 function createBaseGetSeatDetailsRequest(): GetSeatDetailsRequest {
   return { scheduleId: "", seatId: "" };
 }
@@ -330,6 +372,490 @@ export const GetSeatDetailsResponse: MessageFns<GetSeatDetailsResponse> = {
   },
 };
 
+function createBaseGetSeatMapRequest(): GetSeatMapRequest {
+  return { scheduleId: "", fromStationId: "", toStationId: "" };
+}
+
+export const GetSeatMapRequest: MessageFns<GetSeatMapRequest> = {
+  encode(
+    message: GetSeatMapRequest,
+    writer: BinaryWriter = new BinaryWriter(),
+  ): BinaryWriter {
+    if (message.scheduleId !== "") {
+      writer.uint32(10).string(message.scheduleId);
+    }
+    if (message.fromStationId !== "") {
+      writer.uint32(18).string(message.fromStationId);
+    }
+    if (message.toStationId !== "") {
+      writer.uint32(26).string(message.toStationId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetSeatMapRequest {
+    const reader =
+      input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetSeatMapRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.scheduleId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.fromStationId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.toStationId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): GetSeatMapRequest {
+    return {
+      scheduleId: isSet(object.scheduleId)
+        ? globalThis.String(object.scheduleId)
+        : isSet(object.schedule_id)
+          ? globalThis.String(object.schedule_id)
+          : "",
+      fromStationId: isSet(object.fromStationId)
+        ? globalThis.String(object.fromStationId)
+        : isSet(object.from_station_id)
+          ? globalThis.String(object.from_station_id)
+          : "",
+      toStationId: isSet(object.toStationId)
+        ? globalThis.String(object.toStationId)
+        : isSet(object.to_station_id)
+          ? globalThis.String(object.to_station_id)
+          : "",
+    };
+  },
+
+  toJSON(message: GetSeatMapRequest): unknown {
+    const obj: any = {};
+    if (message.scheduleId !== "") {
+      obj.scheduleId = message.scheduleId;
+    }
+    if (message.fromStationId !== "") {
+      obj.fromStationId = message.fromStationId;
+    }
+    if (message.toStationId !== "") {
+      obj.toStationId = message.toStationId;
+    }
+    return obj;
+  },
+};
+
+function createBaseGetSeatMapResponse(): GetSeatMapResponse {
+  return { status: "", coaches: [] };
+}
+
+export const GetSeatMapResponse: MessageFns<GetSeatMapResponse> = {
+  encode(
+    message: GetSeatMapResponse,
+    writer: BinaryWriter = new BinaryWriter(),
+  ): BinaryWriter {
+    if (message.status !== "") {
+      writer.uint32(10).string(message.status);
+    }
+    for (const v of message.coaches) {
+      Coach.encode(v!, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(
+    input: BinaryReader | Uint8Array,
+    length?: number,
+  ): GetSeatMapResponse {
+    const reader =
+      input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetSeatMapResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.status = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.coaches.push(Coach.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): GetSeatMapResponse {
+    return {
+      status: isSet(object.status) ? globalThis.String(object.status) : "",
+      coaches: globalThis.Array.isArray(object?.coaches)
+        ? object.coaches.map((e: any) => Coach.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: GetSeatMapResponse): unknown {
+    const obj: any = {};
+    if (message.status !== "") {
+      obj.status = message.status;
+    }
+    if (message.coaches?.length) {
+      obj.coaches = message.coaches.map((e) => Coach.toJSON(e));
+    }
+    return obj;
+  },
+};
+
+function createBaseCoach(): Coach {
+  return {
+    coachId: "",
+    coachNumber: "",
+    coachType: "",
+    totalSeats: 0,
+    seats: [],
+  };
+}
+
+export const Coach: MessageFns<Coach> = {
+  encode(
+    message: Coach,
+    writer: BinaryWriter = new BinaryWriter(),
+  ): BinaryWriter {
+    if (message.coachId !== "") {
+      writer.uint32(10).string(message.coachId);
+    }
+    if (message.coachNumber !== "") {
+      writer.uint32(18).string(message.coachNumber);
+    }
+    if (message.coachType !== "") {
+      writer.uint32(26).string(message.coachType);
+    }
+    if (message.totalSeats !== 0) {
+      writer.uint32(32).int32(message.totalSeats);
+    }
+    for (const v of message.seats) {
+      SeatMapSeat.encode(v!, writer.uint32(42).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): Coach {
+    const reader =
+      input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCoach();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.coachId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.coachNumber = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.coachType = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.totalSeats = reader.int32();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.seats.push(SeatMapSeat.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): Coach {
+    return {
+      coachId: isSet(object.coachId)
+        ? globalThis.String(object.coachId)
+        : isSet(object.coach_id)
+          ? globalThis.String(object.coach_id)
+          : "",
+      coachNumber: isSet(object.coachNumber)
+        ? globalThis.String(object.coachNumber)
+        : isSet(object.coach_number)
+          ? globalThis.String(object.coach_number)
+          : "",
+      coachType: isSet(object.coachType)
+        ? globalThis.String(object.coachType)
+        : isSet(object.coach_type)
+          ? globalThis.String(object.coach_type)
+          : "",
+      totalSeats: isSet(object.totalSeats)
+        ? globalThis.Number(object.totalSeats)
+        : isSet(object.total_seats)
+          ? globalThis.Number(object.total_seats)
+          : 0,
+      seats: globalThis.Array.isArray(object?.seats)
+        ? object.seats.map((e: any) => SeatMapSeat.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: Coach): unknown {
+    const obj: any = {};
+    if (message.coachId !== "") {
+      obj.coachId = message.coachId;
+    }
+    if (message.coachNumber !== "") {
+      obj.coachNumber = message.coachNumber;
+    }
+    if (message.coachType !== "") {
+      obj.coachType = message.coachType;
+    }
+    if (message.totalSeats !== 0) {
+      obj.totalSeats = Math.round(message.totalSeats);
+    }
+    if (message.seats?.length) {
+      obj.seats = message.seats.map((e) => SeatMapSeat.toJSON(e));
+    }
+    return obj;
+  },
+};
+
+function createBaseSeatMapSeat(): SeatMapSeat {
+  return {
+    seatId: "",
+    seatNumber: 0,
+    seatType: "",
+    berthType: "",
+    price: "",
+    isBooked: false,
+    quota: "",
+  };
+}
+
+export const SeatMapSeat: MessageFns<SeatMapSeat> = {
+  encode(
+    message: SeatMapSeat,
+    writer: BinaryWriter = new BinaryWriter(),
+  ): BinaryWriter {
+    if (message.seatId !== "") {
+      writer.uint32(10).string(message.seatId);
+    }
+    if (message.seatNumber !== 0) {
+      writer.uint32(16).int32(message.seatNumber);
+    }
+    if (message.seatType !== "") {
+      writer.uint32(26).string(message.seatType);
+    }
+    if (message.berthType !== "") {
+      writer.uint32(34).string(message.berthType);
+    }
+    if (message.price !== "") {
+      writer.uint32(42).string(message.price);
+    }
+    if (message.isBooked !== false) {
+      writer.uint32(48).bool(message.isBooked);
+    }
+    if (message.quota !== "") {
+      writer.uint32(58).string(message.quota);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): SeatMapSeat {
+    const reader =
+      input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSeatMapSeat();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.seatId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.seatNumber = reader.int32();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.seatType = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.berthType = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.price = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.isBooked = reader.bool();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.quota = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): SeatMapSeat {
+    return {
+      seatId: isSet(object.seatId)
+        ? globalThis.String(object.seatId)
+        : isSet(object.seat_id)
+          ? globalThis.String(object.seat_id)
+          : "",
+      seatNumber: isSet(object.seatNumber)
+        ? globalThis.Number(object.seatNumber)
+        : isSet(object.seat_number)
+          ? globalThis.Number(object.seat_number)
+          : 0,
+      seatType: isSet(object.seatType)
+        ? globalThis.String(object.seatType)
+        : isSet(object.seat_type)
+          ? globalThis.String(object.seat_type)
+          : "",
+      berthType: isSet(object.berthType)
+        ? globalThis.String(object.berthType)
+        : isSet(object.berth_type)
+          ? globalThis.String(object.berth_type)
+          : "",
+      price: isSet(object.price) ? globalThis.String(object.price) : "",
+      isBooked: isSet(object.isBooked)
+        ? globalThis.Boolean(object.isBooked)
+        : isSet(object.is_booked)
+          ? globalThis.Boolean(object.is_booked)
+          : false,
+      quota: isSet(object.quota) ? globalThis.String(object.quota) : "",
+    };
+  },
+
+  toJSON(message: SeatMapSeat): unknown {
+    const obj: any = {};
+    if (message.seatId !== "") {
+      obj.seatId = message.seatId;
+    }
+    if (message.seatNumber !== 0) {
+      obj.seatNumber = Math.round(message.seatNumber);
+    }
+    if (message.seatType !== "") {
+      obj.seatType = message.seatType;
+    }
+    if (message.berthType !== "") {
+      obj.berthType = message.berthType;
+    }
+    if (message.price !== "") {
+      obj.price = message.price;
+    }
+    if (message.isBooked !== false) {
+      obj.isBooked = message.isBooked;
+    }
+    if (message.quota !== "") {
+      obj.quota = message.quota;
+    }
+    return obj;
+  },
+};
+
 /** InventoryService provides RPC methods to query seat inventory details. */
 export type InventoryServiceDefinition = typeof InventoryServiceDefinition;
 export const InventoryServiceDefinition = {
@@ -345,6 +871,18 @@ export const InventoryServiceDefinition = {
       responseStream: false,
       options: {},
     },
+    /**
+     * GetSeatMap returns the full seat-map (coaches + seats) for a schedule,
+     * marked with bookings that overlap the (from_station, to_station) segment.
+     */
+    getSeatMap: {
+      name: "GetSeatMap",
+      requestType: GetSeatMapRequest as typeof GetSeatMapRequest,
+      requestStream: false,
+      responseType: GetSeatMapResponse as typeof GetSeatMapResponse,
+      responseStream: false,
+      options: {},
+    },
   },
 } as const;
 
@@ -354,6 +892,14 @@ export interface InventoryServiceImplementation<CallContextExt = {}> {
     request: GetSeatDetailsRequest,
     context: CallContext & CallContextExt,
   ): Promise<GetSeatDetailsResponse>;
+  /**
+   * GetSeatMap returns the full seat-map (coaches + seats) for a schedule,
+   * marked with bookings that overlap the (from_station, to_station) segment.
+   */
+  getSeatMap(
+    request: GetSeatMapRequest,
+    context: CallContext & CallContextExt,
+  ): Promise<GetSeatMapResponse>;
 }
 
 export interface InventoryServiceClient<CallOptionsExt = {}> {
@@ -362,6 +908,14 @@ export interface InventoryServiceClient<CallOptionsExt = {}> {
     request: GetSeatDetailsRequest,
     options?: CallOptions & CallOptionsExt,
   ): Promise<GetSeatDetailsResponse>;
+  /**
+   * GetSeatMap returns the full seat-map (coaches + seats) for a schedule,
+   * marked with bookings that overlap the (from_station, to_station) segment.
+   */
+  getSeatMap(
+    request: GetSeatMapRequest,
+    options?: CallOptions & CallOptionsExt,
+  ): Promise<GetSeatMapResponse>;
 }
 
 function isSet(value: any): boolean {

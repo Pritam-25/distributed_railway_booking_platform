@@ -59,6 +59,32 @@ export const searchServiceOpenApiDescriptions = {
         "Snapshot data is frozen at `SCHEDULE_CREATED` time; edits to the underlying train or route do not trigger a re-projection.",
       ],
     }),
+    getSeatMap: buildEndpointDoc({
+      summary: "Retrieve the seat-map for a schedule segment",
+      overview:
+        "Returns the per-coach seat layout for a schedule, with a live `isBooked` overlay for seats whose booking overlaps the requested `(fromStation, toStation)` segment. Backed by the inventory-service `getSeatMap` gRPC call with a Redis read-through cache (60s TTL by default).",
+      queryFields: [
+        "`scheduleId` (path) - The schedule UUID.",
+        "`fromStationId` (query) - Origin station UUID. Must differ from `toStationId`.",
+        "`toStationId` (query) - Destination station UUID. Must differ from `fromStationId`.",
+      ],
+      response:
+        "Returns a `SeatMapResponse` whose `status` is one of `OK`, `SCHEDULE_NOT_FOUND`, or `SCHEDULE_INACTIVE`. On `OK` the `coaches[]` array lists each coach with `coachNumber`, `coachType`, `totalSeats`, and a `seats[]` array of `SeatMapSeat` rows (`seatNumber`, `seatType`, `berthType`, `price`, `isBooked`, `quota`).",
+      outcomes: [
+        "200 OK - Seat-map returned with booking overlay applied for the segment.",
+        "400 Bad Request - Path or query failed schema validation.",
+        "404 Not Found - The `scheduleId` does not exist.",
+        "409 Conflict - The schedule is cancelled or the requested segment is invalid.",
+        "429 Too Many Requests - Caller exceeded the platform rate limit.",
+        "500 Internal Server Error - Inventory gRPC returned an unexpected error.",
+      ],
+      notes: [
+        "The endpoint is public — no authentication is required.",
+        "Cache TTL is bounded by `SEAT_MAP_CACHE_TTL_SECONDS`; the booking-service pre-flight `CheckAvailability` closes the race window for stale reads.",
+        "Only `CONFIRMED` allocations mark a seat `isBooked`. `HELD` allocations are intentionally hidden for a stable UI.",
+        "`coachType`, `berthType`, `quota` are best-effort defaults until those columns land on the seat inventory model.",
+      ],
+    }),
   },
 };
 

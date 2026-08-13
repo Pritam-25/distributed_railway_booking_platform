@@ -260,6 +260,22 @@ export class TrainSearchRepository {
   }
 
   /**
+   * Cheap existence check for a schedule document id.
+   *
+   * @remarks
+   * ### Side Effects
+   * - **Elasticsearch**: Single `_exists` GET against the schedule document.
+   * @param scheduleId - Schedule UUID.
+   * @returns `true` if the schedule document exists.
+   */
+  async existsByScheduleId(scheduleId: string): Promise<boolean> {
+    return this.esClient.exists({
+      index: this.indexName,
+      id: scheduleId,
+    });
+  }
+
+  /**
    * Executes the `fromStation → toStation on date` bool query against
    * the `train_schedules` index.
    *

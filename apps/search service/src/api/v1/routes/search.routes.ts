@@ -1,7 +1,12 @@
 import { Router } from "express";
-import { asyncHandler, validateQuery } from "@irctc/middleware";
+import { asyncHandler, validateParams, validateQuery } from "@irctc/middleware";
 import { searchController } from "@container";
-import { stationSuggestQuerySchema, trainSearchQuerySchema } from "@dto";
+import {
+  seatMapParamsSchema,
+  seatMapQuerySchema,
+  stationSuggestQuerySchema,
+  trainSearchQuerySchema,
+} from "@dto";
 
 /**
  * Public search endpoints.
@@ -15,7 +20,8 @@ import { stationSuggestQuerySchema, trainSearchQuerySchema } from "@dto";
  * - Delegate execution to {@link SearchController}.
  *
  * ### Middleware Pipeline
- * - {@link validateQuery} — Validates request query parameters against Zod schemas.
+ * - {@link validateParams} / {@link validateQuery} — Validate path and query
+ *   parameters against Zod schemas.
  * - {@link asyncHandler} — Catches unhandled async exceptions and routes them to global error handler.
  */
 const router: Router = Router();
@@ -35,6 +41,16 @@ router.get(
   validateQuery(trainSearchQuerySchema),
   asyncHandler(async (req, res) => {
     await searchController.searchTrains(req, res);
+  }),
+);
+
+//  Retrieve the seat-map for a schedule segment.
+router.get(
+  "/schedules/:scheduleId/seat-map",
+  validateParams(seatMapParamsSchema),
+  validateQuery(seatMapQuerySchema),
+  asyncHandler(async (req, res) => {
+    await searchController.getSeatMap(req, res);
   }),
 );
 

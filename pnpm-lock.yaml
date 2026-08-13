@@ -489,6 +489,9 @@ importers:
       "@irctc/errors":
         specifier: workspace:*
         version: link:../../packages/errors
+      "@irctc/grpc":
+        specifier: workspace:*
+        version: link:../../packages/grpc
       "@irctc/http":
         specifier: workspace:*
         version: link:../../packages/http

@@ -9,6 +9,10 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
     "Station search could not complete the request.",
   STATION_NOT_FOUND:
     "Station could not be resolved. Verify the code or id and try again.",
+  SCHEDULE_NOT_FOUND:
+    "Schedule could not be found. Verify the scheduleId and try again.",
+  SCHEDULE_INACTIVE:
+    "Schedule is not active or the requested segment is invalid.",
   SEARCH_INDEX_UNAVAILABLE:
     "Train search index is temporarily unavailable. Please retry shortly.",
   SEARCH_INTERNAL_ERROR: "Train search could not complete the request.",
