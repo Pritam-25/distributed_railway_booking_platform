@@ -29,6 +29,11 @@ export const upstreams = {
     baseUrl: env.ADMIN_UPSTREAM,
     circuitName: "admin-service",
   },
+  booking: {
+    name: "booking",
+    baseUrl: env.BOOKING_UPSTREAM,
+    circuitName: "booking-service",
+  },
   search: {
     name: "search",
     baseUrl: env.SEARCH_UPSTREAM,

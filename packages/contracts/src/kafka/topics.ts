@@ -38,4 +38,7 @@ export const KAFKA_TOPICS = {
   // ------------ inventory domain ------------
   INVENTORY_SCHEDULE_PROJECTED: "inventory.schedule-projected.v1",
   INVENTORY_SCHEDULE_STATUS_CHANGED: "inventory.schedule-status-changed.v1",
+
+  // ------------ booking domain ------------
+  BOOKING_STATUS_CHANGED: "booking.status-changed.v1",
 } as const;

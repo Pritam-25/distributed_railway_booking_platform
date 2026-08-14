@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "tsx watch --import @irctc/telemetry/instrumentation ./src/server.ts",
     "build": "tsc && tsc-alias",
+    "build:spec": "tsx src/openapi/generate-spec.ts",
     "check-types": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -18,6 +19,8 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "js-yaml": "^4.1.0",
     "tsc-alias": "^1.9.0",
     "tsx": "^4.23.0"
   },
@@ -29,6 +32,7 @@
     "@irctc/kafka": "workspace:*",
     "@irctc/logger": "workspace:*",
     "@irctc/middleware": "workspace:*",
+    "@irctc/openapi": "workspace:*",
     "@irctc/redis": "workspace:*",
     "@irctc/telemetry": "workspace:*",
     "@prisma/adapter-pg": "^7.8.0",

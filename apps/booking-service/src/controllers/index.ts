@@ -1,1 +1,1 @@
-// Export booking domain controllers here as they are added
+export { BookingController } from "./booking.controller.js";

@@ -18,7 +18,8 @@
       "dependsOn": [
         "user-service#build:spec",
         "admin-service#build:spec",
-        "search-service#build:spec"
+        "search-service#build:spec",
+        "booking-service#build:spec"
       ],
       "cache": false
     },
