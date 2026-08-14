@@ -99,6 +99,11 @@ export const SERVICES: Readonly<Record<string, ServiceMetadata>> = {
     publish: true,
     tags: ["Search"],
   },
+  "booking-service": {
+    displayName: "Booking Service API",
+    publish: true,
+    tags: ["Bookings"],
+  },
   "api-gateway": {
     displayName: "Railway Booking Platform API",
     publish: true,

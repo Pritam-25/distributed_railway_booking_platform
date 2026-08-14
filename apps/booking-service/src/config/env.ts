@@ -24,6 +24,7 @@ export const env = createEnv({
         message: "REDIS_URL must use redis:// or rediss://",
       },
     ),
+    SEAT_HOLD_TTL_MS: z.coerce.number().int().default(600000),
     SERVICE_NAME: z.string().default("inventory-service"),
     OTEL_EXPORTER_OTLP_ENDPOINT: z.url().default("http://localhost:4318"),
     OTEL_DEBUG: z.enum(["true", "false"]).default("false"),

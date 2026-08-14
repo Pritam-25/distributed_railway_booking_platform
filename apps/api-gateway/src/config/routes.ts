@@ -100,6 +100,12 @@ export const routes: readonly RouteConfig[] = [
     rateLimit: "default",
   },
   {
+    prefix: "/api/v1/bookings",
+    upstream: upstreams.booking,
+    auth: "required",
+    rateLimit: "default",
+  },
+  {
     prefix: "/api/v1/search",
     upstream: upstreams.search,
     auth: "none",

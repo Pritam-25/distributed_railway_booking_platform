@@ -32,4 +32,6 @@ export const EVENT_TYPES = {
   // inventory domain
   INVENTORY_SCHEDULE_PROJECTED: "InventoryScheduleProjectedV1",
   INVENTORY_SCHEDULE_STATUS_CHANGED: "InventoryScheduleStatusChangedV1",
+  // booking domain
+  BOOKING_STATUS_CHANGED: "BookingStatusChangedV1",
 } as const;

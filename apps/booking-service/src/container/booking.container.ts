@@ -1,4 +1,7 @@
-import { prisma, getProducerSync } from "@config";
+import { prisma, redis, getProducerSync } from "@config";
+import { BookingController } from "@controllers";
+import { BookingService, SeatLockService } from "@services";
+import { BookingRepository } from "@repository";
 import {
   PostgresOutboxRepository,
   OutboxPublisherWorker,
@@ -26,6 +29,30 @@ export class BookingContainer {
   public readonly outboxRepository: OutboxRepository;
 
   /**
+   * Booking aggregate repository.
+   */
+  public readonly bookingRepository: BookingRepository;
+
+  /**
+   * Seat lock service instance.
+   */
+  public readonly seatLockService: SeatLockService;
+
+  /**
+   * Booking service that owns the saga business logic.
+   */
+  public readonly bookingService: BookingService;
+
+  /**
+   * HTTP controller for the `/bookings` sub-router.
+   *
+   * Public field because `routes/booking.routes.ts` looks it up via
+   * `import { bookingController } from "@container"` during route
+   * module evaluation.
+   */
+  public readonly bookingController: BookingController;
+
+  /**
    * Outbox publisher worker instance.
    */
   private readonly outboxWorker: OutboxPublisherWorker;
@@ -33,13 +60,27 @@ export class BookingContainer {
   private constructor() {
     // 1. Repositories
     this.outboxRepository = new PostgresOutboxRepository(prisma);
+    this.bookingRepository = new BookingRepository(prisma);
+
+    // 2. Services
+    this.seatLockService = new SeatLockService(redis);
+    this.bookingService = new BookingService(
+      prisma,
+      this.bookingRepository,
+      this.outboxRepository,
+      this.seatLockService,
+    );
+
+    // 3. Controllers
+    this.bookingController = new BookingController(this.bookingService);
+
+    // 4. Workers
     this.outboxWorker = new OutboxPublisherWorker(
       this.outboxRepository,
       getProducerSync,
       logger,
     );
 
-    // 2. Services
     logger.info({ module: "booking-container" }, "Dependencies wired.");
   }
 
