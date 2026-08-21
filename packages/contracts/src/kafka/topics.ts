@@ -39,6 +39,23 @@ export const KAFKA_TOPICS = {
   INVENTORY_SCHEDULE_PROJECTED: "inventory.schedule-projected.v1",
   INVENTORY_SCHEDULE_STATUS_CHANGED: "inventory.schedule-status-changed.v1",
 
+  // ------------ booking ↔ inventory saga ------------
+  BOOKING_HOLD_SEATS_REQUESTED: "booking.hold-seats-requested.v1",
+  INVENTORY_SEATS_HELD: "inventory.seats-held.v1",
+  INVENTORY_SEATS_HOLD_FAILED: "inventory.seats-hold-failed.v1",
+  INVENTORY_SEAT_HOLD_EXPIRED: "inventory.seat-hold-expired.v1",
+
   // ------------ booking domain ------------
   BOOKING_STATUS_CHANGED: "booking.status-changed.v1",
+} as const;
+
+/**
+ * Dead-letter topic names, derived from the canonical topic constants. The
+ * DLQ wrapper in `@irctc/kafka` (`wrapWithDlq`) writes to `<TOPIC>_DLQ`.
+ */
+export const KAFKA_DLQ_TOPICS = {
+  BOOKING_HOLD_SEATS_REQUESTED_DLQ: `${KAFKA_TOPICS.BOOKING_HOLD_SEATS_REQUESTED}.dlq`,
+  INVENTORY_SEATS_HELD_DLQ: `${KAFKA_TOPICS.INVENTORY_SEATS_HELD}.dlq`,
+  INVENTORY_SEATS_HOLD_FAILED_DLQ: `${KAFKA_TOPICS.INVENTORY_SEATS_HOLD_FAILED}.dlq`,
+  INVENTORY_SEAT_HOLD_EXPIRED_DLQ: `${KAFKA_TOPICS.INVENTORY_SEAT_HOLD_EXPIRED}.dlq`,
 } as const;

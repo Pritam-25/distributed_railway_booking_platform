@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 import {
   BookingStatus,
+  SagaStatus,
+  SagaStep,
   type Prisma,
   type PrismaClient,
 } from "@generated/prisma/client.js";
@@ -8,14 +10,16 @@ import {
   EVENT_TYPES,
   KAFKA_TOPICS,
   type BookingStatusChangedV1Type,
+  type HoldSeatsRequestedV1Type,
 } from "@irctc/contracts";
 import { type OutboxRepository } from "@irctc/kafka";
 import { ApiError } from "@irctc/errors";
 import { statusCode } from "@irctc/http";
 import { logger } from "@irctc/logger";
+import { InventoryAdapter } from "@grpc";
 
 import { env } from "@config";
-import { type BookingRepository } from "@repository";
+import { type BookingRepository, type SagaRepository } from "@repository";
 import { ERROR_CODES } from "@utils/errors";
 import { type CreateBookingDto, type CreateBookingResponse } from "@dto";
 import { SeatLockService } from "./seat-lock.service.js";
@@ -38,18 +42,6 @@ interface TransitionArgs {
   allowedFrom?: BookingStatus;
   fromStates?: readonly BookingStatus[];
   updates?: Partial<BookingTransitionUpdate>;
-}
-
-/**
- * Arguments required to emit a status change event to the outbox.
- */
-interface EmitStatusChangedArgs {
-  bookingId: string;
-  pnr: string;
-  userId: string;
-  previousStatus: BookingStatus | null;
-  currentStatus: BookingStatus;
-  version: number;
 }
 
 /**
@@ -81,12 +73,16 @@ export class BookingService {
    * @param bookingRepository - Booking aggregate repository.
    * @param outboxRepository - Transactional outbox repository.
    * @param seatLockService - Service for managing Redis distributed seat locks.
+   * @param inventoryAdapter - Inventory gRPC client adapter.
+   * @param sagaRepository - Booking saga repository.
    */
   constructor(
     private readonly prisma: PrismaClient,
     private readonly bookingRepository: BookingRepository,
     private readonly outboxRepository: OutboxRepository,
-    public readonly seatLockService: SeatLockService,
+    private readonly seatLockService: SeatLockService,
+    private readonly inventoryAdapter: InventoryAdapter,
+    private readonly sagaRepository: SagaRepository,
   ) {}
 
   /**
@@ -131,7 +127,24 @@ export class BookingService {
       return responseBody;
     }
 
-    // 2. Concurrency Lock: Acquire Redis distributed lock on seats (and optional journey legs) before DB transaction
+    // 2. Synchronous gRPC pre-flight — schedule-level invariants only.
+    //    Surfaces SCHEDULE_NOT_FOUND / SCHEDULE_INACTIVE / TRAIN_ALREADY_DEPARTED
+    //    before any booking row is written, no Redis lock, no outbox row.
+    await this.inventoryAdapter.validateBooking(dto);
+
+    // 2b. Resolve booking-side seatIds → inventory-side seatInventoryIds.
+    //     Done OUTSIDE the prisma.s$transaction per the architecture rule
+    //     ("never hold a transaction while doing I/O outside the DB").
+    //     Uses the existing inventory gRPC channel; one round-trip per seat
+    //     in parallel. A future migration can replace this with a local
+    //     seat_inventory view in booking-service's Prisma schema.
+    const seatInventoryIds =
+      await this.inventoryAdapter.resolveSeatInventoryIds(
+        dto.scheduleId,
+        dto.seatIds,
+      );
+
+    // 3. Concurrency Lock: Acquire Redis distributed lock on seats (and optional journey legs) before DB transaction
     const bookingId = crypto.randomUUID();
     const lockTtlSeconds = Math.ceil(env.SEAT_HOLD_TTL_MS / 1000);
 
@@ -157,7 +170,7 @@ export class BookingService {
         seatIds: dto.seatIds,
         legIndices,
       },
-      "Step 3: Acquiring Redis distributed seat/leg locks",
+      "Step 3: Acquiring Redis distributed seat locks",
     );
 
     const locksAcquired = await this.seatLockService.acquireSeatLocks({
@@ -171,128 +184,191 @@ export class BookingService {
     if (!locksAcquired) {
       throw new ApiError(
         statusCode.conflict,
-        ERROR_CODES.BOOKING_INVALID_TRANSITION,
-        "One or more selected seats/legs are currently locked by another transaction.",
+        ERROR_CODES.SEAT_HOLD_FAILED,
+        "One or more selected seats are currently locked by another user. Please select different seats.",
       );
     }
 
     let result: CreateBookingResponse;
     try {
-      result = await this.prisma.$transaction(async (tx) => {
-        // 4. Re-verify idempotency inside transaction
-        logger.debug(
-          {
-            module: "booking-service",
-            bookingId,
-            idempotencyKey: dto.idempotencyKey,
-          },
-          "Step 4: Re-verifying idempotency inside DB transaction",
-        );
-        const existing = await this.bookingRepository.findIdempotencyKey(
-          dto.idempotencyKey,
-          tx,
-        );
-        if (existing) {
-          return existing.responseBody as CreateBookingResponse;
-        }
+      result = await this.prisma.$transaction(
+        async (tx) => {
+          // 4. Re-verify idempotency inside transaction
+          logger.debug(
+            {
+              module: "booking-service",
+              bookingId,
+              idempotencyKey: dto.idempotencyKey,
+            },
+            "Step 4: Re-verifying idempotency inside DB transaction",
+          );
+          const existing = await this.bookingRepository.findIdempotencyKey(
+            dto.idempotencyKey,
+            tx,
+          );
+          if (existing) {
+            return existing.responseBody as CreateBookingResponse;
+          }
 
-        // 5. Generate PNR + insert booking row.
-        const pnr = generatePnr();
-        logger.debug(
-          { module: "booking-service", bookingId, pnr },
-          "Step 5: Generated PNR and inserting booking row in PENDING state",
-        );
-        const booking = await this.bookingRepository.create(
-          {
-            id: bookingId,
-            pnr,
-            userId,
-            scheduleId: dto.scheduleId,
-            fromStationId: dto.fromStationId,
-            toStationId: dto.toStationId,
-            status: BookingStatus.PENDING,
-            version: 1,
-          },
-          tx,
-        );
+          // 5. Generate PNR + insert booking row.
+          const pnr = generatePnr();
+          logger.debug(
+            { module: "booking-service", bookingId, pnr },
+            "Step 5: Generated PNR and inserting booking row in PENDING state",
+          );
+          const booking = await this.bookingRepository.create(
+            {
+              id: bookingId,
+              pnr,
+              userId,
+              scheduleId: dto.scheduleId,
+              fromStationId: dto.fromStationId,
+              toStationId: dto.toStationId,
+              status: BookingStatus.PENDING,
+              version: 1,
+            },
+            tx,
+          );
 
-        // 6. Persist seat rows + passenger rows.
-        logger.debug(
-          {
-            module: "booking-service",
-            bookingId,
-            seatCount: dto.seatIds.length,
-            passengerCount: dto.passengers.length,
-          },
-          "Step 6: Persisting booking seats and passenger records",
-        );
-        await this.bookingRepository.createSeats(
-          dto.seatIds.map((seatId) => ({
-            bookingId: booking.id,
-            seatId,
-          })),
-          tx,
-        );
-        await this.bookingRepository.createPassengers(
-          dto.passengers.map((passenger) => ({
-            bookingId: booking.id,
-            fullName: passenger.fullName,
-            age: passenger.age,
-            gender: passenger.gender,
-            berthPreference: passenger.berthPreference ?? null,
-          })),
-          tx,
-        );
+          // 6. Persist seat rows + passenger rows.
+          logger.debug(
+            {
+              module: "booking-service",
+              bookingId,
+              seatCount: dto.seatIds.length,
+              passengerCount: dto.passengers.length,
+            },
+            "Step 6: Persisting booking seats and passenger records",
+          );
+          await this.bookingRepository.createSeats(
+            dto.seatIds.map((seatId) => ({
+              bookingId: booking.id,
+              seatId,
+            })),
+            tx,
+          );
+          await this.bookingRepository.createPassengers(
+            dto.passengers.map((passenger) => ({
+              bookingId: booking.id,
+              fullName: passenger.fullName,
+              age: passenger.age,
+              gender: passenger.gender,
+              berthPreference: passenger.berthPreference ?? null,
+            })),
+            tx,
+          );
 
-        // 7. Emit first BookingStatusChangedV1 row (PENDING with no previous status) to transactional outbox.
-        logger.debug(
-          { module: "booking-service", bookingId, status: booking.status },
-          "Step 7: Emitting initial BookingStatusChangedV1 outbox event",
-        );
-        await this.emitStatusChanged(tx, {
-          bookingId: booking.id,
-          pnr: booking.pnr,
-          userId: booking.userId,
-          previousStatus: null,
-          currentStatus: booking.status,
-          version: booking.version,
-        });
-
-        // 8. Record the idempotency mapping so a retry returns the same booking.
-        logger.debug(
-          {
-            module: "booking-service",
-            bookingId,
-            idempotencyKey: dto.idempotencyKey,
-          },
-          "Step 8: Recording idempotency mapping in DB",
-        );
-        const responseBody: CreateBookingResponse = {
-          id: booking.id,
-          pnr: booking.pnr,
-          status: booking.status,
-        };
-        await this.bookingRepository.createIdempotencyKey(
-          {
-            idempotencyKey: dto.idempotencyKey,
-            bookingId: booking.id,
-            responseBody: responseBody as unknown as Prisma.InputJsonValue,
-          },
-          tx,
-        );
-
-        logger.info(
-          {
-            module: "booking-service",
+          // 7. Emit first BookingStatusChangedV1 row (PENDING with no previous status) to transactional outbox.
+          logger.debug(
+            { module: "booking-service", bookingId, status: booking.status },
+            "Step 7: Emitting initial BookingStatusChangedV1 outbox event",
+          );
+          const statusChangedPayload: BookingStatusChangedV1Type = {
+            eventId: crypto.randomUUID(),
             bookingId: booking.id,
             pnr: booking.pnr,
-            userId,
-          },
-          "Booking successfully created in PENDING with Redis seat locks held",
-        );
+            userId: booking.userId,
+            previousStatus: null,
+            currentStatus:
+              booking.status as BookingStatusChangedV1Type["currentStatus"],
+            version: booking.version,
+            updatedAt: new Date(),
+          };
 
-        return responseBody;
-      });
+          await this.outboxRepository.insert(tx, {
+            aggregateType: "Booking",
+            aggregateId: booking.id,
+            eventType: EVENT_TYPES.BOOKING_STATUS_CHANGED,
+            topic: KAFKA_TOPICS.BOOKING_STATUS_CHANGED,
+            payload: statusChangedPayload,
+          });
+
+          // 7b. Saga log row (HOLD_SEATS, PENDING) so the orchestrator can
+          //     advance the step to COMPLETED once the inventory reply lands.
+          logger.debug(
+            { module: "booking-service", bookingId, step: SagaStep.HOLD_SEATS },
+            "Step 7b: Recording saga log HOLD_SEATS / PENDING",
+          );
+          await this.sagaRepository.create(
+            {
+              bookingId: booking.id,
+              step: SagaStep.HOLD_SEATS,
+              status: SagaStatus.PENDING,
+            },
+            tx,
+          );
+
+          // 7d. Emit BOOKING_HOLD_SEATS_REQUESTED outbox event. Inventory's
+          //     hold-seats consumer will pick this up, allocate seats, and
+          //     emit INVENTORY_SEATS_HELD (or _FAILED) back to us.
+          logger.debug(
+            {
+              module: "booking-service",
+              bookingId,
+              scheduleId: booking.scheduleId,
+              seatInventoryCount: seatInventoryIds.length,
+            },
+            "Step 7d: Emitting BOOKING_HOLD_SEATS_REQUESTED outbox event",
+          );
+          const holdSeatsPayload: HoldSeatsRequestedV1Type = {
+            eventId: crypto.randomUUID(),
+            bookingId: booking.id,
+            scheduleId: booking.scheduleId,
+            userId: booking.userId,
+            seatInventoryIds,
+            fromStaionId: dto.fromStationId,
+            toStationId: dto.toStationId,
+            fromSequence: dto.fromSequence ?? 0,
+            toSequence: dto.toSequence ?? 2147483647,
+            holdTtlMs: env.SEAT_HOLD_TTL_MS,
+            createdAt: new Date(),
+          };
+
+          await this.outboxRepository.insert(tx, {
+            aggregateType: "Booking",
+            aggregateId: booking.id,
+            eventType: EVENT_TYPES.HOLD_SEATS_REQUESTED,
+            topic: KAFKA_TOPICS.BOOKING_HOLD_SEATS_REQUESTED,
+            payload: holdSeatsPayload,
+          });
+
+          // 8. Record the idempotency mapping so a retry returns the same booking.
+          logger.debug(
+            {
+              module: "booking-service",
+              bookingId,
+              idempotencyKey: dto.idempotencyKey,
+            },
+            "Step 8: Recording idempotency mapping in DB",
+          );
+          const responseBody: CreateBookingResponse = {
+            id: booking.id,
+            pnr: booking.pnr,
+            status: booking.status,
+          };
+          await this.bookingRepository.createIdempotencyKey(
+            {
+              idempotencyKey: dto.idempotencyKey,
+              bookingId: booking.id,
+              responseBody: responseBody as unknown as Prisma.InputJsonValue,
+            },
+            tx,
+          );
+
+          logger.info(
+            {
+              module: "booking-service",
+              bookingId: booking.id,
+              pnr: booking.pnr,
+              userId,
+            },
+            "Booking successfully created in PENDING with Redis seat locks held",
+          );
+
+          return responseBody;
+        },
+        { timeout: 10000 },
+      );
     } catch (err) {
       // Release seat locks if database transaction fails
       logger.warn(
@@ -330,14 +406,14 @@ export class BookingService {
       throw new ApiError(
         statusCode.notFound,
         ERROR_CODES.BOOKING_NOT_FOUND,
-        `Booking not found for bookingId=${bookingId}.`,
+        "The requested booking could not be found.",
       );
     }
     if (booking.userId !== userId) {
       throw new ApiError(
         statusCode.forbidden,
         ERROR_CODES.BOOKING_FORBIDDEN,
-        `Booking ${bookingId} does not belong to this user.`,
+        "You do not have permission to view or manage this booking.",
       );
     }
     return {
@@ -368,7 +444,7 @@ export class BookingService {
       throw new ApiError(
         statusCode.notFound,
         ERROR_CODES.BOOKING_NOT_FOUND,
-        `Booking not found for PNR=${pnr}.`,
+        "No booking was found matching the provided PNR.",
       );
     }
     return booking;
@@ -507,6 +583,45 @@ export class BookingService {
   }
 
   /**
+   * Simulates payment confirmation for a booking at `SEATS_HELD` or `PAYMENT_PENDING`.
+   * Drives the booking row through `CONFIRMING → CONFIRMED` and completes the saga step.
+   * Emits `BookingStatusChangedV1` outbox events for each status transition.
+   *
+   * @param bookingId - The booking UUID.
+   * @param userId - The authenticated user's UUID.
+   */
+  async confirmPayment(bookingId: string, userId: string): Promise<void> {
+    const booking = await this.bookingRepository.findById(bookingId);
+    if (!booking) {
+      throw new ApiError(
+        statusCode.notFound,
+        ERROR_CODES.BOOKING_NOT_FOUND,
+        `Booking not found for bookingId=${bookingId}.`,
+      );
+    }
+    if (booking.userId !== userId) {
+      throw new ApiError(
+        statusCode.forbidden,
+        ERROR_CODES.BOOKING_FORBIDDEN,
+        `Booking ${bookingId} does not belong to this user.`,
+      );
+    }
+
+    if (booking.status === BookingStatus.SEATS_HELD) {
+      await this.markPaymentPending(bookingId, `PAY-${crypto.randomUUID()}`);
+    }
+
+    await this.markConfirming(bookingId);
+    await this.markConfirmed(bookingId);
+    await this.sagaRepository.update(
+      bookingId,
+      SagaStep.CONFIRM_SEATS,
+      SagaStatus.COMPLETED,
+      null,
+    );
+  }
+
+  /**
    * Executes a state transition for a booking record, enforcing state machine rules,
    * optimistic concurrency control, optional metadata updates, and transactional outbox event publishing.
    *
@@ -574,54 +689,25 @@ export class BookingService {
       }
 
       // Step 6: Emit BookingStatusChangedV1 event to transactional outbox
-      await this.emitStatusChanged(tx, {
+      const statusChangedPayload: BookingStatusChangedV1Type = {
+        eventId: crypto.randomUUID(),
         bookingId: booking.id,
         pnr: booking.pnr,
         userId: booking.userId,
-        previousStatus: booking.status,
-        currentStatus: target,
+        previousStatus:
+          booking.status as BookingStatusChangedV1Type["previousStatus"],
+        currentStatus: target as BookingStatusChangedV1Type["currentStatus"],
         version: newVersion,
+        updatedAt: new Date(),
+      };
+
+      await this.outboxRepository.insert(tx, {
+        aggregateType: "Booking",
+        aggregateId: booking.id,
+        eventType: EVENT_TYPES.BOOKING_STATUS_CHANGED,
+        topic: KAFKA_TOPICS.BOOKING_STATUS_CHANGED,
+        payload: statusChangedPayload,
       });
-    });
-  }
-
-  /**
-   * Inserts a `BookingStatusChangedV1` row into the outbox within the
-   * caller's transaction. The outbox publisher drains to Kafka after
-   * the transaction commits.
-   *
-   * @param tx - The Prisma transaction client.
-   * @param args - Outbox event arguments object.
-   * @param args.bookingId - Booking UUID.
-   * @param args.pnr - 10-character ticket PNR.
-   * @param args.userId - Authenticated user UUID.
-   * @param args.previousStatus - State before transition, or null if initial creation.
-   * @param args.currentStatus - Target status after transition.
-   * @param args.version - Incremented entity version number.
-   */
-  private async emitStatusChanged(
-    tx: Prisma.TransactionClient,
-    args: EmitStatusChangedArgs,
-  ): Promise<void> {
-    const payload: BookingStatusChangedV1Type = {
-      eventId: crypto.randomUUID(),
-      bookingId: args.bookingId,
-      pnr: args.pnr,
-      userId: args.userId,
-      previousStatus:
-        args.previousStatus as BookingStatusChangedV1Type["previousStatus"],
-      currentStatus:
-        args.currentStatus as BookingStatusChangedV1Type["currentStatus"],
-      version: args.version,
-      updatedAt: new Date(),
-    };
-
-    await this.outboxRepository.insert(tx, {
-      aggregateType: "Booking",
-      aggregateId: args.bookingId,
-      eventType: EVENT_TYPES.BOOKING_STATUS_CHANGED,
-      topic: KAFKA_TOPICS.BOOKING_STATUS_CHANGED,
-      payload,
     });
   }
 }

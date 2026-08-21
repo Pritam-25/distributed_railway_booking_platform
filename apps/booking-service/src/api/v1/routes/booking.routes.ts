@@ -45,4 +45,10 @@ router.post(
   asyncHandler((req, res) => bookingController.cancelBooking(req, res)),
 );
 
+router.post(
+  "/:bookingId/pay",
+  validateParams(bookingIdParamSchema),
+  asyncHandler((req, res) => bookingController.payBooking(req, res)),
+);
+
 export { router as bookingRoutes };

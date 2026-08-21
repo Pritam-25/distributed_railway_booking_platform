@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package irctc.inventory.v1;
 
+import "google/protobuf/timestamp.proto";
+
 // InventoryService provides RPC methods to query seat inventory details.
 service InventoryService {
   // GetSeatDetails queries the seat details for a given schedule and seat ID.
@@ -9,6 +11,12 @@ service InventoryService {
   // GetSeatMap returns the full seat-map (coaches + seats) for a schedule,
   // marked with bookings that overlap the (from_station, to_station) segment.
   rpc GetSeatMap (GetSeatMapRequest) returns (GetSeatMapResponse);
+  // ValidateBooking is the synchronous schedule-level pre-flight called by
+  // BookingService.createBooking before any booking row is written. It surfaces
+  // the cheap invariants (schedule exists, schedule ACTIVE, departure time
+  // still in the future) that would otherwise produce a useless PENDING →
+  // SagaLog(HOLD_SEATS) → INVENTORY_SEATS_HOLD_FAILED round-trip.
+  rpc ValidateBooking (ValidateBookingRequest) returns (ValidateBookingResponse);
 }
 
 // GetSeatDetailsRequest contains the parameters for fetching seat details.
@@ -19,15 +27,19 @@ message GetSeatDetailsRequest {
 
 // GetSeatDetailsResponse contains detailed seat information.
 message GetSeatDetailsResponse {
-  string schedule_id = 1;
-  string seat_id = 2;
-  string train_id = 3;
-  string coach_id = 4;
-  string coach_number = 5;
-  int32 seat_number = 6;
-  string seat_type = 7;
-  double price_per_km = 8;
-  int32 version = 9;
+  string schedule_id      = 1;
+  string seat_id          = 2;
+  // Inventory-side row UUID. Booking-service needs this when emitting
+  // BOOKING_HOLD_SEATS_REQUESTED so the consumer can write the matching
+  // SeatAllocation rows.
+  string seat_inventory_id = 10;
+  string train_id         = 3;
+  string coach_id         = 4;
+  string coach_number     = 5;
+  int32  seat_number      = 6;
+  string seat_type        = 7;
+  double price_per_km     = 8;
+  int32  version          = 9;
 }
 
 // GetSeatMapRequest contains the parameters for fetching a full seat-map.
@@ -67,5 +79,34 @@ message SeatMapSeat {
   string price = 5;        // decimal string, e.g. "2.5000"
   bool is_booked = 6;
   string quota = 7;
+}
+
+// ValidateBookingRequest is the synchronous pre-flight payload sent by
+// BookingService.createBooking. Carries enough information for inventory-service
+// to reject the obvious schedule-level failures before the booking row is
+// written.
+message ValidateBookingRequest {
+  string schedule_id      = 1;
+  string from_station_id  = 2;
+  string to_station_id    = 3;
+  // The wall-clock instant at which the booking-side handler began processing
+  // the request. Used to compare against the schedule's departure date so
+  // both services agree on "has the train left?".
+  google.protobuf.Timestamp client_requested_at = 4;
+}
+
+// ValidateBookingResponse carries a simple status discriminator:
+//
+//   - "OK"                    : schedule is active and the train has not yet departed.
+//   - "SCHEDULE_NOT_FOUND"    : no schedule with `schedule_id` exists.
+//   - "SCHEDULE_INACTIVE"     : schedule exists but is cancelled.
+//   - "TRAIN_ALREADY_DEPARTED": departure date has passed (with a small
+//                               clock-skew tolerance — see inventory handler).
+//
+// `departure_at` is populated only when status == OK, as an ISO-8601 UTC
+// string the caller can echo back to the user.
+message ValidateBookingResponse {
+  string status       = 1;
+  string departure_at = 2;
 }
 

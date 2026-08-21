@@ -78,4 +78,29 @@ export class RouteStopRepository {
       },
     });
   }
+
+  /**
+   * Retrieves a specific route stop by schedule ID and sequence number.
+   * Uses the `@@unique([scheduleId, sequenceNumber])` index, so it is a
+   * O(log n) point lookup.
+   *
+   * @param scheduleId - The unique ID of the schedule.
+   * @param sequenceNumber - The route-stop sequence index.
+   * @param tx - Optional Prisma transaction client.
+   * @returns A promise resolving to the route stop or null if not found.
+   */
+  async findByScheduleAndSequence(
+    scheduleId: string,
+    sequenceNumber: number,
+    tx?: Prisma.TransactionClient,
+  ): Promise<RouteStop | null> {
+    return this.getClient(tx).routeStop.findUnique({
+      where: {
+        scheduleId_sequenceNumber: {
+          scheduleId,
+          sequenceNumber,
+        },
+      },
+    });
+  }
 }

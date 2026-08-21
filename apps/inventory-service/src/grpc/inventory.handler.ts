@@ -6,11 +6,22 @@ import {
   type GetSeatDetailsRequest,
   type GetSeatDetailsResponse,
   type SeatMapSeat,
+  type ValidateBookingRequest,
+  type ValidateBookingResponse,
 } from "@irctc/contracts";
 import { ApiError, COMMON_ERROR_CODES } from "@irctc/errors";
 import { logger } from "@irctc/logger";
 import { prisma } from "@config";
 import { statusCode } from "@irctc/http";
+
+/**
+ * Clock-skew tolerance (ms) when comparing `client_requested_at` against
+ * the schedule's `departure_date`. Two services on different hosts can
+ * drift slightly; the booking-side clock may be a second or two ahead
+ * of inventory's. A 60s window absorbs that without admitting a booking
+ * for a train that has truly left.
+ */
+const DEPARTED_SKEW_TOLERANCE_MS = 60_000;
 
 /**
  * gRPC Handler implementing InventoryService Implementation for nice-grpc.
@@ -50,6 +61,7 @@ export const inventoryHandler: InventoryServiceImplementation = {
     return {
       scheduleId: seat.scheduleId,
       seatId: seat.seatId,
+      seatInventoryId: seat.id,
       trainId: seat.trainId,
       coachId: seat.coachId,
       coachNumber: seat.coachNumber,
@@ -168,13 +180,15 @@ export const inventoryHandler: InventoryServiceImplementation = {
       "Step 3: seatInventory query completed",
     );
 
-    // 4. Booked seat ids = CONFIRMED allocations whose segment overlaps the
-    //    (fromSequence, toSequence) tuple. HELD/EXPIRED/RELEASED intentionally
-    //    hidden for stable UI; CheckAvailability closes the race window.
+    // 4. Booked seat ids = CONFIRMED or active HELD allocations whose segment overlaps the
+    //    (fromSequence, toSequence) tuple.
     const allocations = await prisma.seatAllocation.findMany({
       where: {
         scheduleId,
-        status: "CONFIRMED",
+        OR: [
+          { status: "CONFIRMED" },
+          { status: "HELD", holdExpiresAt: { gt: new Date() } },
+        ],
         fromSequence: { lt: toSequence },
         toSequence: { gt: fromSequence },
       },
@@ -232,6 +246,83 @@ export const inventoryHandler: InventoryServiceImplementation = {
     return {
       status: "OK",
       coaches: coachOrder.map((id) => coachesById.get(id)!),
+    };
+  },
+
+  /**
+   * Synchronous schedule-level pre-flight for `BookingService.createBooking`.
+   *
+   * Returns one of:
+   *   - "OK"                    : schedule exists, is ACTIVE, departure still future.
+   *   - "SCHEDULE_NOT_FOUND"    : no schedule with `scheduleId` exists.
+   *   - "SCHEDULE_INACTIVE"     : schedule exists but is CANCELLED.
+   *   - "TRAIN_ALREADY_DEPARTED": `departureDate + 60s skew < clientRequestedAt`.
+   *
+   * Does NOT check per-seat availability — that stays in inventory's
+   * authoritative `holdSeats` consumer where it belongs and is naturally
+   * serialized through the saga.
+   */
+  async validateBooking(
+    request: ValidateBookingRequest,
+  ): Promise<ValidateBookingResponse> {
+    const { scheduleId, clientRequestedAt } = request;
+
+    logger.debug(
+      { module: "inventory-grpc", scheduleId },
+      "Received validateBooking gRPC request",
+    );
+
+    const schedule = await prisma.scheduleInventory.findUnique({
+      where: { scheduleId },
+      select: { status: true, departureDate: true },
+    });
+
+    if (!schedule) {
+      logger.debug(
+        { module: "inventory-grpc", scheduleId },
+        "validateBooking → SCHEDULE_NOT_FOUND",
+      );
+      return { status: "SCHEDULE_NOT_FOUND", departureAt: "" };
+    }
+    if (schedule.status !== "ACTIVE") {
+      logger.debug(
+        {
+          module: "inventory-grpc",
+          scheduleId,
+          status: schedule.status,
+        },
+        "validateBooking → SCHEDULE_INACTIVE",
+      );
+      return { status: "SCHEDULE_INACTIVE", departureAt: "" };
+    }
+
+    const clientNowMs = clientRequestedAt
+      ? clientRequestedAt.getTime()
+      : Date.now();
+
+    const departureMs = schedule.departureDate.getTime();
+    const cutoff = departureMs + DEPARTED_SKEW_TOLERANCE_MS;
+    if (clientNowMs >= cutoff) {
+      logger.debug(
+        {
+          module: "inventory-grpc",
+          scheduleId,
+          clientNowMs,
+          departureMs,
+          cutoff,
+        },
+        "validateBooking → TRAIN_ALREADY_DEPARTED",
+      );
+      return { status: "TRAIN_ALREADY_DEPARTED", departureAt: "" };
+    }
+
+    logger.debug(
+      { module: "inventory-grpc", scheduleId },
+      "validateBooking → OK",
+    );
+    return {
+      status: "OK",
+      departureAt: schedule.departureDate.toISOString(),
     };
   },
 };

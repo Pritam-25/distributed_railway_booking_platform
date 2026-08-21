@@ -94,6 +94,32 @@ export class BookingController {
   }
 
   /**
+   * `POST /api/v1/bookings/:bookingId/pay`
+   *
+   * Simulates successful payment for a booking at `SEATS_HELD` / `PAYMENT_PENDING`.
+   * Drives the booking row through `CONFIRMING` → `CONFIRMED` and emits `BookingStatusChangedV1` events.
+   *
+   * @param req - Express request with `req.params.bookingId`.
+   * @param res - Express response returning the confirmed booking.
+   */
+  async payBooking(req: Request, res: Response): Promise<void> {
+    const userId = this.requireUserId(req);
+    const { bookingId } = req.params as unknown as BookingIdParamDto;
+
+    await this.bookingService.confirmPayment(bookingId, userId);
+    const booking = await this.bookingService.findByIdForUser(
+      userId,
+      bookingId,
+    );
+
+    res
+      .status(statusCode.success)
+      .json(
+        successResponse("Payment completed and booking confirmed", booking),
+      );
+  }
+
+  /**
    * Throws `UNAUTHORIZED` when the gateway headers haven't populated
    * `req.user`. In practice this only fires when the request bypasses
    * the gateway (e.g. local curl in development) — the production

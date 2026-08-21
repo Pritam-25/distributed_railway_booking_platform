@@ -41,6 +41,15 @@ export const env = createEnv({
         message: "KAFKA_BROKERS must include at least one broker",
       }),
     KAFKA_CLIENT_ID: z.string().default("inventory-service"),
+
+    /**
+     * TTL for inventory-side Redis seat-segment locks. These only guard the
+     * short critical section around the SeatAllocation Prisma transaction, so
+     * the default is intentionally small (30s) — long enough to cover the
+     * worst-case tx time, short enough that a crashed consumer cannot leave
+     * keys pinned for the booking-side TTL (~10 min).
+     */
+    SEAT_LOCK_TTL_SEC: z.coerce.number().int().min(1).max(300).default(30),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,

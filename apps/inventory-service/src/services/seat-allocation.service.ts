@@ -1,0 +1,638 @@
+import crypto from "node:crypto";
+import {
+  AllocationStatus,
+  ScheduleInventoryStatus,
+  type PrismaClient,
+  type RouteStop,
+  type SeatInventory,
+} from "@generated/prisma/client.js";
+import {
+  EVENT_TYPES,
+  KAFKA_TOPICS,
+  type HoldSeatsRequestedV1Type,
+  type SeatAllocationV1Type,
+  type SeatsHeldV1Type,
+  type SeatsHoldFailedV1Type,
+  type SeatHoldFailureReasonType,
+} from "@irctc/contracts";
+import { type OutboxRepository } from "@irctc/kafka";
+import { logger } from "@irctc/logger";
+
+import {
+  type IdempotencyRepository,
+  type RouteStopRepository,
+  type ScheduleInventoryRepository,
+  type SeatAllocationRepository,
+  type SeatInventoryRepository,
+} from "@repository";
+import { type SeatLockService } from "./seat-lock.service.js";
+
+/**
+ * Outcome of `SeatAllocationService.holdSeats` — exactly one branch is
+ * populated per call. The Kafka consumer maps this to the matching
+ * outbox row that the service already wrote.
+ */
+export type HoldSeatsOutcome =
+  | { kind: "held"; payload: SeatsHeldV1Type }
+  | { kind: "failed"; payload: SeatsHoldFailedV1Type };
+
+export interface SeatLifecycleEventArgs {
+  eventId: string;
+  bookingId: string;
+  scheduleId: string;
+  seatInventoryIds: string[];
+}
+
+export type ConfirmSeatsArgs = SeatLifecycleEventArgs;
+export type CancelSeatsArgs = SeatLifecycleEventArgs;
+
+/**
+ * Service class implementing the inventory-side seat-hold critical
+ * section. Called by `HoldSeatsConsumer` when a `HoldSeatsRequestedV1`
+ * event lands on the topic.
+ */
+export class SeatAllocationService {
+  /**
+   * @param prisma - PrismaClient instance used ONLY for transaction orchestration ($transaction).
+   * @param scheduleInventoryRepository - Schedule existence + status checks.
+   * @param routeStopRepository - Sequence-index → distance lookup.
+   * @param seatInventoryRepository - Inventory row fetch (for pricing + coach info).
+   * @param seatAllocationRepository - Allocation row writes.
+   * @param idempotencyRepository - Idempotency record tracking.
+   * @param outboxRepository - Transactional outbox writes.
+   * @param seatLockService - Per-segment Redis lock primitive.
+   */
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly scheduleInventoryRepository: ScheduleInventoryRepository,
+    private readonly routeStopRepository: RouteStopRepository,
+    private readonly seatInventoryRepository: SeatInventoryRepository,
+    private readonly seatAllocationRepository: SeatAllocationRepository,
+    private readonly idempotencyRepository: IdempotencyRepository,
+    private readonly outboxRepository: OutboxRepository,
+    private readonly seatLockService: SeatLockService,
+  ) {}
+
+  /**
+   * Runs the hold-seats critical section for a single event.
+   * Refactored into clean helper methods to maintain Cognitive Complexity <= 5.
+   *
+   * @param event - Validated `HoldSeatsRequestedV1` event payload.
+   * @returns The success or failure payload that was written to the outbox.
+   */
+  async holdSeats(event: HoldSeatsRequestedV1Type): Promise<HoldSeatsOutcome> {
+    const { eventId, bookingId, scheduleId, seatInventoryIds } = event;
+    const eventKey = `booking:hold:${eventId}`;
+
+    logger.info(
+      { module: "seat-allocation-service", eventId, bookingId, scheduleId },
+      "Processing holdSeats request",
+    );
+
+    // 1. Idempotency Check
+    if (await this.idempotencyRepository.exists(eventKey)) {
+      return this.buildAlreadyProcessedOutcome(
+        eventKey,
+        bookingId,
+        seatInventoryIds,
+      );
+    }
+
+    // 2. Schedule validation via repository
+    if (!(await this.isScheduleActive(scheduleId))) {
+      return this.fail(
+        event,
+        "SCHEDULE_NOT_FOUND",
+        "Schedule not found or not active.",
+        [...seatInventoryIds],
+      );
+    }
+
+    // 3. Resolve segment distance & route stops
+    const segment = await this.resolveSegmentStops(event);
+    if (!segment) {
+      return this.fail(
+        event,
+        "SEGMENT_CONFLICT",
+        `Could not resolve valid segment for scheduleId=${scheduleId} fromSequence=${event.fromSequence} toSequence=${event.toSequence}.`,
+        [...seatInventoryIds],
+      );
+    }
+
+    const { fromStop, toStop, distance } = segment;
+
+    // 4. Redis seat-segment lock arguments
+    const lockParams = {
+      scheduleId,
+      seatInventorySegments: seatInventoryIds.map((id) => ({
+        seatInventoryId: id,
+        fromSequence: fromStop.sequenceNumber,
+        toSequence: toStop.sequenceNumber,
+      })),
+      lockToken: bookingId,
+    };
+
+    const locksAcquired = await this.seatLockService.acquireSeatLocks({
+      ...lockParams,
+      ttlSeconds: 30,
+    });
+
+    if (!locksAcquired) {
+      return this.fail(
+        event,
+        "SEAT_ALREADY_HELD",
+        "One or more requested seats are already held.",
+        [...seatInventoryIds],
+      );
+    }
+
+    try {
+      // 5. Verify seat existence & map creation
+      const seatById = await this.fetchSeatMap(scheduleId, seatInventoryIds);
+      if (!seatById) {
+        return this.fail(
+          event,
+          "SEAT_NOT_FOUND",
+          `Seat inventory rows missing for scheduleId=${scheduleId}.`,
+          [...seatInventoryIds],
+        );
+      }
+
+      // 6. Commit Postgres hold transaction
+      return await this.commitHoldTransaction(
+        event,
+        eventKey,
+        fromStop,
+        toStop,
+        distance,
+        seatById,
+      );
+    } finally {
+      // 7. Ensure Redis locks are released
+      await this.seatLockService.releaseSeatLocks(lockParams);
+    }
+  }
+
+  private buildAlreadyProcessedOutcome(
+    eventKey: string,
+    bookingId: string,
+    seatInventoryIds: string[],
+  ): HoldSeatsOutcome {
+    logger.info(
+      { module: "seat-allocation-service", eventKey, bookingId },
+      "Hold event already processed, skipping",
+    );
+    return {
+      kind: "failed",
+      payload: {
+        eventId: crypto.randomUUID(),
+        bookingId,
+        reason: "SEAT_ALREADY_HELD",
+        message: "Event already processed.",
+        failedSeatInventoryIds: [...seatInventoryIds],
+        createdAt: new Date(),
+      },
+    };
+  }
+
+  private async isScheduleActive(scheduleId: string): Promise<boolean> {
+    const schedule =
+      await this.scheduleInventoryRepository.findByScheduleId(scheduleId);
+    return Boolean(schedule?.status === ScheduleInventoryStatus.ACTIVE);
+  }
+
+  private async resolveSegmentStops(event: HoldSeatsRequestedV1Type): Promise<{
+    fromStop: RouteStop;
+    toStop: RouteStop;
+    distance: number;
+  } | null> {
+    const MAX_POSTGRES_INT = 2147483647;
+    const { scheduleId, fromSequence, toSequence, fromStaionId, toStationId } =
+      event;
+
+    let fromStop =
+      fromSequence > 0 && fromSequence <= MAX_POSTGRES_INT
+        ? await this.routeStopRepository.findByScheduleAndSequence(
+            scheduleId,
+            fromSequence,
+          )
+        : null;
+
+    let toStop =
+      toSequence > 0 && toSequence <= MAX_POSTGRES_INT
+        ? await this.routeStopRepository.findByScheduleAndSequence(
+            scheduleId,
+            toSequence,
+          )
+        : null;
+
+    if (!fromStop && fromStaionId) {
+      fromStop = await this.routeStopRepository.findByScheduleAndStation(
+        scheduleId,
+        fromStaionId,
+      );
+    }
+
+    if (!toStop && toStationId) {
+      toStop = await this.routeStopRepository.findByScheduleAndStation(
+        scheduleId,
+        toStationId,
+      );
+    }
+
+    if (
+      !fromStop ||
+      !toStop ||
+      fromStop.sequenceNumber >= toStop.sequenceNumber
+    ) {
+      return null;
+    }
+
+    const distance = Math.max(
+      0,
+      (toStop.distanceFromStart ?? 0) - (fromStop.distanceFromStart ?? 0),
+    );
+
+    return { fromStop, toStop, distance };
+  }
+
+  private async fetchSeatMap(
+    scheduleId: string,
+    seatInventoryIds: string[],
+  ): Promise<Map<string, SeatInventory> | null> {
+    const seats = await this.seatInventoryRepository.getBySchedule(scheduleId);
+    const seatById = new Map(seats.map((s) => [s.id, s]));
+    const hasMissing = seatInventoryIds.some((id) => !seatById.has(id));
+    if (hasMissing) return null;
+    return seatById;
+  }
+
+  private async commitHoldTransaction(
+    event: HoldSeatsRequestedV1Type,
+    eventKey: string,
+    fromStop: RouteStop,
+    toStop: RouteStop,
+    distance: number,
+    seatById: Map<string, SeatInventory>,
+  ): Promise<HoldSeatsOutcome> {
+    const { bookingId, scheduleId, seatInventoryIds } = event;
+    const holdExpiresAt = new Date(Date.now() + event.holdTtlMs);
+    const sortedSeatInventoryIds = [...seatInventoryIds].sort((a, b) =>
+      a.localeCompare(b),
+    );
+    const effectiveFromSeq = fromStop.sequenceNumber;
+    const effectiveToSeq = toStop.sequenceNumber;
+
+    const allocationRows = seatInventoryIds.map((id) => {
+      const seat = seatById.get(id)!;
+      const pricePerKm = Number(seat.pricePerKm);
+      const price =
+        distance > 0
+          ? Number((distance * pricePerKm).toFixed(2))
+          : Number(pricePerKm.toFixed(2));
+      return {
+        scheduleId,
+        seatInventoryId: id,
+        bookingId,
+        fromStationId: fromStop.stationId,
+        toStationId: toStop.stationId,
+        fromSequence: effectiveFromSeq,
+        toSequence: effectiveToSeq,
+        status: AllocationStatus.HELD,
+        holdExpiresAt,
+        price,
+      };
+    });
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        if (await this.idempotencyRepository.exists(eventKey, tx)) return;
+
+        await this.seatInventoryRepository.lockSeats(
+          sortedSeatInventoryIds,
+          tx,
+        );
+
+        const hasOverlap =
+          await this.seatAllocationRepository.hasOverlappingAllocation(
+            scheduleId,
+            sortedSeatInventoryIds,
+            effectiveFromSeq,
+            effectiveToSeq,
+            tx,
+          );
+
+        if (hasOverlap) {
+          throw new Error("SEGMENT_CONFLICT");
+        }
+
+        await this.seatAllocationRepository.createMany(allocationRows, tx);
+
+        const createdAllocations =
+          await this.seatAllocationRepository.findByBookingId(bookingId, tx);
+
+        const historyData = createdAllocations.map((a) => ({
+          allocationId: a.id,
+          oldStatus: AllocationStatus.HELD,
+          newStatus: AllocationStatus.HELD,
+          reason: "Seat hold requested",
+        }));
+        await this.seatAllocationRepository.createHistoryMany(historyData, tx);
+
+        await this.idempotencyRepository.create(eventKey, tx);
+
+        await this.outboxRepository.insert(tx, {
+          aggregateType: "SeatAllocation",
+          aggregateId: bookingId,
+          eventType: EVENT_TYPES.INVENTORY_SEATS_HELD,
+          topic: KAFKA_TOPICS.INVENTORY_SEATS_HELD,
+          payload: {
+            eventId: crypto.randomUUID(),
+            bookingId,
+            allocations: seatInventoryIds.map((id) => {
+              const seat = seatById.get(id)!;
+              return {
+                seatId: seat.seatId,
+                seatInventoryId: id,
+                coachNumber: seat.coachNumber,
+                seatNumber: seat.seatNumber,
+                seatType: seat.seatType,
+                price: Number(
+                  (Number(seat.pricePerKm) * Math.max(distance, 1)).toFixed(2),
+                ),
+              } satisfies SeatAllocationV1Type;
+            }),
+            holdExpiresAt,
+            createdAt: new Date(),
+          } satisfies SeatsHeldV1Type,
+        });
+      });
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      if (errMsg === "SEGMENT_CONFLICT") {
+        logger.warn(
+          { module: "seat-allocation-service", bookingId },
+          "Segment overlap conflict detected during database check",
+        );
+        return this.fail(
+          event,
+          "SEGMENT_CONFLICT",
+          "One or more requested seat segments overlap with an active booking.",
+          [...seatInventoryIds],
+        );
+      }
+
+      logger.error(
+        {
+          module: "seat-allocation-service",
+          scheduleId,
+          bookingId,
+          err:
+            err instanceof Error
+              ? { message: err.message, stack: err.stack }
+              : err,
+        },
+        "holdSeats transaction failed",
+      );
+      return this.fail(
+        event,
+        "INTERNAL_ERROR",
+        "Failed to persist seat allocations.",
+        [...seatInventoryIds],
+      );
+    }
+
+    logger.info(
+      {
+        module: "seat-allocation-service",
+        scheduleId,
+        bookingId,
+        allocationCount: allocationRows.length,
+        holdExpiresAt: holdExpiresAt.toISOString(),
+      },
+      "Seat hold committed successfully",
+    );
+
+    return {
+      kind: "held",
+      payload: {
+        eventId: crypto.randomUUID(),
+        bookingId,
+        allocations: allocationRows.map((row) => {
+          const seat = seatById.get(row.seatInventoryId)!;
+          return {
+            seatId: seat.seatId,
+            seatInventoryId: row.seatInventoryId,
+            coachNumber: seat.coachNumber,
+            seatNumber: seat.seatNumber,
+            seatType: seat.seatType,
+            price: row.price,
+          } satisfies SeatAllocationV1Type;
+        }),
+        holdExpiresAt,
+        createdAt: new Date(),
+      },
+    };
+  }
+
+  /**
+   * Confirms held seat allocations for a booking when payment succeeds.
+   * Updates status to CONFIRMED and logs history.
+   *
+   * @param event Confirmation details.
+   */
+  async confirmSeats(event: ConfirmSeatsArgs): Promise<void> {
+    const { eventId, bookingId } = event;
+    const eventKey = `booking:confirm:${eventId}`;
+
+    logger.info(
+      { module: "seat-allocation-service", eventId, bookingId },
+      "Processing confirmSeats request",
+    );
+
+    if (await this.idempotencyRepository.exists(eventKey)) {
+      logger.info(
+        { module: "seat-allocation-service", eventKey },
+        "ConfirmSeats event already processed, skipping",
+      );
+      return;
+    }
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        if (await this.idempotencyRepository.exists(eventKey, tx)) return;
+
+        const allocations = await this.seatAllocationRepository.findByBookingId(
+          bookingId,
+          tx,
+        );
+        const heldAllocations = allocations.filter(
+          (a) => a.status === AllocationStatus.HELD,
+        );
+
+        if (heldAllocations.length === 0) {
+          logger.warn(
+            { module: "seat-allocation-service", bookingId },
+            "No HELD allocations found to confirm for this booking",
+          );
+        } else {
+          await this.seatAllocationRepository.updateManyStatusByBooking(
+            bookingId,
+            AllocationStatus.CONFIRMED,
+            tx,
+          );
+
+          const historyData = heldAllocations.map((a) => ({
+            allocationId: a.id,
+            oldStatus: AllocationStatus.HELD,
+            newStatus: AllocationStatus.CONFIRMED,
+            reason: "Booking payment confirmed",
+          }));
+          await this.seatAllocationRepository.createHistoryMany(
+            historyData,
+            tx,
+          );
+        }
+
+        await this.idempotencyRepository.create(eventKey, tx);
+      });
+
+      logger.info(
+        { module: "seat-allocation-service", bookingId },
+        "Booking confirmation processed successfully",
+      );
+    } catch (error) {
+      logger.error(
+        { module: "seat-allocation-service", bookingId, error },
+        "Error processing booking confirmation",
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Releases and cancels seat allocations for a booking.
+   * Updates status to CANCELLED and logs history.
+   *
+   * @param event Cancellation details.
+   */
+  async cancelSeats(event: CancelSeatsArgs): Promise<void> {
+    const { eventId, bookingId } = event;
+    const eventKey = `booking:cancel:${eventId}`;
+
+    logger.info(
+      { module: "seat-allocation-service", eventId, bookingId },
+      "Processing cancelSeats request...",
+    );
+
+    if (await this.idempotencyRepository.exists(eventKey)) {
+      logger.info(
+        { module: "seat-allocation-service", eventKey },
+        "CancelSeats event already processed, skipping",
+      );
+      return;
+    }
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        if (await this.idempotencyRepository.exists(eventKey, tx)) return;
+
+        const allocations = await this.seatAllocationRepository.findByBookingId(
+          bookingId,
+          tx,
+        );
+        const activeAllocations = allocations.filter(
+          (a) =>
+            a.status === AllocationStatus.HELD ||
+            a.status === AllocationStatus.CONFIRMED,
+        );
+
+        if (activeAllocations.length === 0) {
+          logger.warn(
+            { module: "seat-allocation-service", bookingId },
+            "No active allocations found to release for this booking",
+          );
+        } else {
+          await this.seatAllocationRepository.updateManyStatusByBookingAndStatuses(
+            bookingId,
+            AllocationStatus.CANCELLED,
+            [AllocationStatus.HELD, AllocationStatus.CONFIRMED],
+            tx,
+          );
+
+          const historyData = activeAllocations.map((a) => ({
+            allocationId: a.id,
+            oldStatus: a.status,
+            newStatus: AllocationStatus.CANCELLED,
+            reason: "Booking cancelled / payment failed",
+          }));
+          await this.seatAllocationRepository.createHistoryMany(
+            historyData,
+            tx,
+          );
+        }
+
+        await this.idempotencyRepository.create(eventKey, tx);
+      });
+
+      logger.info(
+        { module: "seat-allocation-service", bookingId },
+        "Booking cancellation processed successfully",
+      );
+    } catch (error) {
+      logger.error(
+        { module: "seat-allocation-service", bookingId, error },
+        "Error processing booking cancellation",
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Writes a `SeatsHoldFailedV1` outbox row inside its own transaction
+   * so the booking-side orchestrator sees the failure reply.
+   *
+   * @param event - The originating hold-seats event (carries `bookingId`).
+   * @param reason - Stable failure reason code from {@link SeatHoldFailureReasonType}.
+   * @param message - Human-readable detail (no PII).
+   * @param failedSeatInventoryIds - Optional list of seats that failed.
+   */
+  private async fail(
+    event: HoldSeatsRequestedV1Type,
+    reason: SeatHoldFailureReasonType,
+    message: string,
+    failedSeatInventoryIds?: string[],
+  ): Promise<{ kind: "failed"; payload: SeatsHoldFailedV1Type }> {
+    const payload: SeatsHoldFailedV1Type = {
+      eventId: crypto.randomUUID(),
+      bookingId: event.bookingId,
+      reason,
+      message,
+      failedSeatInventoryIds,
+      createdAt: new Date(),
+    };
+
+    await this.prisma.$transaction(async (tx) => {
+      await this.outboxRepository.insert(tx, {
+        aggregateType: "SeatAllocation",
+        aggregateId: event.bookingId,
+        eventType: EVENT_TYPES.INVENTORY_SEATS_HOLD_FAILED,
+        topic: KAFKA_TOPICS.INVENTORY_SEATS_HOLD_FAILED,
+        payload,
+      });
+    });
+
+    logger.warn(
+      {
+        module: "seat-allocation-service",
+        scheduleId: event.scheduleId,
+        bookingId: event.bookingId,
+        reason,
+        failedSeatCount: failedSeatInventoryIds?.length ?? 0,
+      },
+      "Seat hold failed",
+    );
+
+    return { kind: "failed", payload };
+  }
+}

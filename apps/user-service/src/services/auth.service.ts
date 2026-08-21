@@ -573,10 +573,7 @@ export class AuthService {
       userAgent,
     );
 
-    logger.info(
-      { module: "auth", userId: user.id },
-      "User logged in successfully",
-    );
+    logger.info({ module: "auth" }, "User logged in successfully");
 
     // 5. Publish UserLoggedInV1 notification event to Kafka (non-blocking best-effort)
     const loginEvent: UserLoggedInV1Type = {

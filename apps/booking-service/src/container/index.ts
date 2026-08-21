@@ -4,6 +4,7 @@ const bookingContainer = BookingContainer.getInstance();
 
 export const {
   bookingController,
+  bookingEventsController,
   bookingRepository,
   bookingService,
   outboxRepository,

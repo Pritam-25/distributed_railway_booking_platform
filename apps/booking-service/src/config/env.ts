@@ -42,6 +42,52 @@ export const env = createEnv({
         message: "KAFKA_BROKERS must include at least one broker",
       }),
     KAFKA_CLIENT_ID: z.string().default("inventory-service"),
+
+    /**
+     * TTL for the Redis idempotency `PROCESSING` lease held while a
+     * consumer is working on a saga-reply event. Must exceed the worst-case
+     * orchestrator handler duration; if it expires while a consumer is
+     * still running, a Kafka redelivery can double-process. The default
+     * 60s is well above the saga-reply handler's < 5s typical duration.
+     */
+    SAGA_IDEMPOTENCY_PROCESSING_LEASE_SEC: z.coerce
+      .number()
+      .int()
+      .min(5)
+      .max(600)
+      .default(60),
+
+    /**
+     * TTL for the Redis idempotency `PROCESSED` marker kept after a saga
+     * reply has been handled. The marker exists to dedupe Kafka
+     * redeliveries; 7 days matches the broker retention default.
+     */
+    SAGA_IDEMPOTENCY_PROCESSED_TTL_SEC: z.coerce
+      .number()
+      .int()
+      .min(60)
+      .max(2592000)
+      .default(604800),
+
+    /**
+     * Keyspace prefix for booking-service saga-reply idempotency keys.
+     * Keeps the booking-service namespace distinct from any other Redis
+     * idempotency keys (notification-service uses its own).
+     */
+    SAGA_IDEMPOTENCY_KEYSPACE: z.string().default("booking-service:saga"),
+
+    /**
+     * Deadline (ms) for the synchronous `inventory.ValidateBooking` gRPC
+     * pre-flight called from BookingService.createBooking. Must be lower
+     * than the api-gateway request timeout. The default 3s matches the
+     * underlying gRPC client's `defaultTimeoutMs`.
+     */
+    BOOKING_VALIDATE_DEADLINE_MS: z.coerce
+      .number()
+      .int()
+      .min(100)
+      .max(10000)
+      .default(3000),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,
