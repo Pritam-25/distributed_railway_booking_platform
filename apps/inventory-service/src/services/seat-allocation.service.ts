@@ -1,6 +1,7 @@
 import {
   AllocationStatus,
   ScheduleInventoryStatus,
+  type Prisma,
   type PrismaClient,
   type RouteStop,
   type SeatInventory,
@@ -245,12 +246,15 @@ export class SeatAllocationService {
   private async fetchSeatMap(
     scheduleId: string,
     seatInventoryIds: string[],
+    tx?: Prisma.TransactionClient,
   ): Promise<Map<string, SeatInventory> | null> {
-    const seats = await this.seatInventoryRepository.getBySchedule(scheduleId);
-    const seatById = new Map(seats.map((s) => [s.id, s]));
-    const hasMissing = seatInventoryIds.some((id) => !seatById.has(id));
-    if (hasMissing) return null;
-    return seatById;
+    const seats = await this.seatInventoryRepository.findManyByIds(
+      scheduleId,
+      seatInventoryIds,
+      tx,
+    );
+    if (seats.length !== seatInventoryIds.length) return null;
+    return new Map(seats.map((s) => [s.id, s]));
   }
 
   private async commitHoldTransaction(

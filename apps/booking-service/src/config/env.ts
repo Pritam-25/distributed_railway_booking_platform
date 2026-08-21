@@ -4,7 +4,7 @@ import { z } from "zod";
 
 export const env = createEnv({
   server: {
-    PORT: z.coerce.number().int().min(1).max(65535).default(4003),
+    PORT: z.coerce.number().int().min(1).max(65535).default(4005),
     INVENTORY_GRPC_URL: z.string().default("localhost:50051"),
     NODE_ENV: z
       .enum(["development", "production", "test"])
@@ -25,7 +25,7 @@ export const env = createEnv({
       },
     ),
     SEAT_HOLD_TTL_MS: z.coerce.number().int().default(600000),
-    SERVICE_NAME: z.string().default("inventory-service"),
+    SERVICE_NAME: z.string().default("booking-service"),
     OTEL_EXPORTER_OTLP_ENDPOINT: z.url().default("http://localhost:4318"),
     OTEL_DEBUG: z.enum(["true", "false"]).default("false"),
     LOKI_HOST: z.url().optional(),

@@ -77,6 +77,27 @@ export class SeatInventoryRepository {
   }
 
   /**
+   * Retrieves seat inventory records by schedule ID and seat inventory IDs.
+   *
+   * @param scheduleId - The unique ID of the schedule.
+   * @param ids - Array of seat inventory record IDs.
+   * @param tx - Optional Prisma transaction client.
+   * @returns A promise resolving to the matching seat inventory records.
+   */
+  async findManyByIds(
+    scheduleId: string,
+    ids: string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<SeatInventory[]> {
+    return this.getClient(tx).seatInventory.findMany({
+      where: {
+        scheduleId,
+        id: { in: ids },
+      },
+    });
+  }
+
+  /**
    * Performs SELECT ... FOR UPDATE row-level locking on seat inventory records.
    *
    * @param ids - Array of seat inventory record IDs to lock.
@@ -84,8 +105,9 @@ export class SeatInventoryRepository {
    */
   async lockSeats(ids: string[], tx: Prisma.TransactionClient): Promise<void> {
     if (ids.length === 0) return;
+    const placeholders = ids.map((_, i) => `$${i + 1}`).join(",");
     await tx.$executeRawUnsafe(
-      `SELECT id FROM seat_inventory WHERE id IN (${ids.map((_, i) => `$${i + 1}`).join(",")}) FOR UPDATE`,
+      `SELECT id FROM seat_inventory WHERE id IN (${placeholders}) FOR UPDATE`,
       ...ids,
     );
   }

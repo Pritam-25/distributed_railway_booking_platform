@@ -30,6 +30,7 @@
     "@types/node": "^22.19.21",
     "@types/otp-generator": "^4.0.2",
     "js-yaml": "^4.1.0",
+    "prisma": "^7.8.0",
     "tsc-alias": "^1.9.0",
     "tsx": "^4.23.0"
   },
@@ -45,7 +46,6 @@
     "@irctc/telemetry": "workspace:*",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
-    "prisma": "^7.8.0",
     "@t3-oss/env-core": "^0.13.11",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
