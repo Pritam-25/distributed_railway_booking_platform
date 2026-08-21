@@ -27,7 +27,7 @@ routeStationRouter.use(requireAdmin);
 
 /**
  * @route GET /api/v1/admin/routes
- * @desc Retrieve a paginated list of all routes
+ * @description Retrieve a paginated list of all routes
  */
 routeRouter.get(
   "/",
@@ -37,7 +37,7 @@ routeRouter.get(
 
 /**
  * @route GET /api/v1/admin/routes/:routeId
- * @desc Retrieve a single route by ID with ordered station stops
+ * @description Retrieve a single route by ID with ordered station stops
  */
 routeRouter.get(
   "/:routeId",
@@ -47,7 +47,7 @@ routeRouter.get(
 
 /**
  * @route POST /api/v1/admin/routes/:routeId/stations
- * @desc Add a new station stop to a route
+ * @description Add a new station stop to a route
  */
 routeRouter.post(
   "/:routeId/stations",
@@ -58,7 +58,7 @@ routeRouter.post(
 
 /**
  * @route DELETE /api/v1/admin/routes/:routeId
- * @desc Soft delete / deactivate a route by ID
+ * @description Soft delete / deactivate a route by ID
  */
 routeRouter.delete(
   "/:routeId",
@@ -68,7 +68,7 @@ routeRouter.delete(
 
 /**
  * @route PATCH /api/v1/admin/routes/:routeId/status
- * @desc Activate or deactivate a route by ID
+ * @description Activate or deactivate a route by ID
  */
 routeRouter.patch(
   "/:routeId/status",
@@ -81,7 +81,7 @@ routeRouter.patch(
 
 /**
  * @route PATCH /api/v1/admin/route-stations/:routeStationId
- * @desc Update route station stop sequence details
+ * @description Update route station stop sequence details
  */
 routeStationRouter.patch(
   "/:routeStationId",
@@ -92,7 +92,7 @@ routeStationRouter.patch(
 
 /**
  * @route DELETE /api/v1/admin/route-stations/:routeStationId
- * @desc Physically remove a station stop from a route
+ * @description Physically remove a station stop from a route
  */
 routeStationRouter.delete(
   "/:routeStationId",

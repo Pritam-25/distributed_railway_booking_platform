@@ -1,5 +1,5 @@
 import {
-  CircuitBreakerOptions,
+  type CircuitBreakerOptions,
   CircuitBreakerState,
   CircuitBreakerOpenError,
   CircuitBreakerHalfOpenError,

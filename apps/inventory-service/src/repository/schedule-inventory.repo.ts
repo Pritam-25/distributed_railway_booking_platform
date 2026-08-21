@@ -36,7 +36,7 @@ export class ScheduleInventoryRepository {
   async findByScheduleId(scheduleId: string, tx?: Prisma.TransactionClient) {
     return this.getClient(tx).scheduleInventory.findUnique({
       where: { scheduleId },
-      select: { version: true },
+      select: { version: true, status: true },
     });
   }
 
@@ -57,33 +57,32 @@ export class ScheduleInventoryRepository {
   }
 
   /**
-   * Updates the status and version of a schedule inventory record using a compare-and-swap pattern.
+   * Atomically updates the status and version of a schedule inventory record,
+   * ensuring the update only succeeds if the incoming version is strictly greater.
    *
    * @param scheduleId - The unique ID of the schedule.
    * @param status - The new status of the schedule inventory.
    * @param version - The new version of the schedule inventory.
-   * @param expectedVersion - The expected current version in the database.
    * @param tx - Optional Prisma transaction client.
-   * @returns A promise resolving to true if exactly one row was updated, false otherwise.
+   * @returns A promise resolving to true if the update succeeded, or false if the version was stale.
    */
   async updateStatus(
     scheduleId: string,
     status: ScheduleInventoryStatus,
     version: number,
-    expectedVersion: number,
     tx?: Prisma.TransactionClient,
   ): Promise<boolean> {
     const result = await this.getClient(tx).scheduleInventory.updateMany({
       where: {
         scheduleId,
-        version: expectedVersion,
+        version: { lt: version },
       },
       data: {
         status,
         version,
       },
     });
-    return result.count === 1;
+    return result.count > 0;
   }
 
   /**

@@ -7,30 +7,37 @@ import { ERROR_CODES } from "@utils/errors";
 import { AUTH_DURATIONS, REDIS_KEYS } from "@utils/constants";
 
 /**
- * Middleware that checks if a user is logged in with a valid session.
+ * Verifies the active session in Redis and extends its TTL on every authenticated request.
  *
- * What this middleware does:
- * 1. Checks if the request has a session ID. If not, stops and returns a "not authorized" error.
- * 2. Loads the session data from Redis. If the session is missing, stops and returns a "session expired or logged out" error.
- * 3. Updates the session's last active time to now.
- * 4. Extends the session's expiration timer in Redis so the user stays logged in while actively using the app.
+ * @remarks
+ * ### What This Middleware Does
+ * 1. **Session Context Check**: Verifies `req.user.sessionId` was attached upstream by `trustGatewayHeaders`. If missing, short-circuits with `401`.
+ * 2. **Stateful Redis Verification**: Loads session payload from `auth:session:<sessionId>` in Redis. If missing (revoked, logged out, or expired), short-circuits with `401`.
+ * 3. **Activity Tracking**: Updates the session's `lastUsedAt` timestamp.
+ * 4. **Sliding Session Window**: Resets the TTL of the session payload key and user-sessions index set in Redis to {@link AUTH_DURATIONS.SESSION_TTL_SECONDS}.
  *
- * Why we need this (alongside trustGatewayHeaders):
- * - trustGatewayHeaders only extracts the identity claims from headers injected by the API gateway (stateless). Because it doesn't talk to Redis, it has two major limitations:
- *     1. No immediate revocation: It cannot detect if a session was deleted (e.g. if the user logged out, changed their password, or got banned) before the JWT's built-in expiry time runs out at the gateway edge.
- *     2. No sliding session window: It cannot extend the user's active session length based on their activity.
- * - This middleware checks if the session is still active in Redis (stateful), solving both limitations by enabling immediate session termination and resetting the session expiration time on every request.
+ * ### Why This Is Needed (Stateful vs. Stateless Auth)
+ * - `trustGatewayHeaders` only extracts stateless JWT identity claims injected by the API gateway edge. It does not communicate with Redis, which causes two limitations:
+ *   - **No Immediate Revocation**: It cannot detect if a session was revoked (logout, password reset, or account ban) before the JWT's built-in expiry.
+ *   - **No Sliding Session Window**: It cannot extend session lifetime based on user activity.
+ * - `sessionMiddleware` provides **stateful verification** against Redis, enabling instant session revocation and sliding session expiration.
  *
- * @param req - The Request object containing user details.
- * @param _res - The Response object (unused).
- * @param next - The function to call the next middleware/handler.
- * @throws {ApiError} - If there is no session ID, or if the session is expired/logged out.
+ * ### Side Effects
+ * - Reads `auth:session:<sessionId>` from Redis.
+ * - Rewrites `auth:session:<sessionId>` with updated `lastUsedAt` and refreshed TTL.
+ * - Touches TTL on `user:sessions:<userId>` index set.
+ *
+ * ### Response Guarantees
+ * Downstream handlers can rely on the user's session having been validated in Redis and refreshed before execution.
+ * @param req - Express request object containing user details.
+ * @param _res - Express response object (unused).
+ * @param next - Express continuation function to call the next middleware or handler.
  */
 export const sessionMiddleware = async (
   req: Request,
   _res: Response,
   next: NextFunction,
-) => {
+): Promise<void> => {
   const user = req.user;
 
   if (!user?.sessionId) {
@@ -50,11 +57,11 @@ export const sessionMiddleware = async (
     );
   }
 
-  // Optional: update lastUsedAt to now
+  // 1. Refresh lastUsedAt so the session blob reflects the current request
   const session = JSON.parse(sessionJson);
   session.lastUsedAt = new Date().toISOString();
 
-  // extend the session TTL to (30 days) to prevent idle session logout (sliding session window)
+  // 2. Extend the session TTL — implements the sliding session window
   await redis.set(
     sessionKey,
     JSON.stringify(session),
@@ -62,7 +69,7 @@ export const sessionMiddleware = async (
     AUTH_DURATIONS.SESSION_TTL_SECONDS,
   );
 
-  // Refresh the user-sessions index TTL to keep sessions discoverable
+  // 3. Refresh the user-sessions index TTL to keep sessions discoverable
   await redis.expire(
     REDIS_KEYS.userSessions(user.userId),
     AUTH_DURATIONS.SESSION_TTL_SECONDS,

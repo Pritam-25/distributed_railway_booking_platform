@@ -65,8 +65,7 @@ Content-Type: application/json
   "firstName": "John",
   "lastName": "Doe",
   "email": "{{fallbackEmail}}",
-  "password": "Password@123",
-  "confirmPassword": "Password@123"
+  "password": "Password@123"
 }
 
 ### Step 2: Verify OTP & Complete Registration
@@ -91,8 +90,8 @@ POST {{auth}}/login
 Content-Type: application/json
 
 {
-  "email": "{{fallbackEmail}}",
-  "password": "Password@123"
+  "email": "maityp2024@gmail.com",
+  "password": "maityP2024gmail.com"
 }
 
 ### Refresh Access/Refresh Tokens (Refresh Token Rotation)

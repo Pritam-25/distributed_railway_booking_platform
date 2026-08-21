@@ -4,8 +4,6 @@ import { adminAuthController } from "@container";
 import { adminLoginSchema } from "@dto";
 import { requireAdmin } from "@middleware";
 
-const router: Router = Router();
-
 /**
  * all routes are private (Admin only via Gateway)
  *
@@ -13,9 +11,11 @@ const router: Router = Router();
  * Admin user is seeded at the time of DB setup.
  * Or admin user can only be created by platform-admin (Super Admin)
  */
+const router: Router = Router();
+
 /**
  * @route POST /api/v1/admin/auth/login
- * @desc Admin Login
+ * @description Admin Login
  */
 router.post(
   "/login",
@@ -27,7 +27,7 @@ router.post(
 
 /**
  * @route POST /api/v1/admin/auth/logout
- * @desc Admin Logout
+ * @description Admin Logout
  */
 router.post(
   "/logout",

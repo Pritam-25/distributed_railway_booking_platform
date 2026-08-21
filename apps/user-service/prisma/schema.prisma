@@ -15,10 +15,13 @@ datasource db {
 model User {
   id            String   @id @default(uuid())
   email         String   @unique
-  firstName     String
-  lastName      String
+  firstName     String   @map("first_name")
+  lastName      String   @map("last_name")
   password      String
-  emailVerified Boolean  @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  emailVerified Boolean  @default(false) @map("email_verified")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
 }
+

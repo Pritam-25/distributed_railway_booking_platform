@@ -9,7 +9,7 @@ import type {
   SessionSummaryDto,
   VerifyPasswordResetOtpResponseDto,
   ForgotPasswordResponseDto,
-  AuthSessionRecord,
+  SessionRecord,
 } from "@dto";
 import type { UserRepository } from "@repository";
 import { logger } from "@irctc/logger";
@@ -25,21 +25,49 @@ import {
   type OTPRequestedV1Type,
   type UserLoggedInV1Type,
 } from "@irctc/contracts";
-import { generateOtp, getIpLocation } from "@utils";
+import { generateOtp, getIpLocation, verifyRefreshToken } from "@utils";
 import type {
   OtpEventPublisher,
   UserLoggedInEventPublisher,
 } from "@publishers";
 import { COMMON_ERROR_CODES, ApiError } from "@irctc/errors";
 import { AUTH_DURATIONS, REDIS_KEYS } from "@utils/constants";
-import { AuthMapper } from "../mappers/auth.mapper.js";
-import type { RefreshTokenPayload } from "@irctc/middleware";
+import { UserMapper } from "@mappers";
 
 /**
- * Service handling authentication-related business logic, including registration flows,
- * OTP requests, and password hashing/verification.
+ * ## AuthService
+ *
+ * Core domain service managing user authentication, session management,
+ * OTP flows, and password recovery.
+ *
+ * @remarks
+ * ### Responsibilities
+ * - Orchestrates registration, login, session lifecycle, and password
+ *   recovery workflows.
+ * - Enforces security policies: bcrypt password hashing, JWT token
+ *   rotation, device fingerprint binding, and refresh-token reuse
+ *   detection.
+ * - Maintains ephemeral state (sessions, OTP attempts, password reset
+ *   tokens) in Redis.
+ *
+ * ### Storage & Persistence
+ * - **PostgreSQL**: User profiles and credential hashes via
+ *   {@link UserRepository}.
+ * - **Redis**: Active sessions (`auth:session:<id>`), per-user session
+ *   index (`user:sessions:<id>`), and OTP / password reset state.
+ *
+ * ### Events Published
+ * - `OTPRequestedV1` via {@link OtpEventPublisher}.
+ * - `UserLoggedInV1` via {@link UserLoggedInEventPublisher} (best-effort).
  */
 export class AuthService {
+  /**
+   * Creates an instance of AuthService.
+   *
+   * @param repo - Injected UserRepository instance.
+   * @param otpPublisher - Injected OtpEventPublisher instance.
+   * @param loginPublisher - Injected UserLoggedInEventPublisher instance.
+   */
   constructor(
     private readonly repo: UserRepository,
     private readonly otpPublisher: OtpEventPublisher,
@@ -47,7 +75,13 @@ export class AuthService {
   ) {}
 
   /**
-   * Generates an access token for a user.
+   * Signs a short-lived JWT access token carrying the user identity, the
+   * active session ID, and the user's email.
+   *
+   * @param userId - Unique user identifier.
+   * @param sessionId - Active authentication session ID.
+   * @param email - User's email address.
+   * @returns Signed JWT access token string.
    */
   private generateAccessToken(
     userId: string,
@@ -64,7 +98,12 @@ export class AuthService {
   }
 
   /**
-   * Generates a refresh token for a user.
+   * Signs a long-lived JWT refresh token carrying the user identity and
+   * the active session ID.
+   *
+   * @param userId - Unique user identifier.
+   * @param sessionId - Active authentication session ID.
+   * @returns Signed JWT refresh token string.
    */
   private generateRefreshToken(userId: string, sessionId: string): string {
     return jwt.sign(
@@ -77,7 +116,32 @@ export class AuthService {
   }
 
   /**
-   * Persists a new Redis session record and updates the user's sessions index atomically.
+   * Persists a new Redis session record and updates the user's session
+   * index atomically.
+   *
+   * @remarks
+   * ### Responsibilities
+   * - Hashes the refresh token with SHA-256 before storage.
+   * - Builds a session payload including user info, IP, User-Agent, and
+   *   geolocation.
+   * - Executes an atomic Redis `multi/exec` pipeline to write the session
+   *   and update the user index.
+   *
+   * ### Side Effects
+   * - **Redis**: Writes `auth:session:<sessionId>` and updates
+   *   `user:sessions:<userId>` with TTL.
+   *
+   * ### Consistency Guarantees
+   * - Executed atomically via Redis pipeline transaction.
+   * - Rolls back the session key and the set membership if the pipeline
+   *   reports an item-level error.
+   * @param userId - User identifier owning the session.
+   * @param sessionId - Unique session UUID.
+   * @param refreshToken - Raw refresh token string (hashed before storage).
+   * @param fingerprint - Device fingerprint string for binding.
+   * @param ipAddress - Request IP address.
+   * @param userAgent - Client User-Agent header string.
+   * @throws {Error} If Redis pipeline execution fails or any item errors.
    */
   private async createAuthSession(
     userId: string,
@@ -87,10 +151,12 @@ export class AuthService {
     ipAddress?: string,
     userAgent?: string,
   ): Promise<void> {
+    // 1. Hash incoming refresh token with SHA-256 for secure storage
     const refreshTokenHash = createHash("sha256")
       .update(refreshToken)
       .digest("hex");
 
+    // 2. Build session payload record
     const sessionData = {
       userId,
       fingerprint,
@@ -105,6 +171,7 @@ export class AuthService {
       ).toISOString(),
     };
 
+    // 3. Execute atomic Redis transaction to store session and update user index
     const results = await redis
       .multi()
       .set(
@@ -124,6 +191,7 @@ export class AuthService {
       throw new Error("Failed to persist authentication session");
     }
 
+    // 4. Handle pipeline execution errors with automatic rollback cleanup
     const hasRedisError = results.some(([error]) => error !== null);
     if (hasRedisError) {
       await Promise.allSettled([
@@ -135,45 +203,53 @@ export class AuthService {
     }
   }
 
+  /**
+   * Retrieves a user account by email address or throws.
+   *
+   * @param email - User email address to look up.
+   * @returns Found `User` record.
+   * @throws {ApiError}
+   * `USER_NOT_FOUND` — No user record exists with the provided email.
+   */
   private async requireUser(email: string) {
     const user = await this.repo.findUserByEmail(email);
     if (!user) {
-      logger.warn(
-        { module: "auth" },
-        "Forgot password request failed: User not found",
-      );
+      logger.warn({ module: "auth" }, "User not found");
       throw new ApiError(statusCode.notFound, ERROR_CODES.USER_NOT_FOUND);
     }
     return user;
   }
 
   /**
-   * Initiates the registration workflow.
+   * Initiates the registration workflow by generating and dispatching an
+   * OTP to the user's email.
    *
-   * Workflow:
-   * 1. Ensure the email is not already registered.
-   * 2. Generate an OTP.
-   * 3. Store OTP state in Redis.
-   * 4. Store pre-registration data in Redis.
-   * 5. Publish OTPRequestedV1 for asynchronous email delivery.
+   * @remarks
+   * ### Responsibilities
+   * - Validates that the email is not already registered.
+   * - Reuses the active OTP session for the email when one exists, or
+   *   generates a fresh 6-digit OTP and session.
+   * - Stores the hashed user password and pre-registration payload in Redis.
+   * - Publishes an `OTPRequestedV1` event to Kafka for email dispatch.
    *
-   * The OTP email is sent by Notification Service after consuming the
-   * Kafka event. This service never communicates directly with an
-   * email provider.
+   * ### Side Effects
+   * - **PostgreSQL**: Queries user existence by email.
+   * - **Redis**: Writes registration session and OTP hash with TTL.
+   * - **Kafka**: Publishes `OTPRequestedV1` event.
    *
-   * Consistency guarantee:
-   * If Kafka publishing fails, Redis registration state is rolled back
-   * so the user can safely retry registration.
-   *
-   * @param data Registration request.
-   * @returns Registration session identifier.
-   *
+   * ### Consistency Guarantees
+   * - If Kafka event publishing fails, newly created Redis OTP state is
+   *   rolled back so the user can safely retry.
+   * @param data - Registration request DTO containing email, password,
+   *   and name fields.
+   * @returns Registration session identifier string.
    * @throws {ApiError}
-   * - USER_ALREADY_EXISTS
-   * - KAFKA_PUBLISH_FAILED
+   * `USER_ALREADY_EXISTS` — User email is already registered in PostgreSQL.
+   * @throws {ApiError}
+   * `KAFKA_PUBLISH_FAILED` — OTP delivery event dispatch to Kafka failed.
    */
   async sendOtp(data: RegisterRequestDto): Promise<string> {
-    // 1. Check if user already exists to prevent spam/duplicate registrations
+    // 1. Check if user already exists to prevent duplicate registrations
     const existingUser = await this.repo.findUserByEmail(data.email);
     if (existingUser) {
       logger.warn(
@@ -229,8 +305,7 @@ export class AuthService {
       });
     }
 
-    // 3. Publish OTPRequestedV1. Roll back on failure so the user can
-    // safely retry without leaving a stale registration session.
+    // 3. Publish OTPRequestedV1 event to Kafka for email dispatch
     const event: OTPRequestedV1Type = {
       eventId: randomUUID(),
       email: data.email,
@@ -243,12 +318,11 @@ export class AuthService {
     try {
       await this.otpPublisher.publishOtpRequested(event);
     } catch (err) {
-      // Pre-registration flow has no userId; log eventId only.
       logger.error(
         { module: "auth", err, eventId: event.eventId, purpose: event.purpose },
         "OTP publish failed; rolling back Redis state",
       );
-      // Only roll back fully if this was a new session
+      // Roll back fully if this was a newly created session
       if (!existingSessionId) {
         await OtpService.deleteRegistrationSession(sessionId);
         await OtpService.deleteOtpSession(data.email);
@@ -265,18 +339,29 @@ export class AuthService {
   }
 
   /**
-   * Creates a verified user account and issues initial JWT tokens.
+   * Persists a new user record in PostgreSQL and establishes an active
+   * Redis auth session for that user.
    *
-   * This method is only invoked after OTP verification has succeeded.
-   * Password hashing has already been completed during the registration
-   * initiation phase.
+   * @remarks
+   * ### Responsibilities
+   * - Creates the user entity in PostgreSQL with `emailVerified: true`.
+   * - Issues the JWT access and refresh token pair.
+   * - Persists the Redis authentication session.
    *
-   * @param data Verified registration data.
-   * @param sessionId Registration session identifier.
-   * @param fingerprint Device fingerprint.
-   * @param ipAddress User's IP address.
-   * @param userAgent User's browser User-Agent header.
-   * @returns Auth response containing issued tokens.
+   * ### Side Effects
+   * - **PostgreSQL**: Inserts a row into the `User` table.
+   * - **Redis**: Stores the active authentication session.
+   *
+   * ### Consistency Guarantees
+   * - If Redis session creation fails after the PostgreSQL user record is
+   *   created, the new user record is automatically deleted (rolled back)
+   *   to prevent orphaned user accounts.
+   * @param data - Pre-registration session data retrieved from Redis.
+   * @param sessionId - Active registration session UUID.
+   * @param fingerprint - Device fingerprint string.
+   * @param ipAddress - User IP address.
+   * @param userAgent - User browser User-Agent.
+   * @returns Issued authentication tokens and created user profile.
    */
   private async registerUser(
     data: RegistrationSessionData,
@@ -285,6 +370,7 @@ export class AuthService {
     ipAddress?: string,
     userAgent?: string,
   ): Promise<AuthResponseDto> {
+    // 1. Create new user account in PostgreSQL database
     const user = await this.repo.createUser({
       firstName: data.firstName,
       lastName: data.lastName,
@@ -293,6 +379,7 @@ export class AuthService {
       emailVerified: true,
     });
 
+    // 2. Generate signed JWT access and refresh token pair
     const accessToken = this.generateAccessToken(
       user.id,
       sessionId,
@@ -300,6 +387,7 @@ export class AuthService {
     );
     const refreshToken = this.generateRefreshToken(user.id, sessionId);
 
+    // 3. Persist active auth session in Redis with automatic user rollback on failure
     try {
       await this.createAuthSession(
         user.id,
@@ -323,31 +411,38 @@ export class AuthService {
       "User registered successfully and session created",
     );
 
-    return AuthMapper.toAuthResponseDto(user, accessToken, refreshToken);
+    // 4. Return formatted authentication response payload
+    return UserMapper.toAuthResponseDto(user, accessToken, refreshToken);
   }
 
   /**
-   * Completes registration after successful OTP verification.
+   * Completes user registration after successful OTP verification.
    *
-   * Workflow:
-   * 1. Verify OTP.
-   * 2. Load pre-registration data from Redis.
-   * 3. Create the user in PostgreSQL.
-   * 4. Generate authentication tokens.
-   * 5. Remove temporary registration state.
+   * @remarks
+   * ### Responsibilities
+   * - Validates the OTP code against the stored session in Redis.
+   * - Retrieves the stored pre-registration payload.
+   * - Calls {@link registerUser} to persist the user in PostgreSQL and
+   *   establish the active session.
+   * - Cleans up the temporary registration session from Redis.
    *
-   * Registration cleanup is best effort and does not affect a
-   * successful registration response.
+   * ### Side Effects
+   * - **PostgreSQL**: Creates the user account.
+   * - **Redis**: Deletes the registration OTP session; creates the active
+   *   auth session.
    *
-   * @param sessionId Registration session identifier.
-   * @param data OTP verification request.
-   * @param fingerprint Device fingerprint.
-   * @param ipAddress User's IP address.
-   * @param userAgent User's browser User-Agent header.
-   * @returns Auth response containing issued tokens.
-   *
+   * ### Failure Guarantees
+   * - Session cleanup failures are caught and logged non-fatally, ensuring
+   *   the successful registration response is delivered to the user.
+   * @param sessionId - Registration session UUID from cookie.
+   * @param data - OTP verification payload containing the 6-digit code.
+   * @param fingerprint - Device fingerprint string.
+   * @param ipAddress - Request IP address.
+   * @param userAgent - Client User-Agent string.
+   * @returns Issued authentication tokens and user profile DTO.
    * @throws {ApiError}
-   * - REGISTRATION_SESSION_EXPIRED
+   * `REGISTRATION_SESSION_EXPIRED` — Registration session in Redis is
+   * missing or expired.
    */
   async verifyAndRegister(
     sessionId: string,
@@ -356,10 +451,10 @@ export class AuthService {
     ipAddress?: string,
     userAgent?: string,
   ): Promise<AuthResponseDto> {
-    // 1. Verify OTP
+    // 1. Verify OTP code against Redis session
     await OtpService.verifyOtp(sessionId, data.otp);
 
-    // 2. Retrieve registration data from Redis
+    // 2. Retrieve pre-registration session payload from Redis
     const regData = await OtpService.getRegistrationSession(sessionId);
     if (!regData) {
       logger.warn(
@@ -372,7 +467,7 @@ export class AuthService {
       );
     }
 
-    // 3. Execute registration using stored data
+    // 3. Execute user creation and session setup
     const authResponse = await this.registerUser(
       regData,
       sessionId,
@@ -381,7 +476,7 @@ export class AuthService {
       userAgent,
     );
 
-    // 4. Clean up sessions (best-effort; do not fail completed registration)
+    // 4. Clean up temporary registration session keys from Redis (best-effort)
     try {
       await OtpService.deleteRegistrationSession(sessionId);
       await OtpService.deleteOtpSession(regData.email);
@@ -393,26 +488,37 @@ export class AuthService {
   }
 
   /**
-   * Authenticates a user and creates a new device session.
+   * Authenticates a user with email and password credentials.
    *
-   * Workflow:
-   * 1. Validate email and password.
-   * 2. Generate access and refresh tokens.
-   * 3. Create a Redis-backed session.
-   * 4. Track the session for logout-all support.
-   * 5. Publish a UserLoggedInV1 event (best effort).
+   * @remarks
+   * ### Responsibilities
+   * - Validates the user email and bcrypt password hash.
+   * - Generates the access and refresh JWT token pair.
+   * - Establishes the active device session in Redis.
+   * - Dispatches a `UserLoggedInV1` notification event.
    *
-   * Login succeeds even if event publication fails because authentication
-   * is considered the primary operation while notifications are secondary.
+   * ### Side Effects
+   * - **PostgreSQL**: Queries the user record by email.
+   * - **Redis**: Stores active session metadata and the token hash.
+   * - **Kafka**: Publishes `UserLoggedInV1` event.
    *
-   * @param data Login credentials.
-   * @param fingerprint Device fingerprint used for session binding.
-   * @param ipAddress User's IP address.
-   * @param userAgent User's browser User-Agent header.
-   * @returns Auth response containing user details and JWT tokens.
+   * ### Consistency Guarantees
+   * - Session persistence in Redis completes before the tokens are returned
+   *   to the caller.
    *
+   * ### Failure Guarantees
+   * - Kafka login event publication is non-blocking; authentication succeeds
+   *   even if the notification event delivery fails.
+   * @param data - Validated login request payload containing email and password.
+   * @param fingerprint - Device fingerprint string for session binding.
+   * @param ipAddress - Request IP address.
+   * @param userAgent - Client User-Agent string.
+   * @returns Auth response object containing generated JWT tokens and user
+   *   profile DTO.
    * @throws {ApiError}
-   * - INVALID_CREDENTIALS
+   * `USER_NOT_FOUND` — User email is not registered in PostgreSQL.
+   * @throws {ApiError}
+   * `INVALID_CREDENTIALS` — Password does not match stored bcrypt hash.
    */
   async login(
     data: LoginRequestDto,
@@ -420,11 +526,17 @@ export class AuthService {
     ipAddress?: string,
     userAgent?: string,
   ): Promise<AuthResponseDto> {
-    // 1. Find user by email
+    // 1. Find user by email address
+    logger.debug({ module: "auth" }, "Finding user by email for login...");
     const user = await this.requireUser(data.email);
 
-    // 2. Verify password
+    // 2. Verify plaintext password against stored bcrypt hash
+    logger.debug(
+      { module: "auth", userId: user.id },
+      "Verifying user password...",
+    );
     const isPasswordValid = await bcrypt.compare(data.password, user.password);
+
     if (!isPasswordValid) {
       logger.warn({ module: "auth" }, "Login failed: Invalid password");
       throw new ApiError(
@@ -434,7 +546,11 @@ export class AuthService {
       );
     }
 
-    // 3. Generate Session and Tokens
+    // 3. Generate session UUID and JWT access/refresh token pair
+    logger.debug(
+      { module: "auth", userId: user.id },
+      "Generating session and tokens...",
+    );
     const sessionId = randomUUID();
     const accessToken = this.generateAccessToken(
       user.id,
@@ -443,7 +559,11 @@ export class AuthService {
     );
     const refreshToken = this.generateRefreshToken(user.id, sessionId);
 
-    // 4. Store session in Redis
+    // 4. Store active authentication session in Redis
+    logger.debug(
+      { module: "auth", userId: user.id },
+      "Creating auth session in Redis...",
+    );
     await this.createAuthSession(
       user.id,
       sessionId,
@@ -453,19 +573,9 @@ export class AuthService {
       userAgent,
     );
 
-    logger.info(
-      { module: "auth", userId: user.id },
-      "User logged in successfully",
-    );
+    logger.info({ module: "auth" }, "User logged in successfully");
 
-    /**
-     * Best-effort welcome email: the user has already authenticated
-     * and the session is persisted already created in Redis.
-     * If the Kafka publish fails, we don't want to roll back the
-     * login because it would create an inconsistent state for the user.
-     * The notification service will handle the event in its own time
-     * and will dedupe on eventId if a redelivery ever lands.
-     */
+    // 5. Publish UserLoggedInV1 notification event to Kafka (non-blocking best-effort)
     const loginEvent: UserLoggedInV1Type = {
       eventId: randomUUID(),
       userId: user.id,
@@ -476,6 +586,10 @@ export class AuthService {
     };
 
     try {
+      logger.debug(
+        { module: "auth", userId: user.id },
+        "Publishing UserLoggedInV1 event...",
+      );
       await this.loginPublisher.publishUserLoggedIn(loginEvent);
     } catch (err) {
       logger.error(
@@ -484,49 +598,60 @@ export class AuthService {
       );
     }
 
-    return AuthMapper.toAuthResponseDto(user, accessToken, refreshToken);
+    // 6. Return authentication response payload with tokens
+    return UserMapper.toAuthResponseDto(user, accessToken, refreshToken);
   }
 
   /**
-   * Issues a new access token and refresh token for an existing session.
+   * Rotates tokens and issues a new access/refresh pair (RTR).
    *
-   * Security protections:
-   * - Session existence validation
-   * - Device fingerprint verification
-   * - Refresh token rotation
-   * - Refresh token reuse detection
+   * @remarks
+   * ### Responsibilities
+   * - Decodes and verifies the incoming refresh JWT.
+   * - Validates the active Redis session existence and device fingerprint
+   *   binding.
+   * - Detects refresh token reuse attempts via SHA-256 token hash
+   *   comparisons.
+   * - Rotates the refresh token in Redis and updates the session
+   *   `lastUsedAt` timestamp.
    *
-   * If refresh token reuse is detected, all active sessions belonging to
-   * the user are revoked as a defensive security measure.
+   * ### Side Effects
+   * - **Redis**: Updates the session record with the new refresh token
+   *   hash and extended TTL.
    *
-   * @param refreshToken Existing refresh token.
-   * @param fingerprint Device fingerprint associated with the session.
-   * @returns Newly issued access and refresh tokens.
-   *
+   * ### Consistency Guarantees
+   * - If refresh token reuse is detected, all active sessions belonging to
+   *   the user are immediately revoked as a defensive security measure.
+   * @param refreshToken - Existing JWT refresh token string.
+   * @param fingerprint - Current client device fingerprint for the binding
+   *   check.
+   * @returns Newly issued access and refresh tokens with user profile DTO.
    * @throws {ApiError}
-   * - INVALID_REFRESH_TOKEN
-   * - SESSION_EXPIRED_OR_REVOKED
-   * - DEVICE_FINGERPRINT_MISMATCH
+   * `INVALID_REFRESH_TOKEN` — Token is invalid, malformed, or has been
+   * reused.
+   * @throws {ApiError}
+   * `SESSION_EXPIRED_OR_REVOKED` — Active session was not found in Redis.
+   * @throws {ApiError}
+   * `DEVICE_FINGERPRINT_MISMATCH` — Request device fingerprint does not
+   * match session fingerprint.
    */
   async refresh(
     refreshToken: string,
     fingerprint: string,
   ): Promise<AuthResponseDto> {
     try {
-      const decoded = jwt.verify(
-        refreshToken,
-        env.JWT_SECRET,
-      ) as RefreshTokenPayload;
-      const { sub: userId, sessionId } = decoded;
+      // 1. Decode and verify JWT refresh token signature
+      const decoded = verifyRefreshToken(refreshToken);
 
-      if (decoded.type !== "refresh") {
+      if (!decoded?.sessionId) {
         throw new ApiError(
           statusCode.unauthorized,
           ERROR_CODES.INVALID_REFRESH_TOKEN,
         );
       }
+      const { sub: userId, sessionId } = decoded;
 
-      // 1. Load session from Redis
+      // 2. Load active session record from Redis
       const sessionKey = REDIS_KEYS.authSession(sessionId);
       const sessionJson = await redis.get(sessionKey);
       if (!sessionJson) {
@@ -542,7 +667,7 @@ export class AuthService {
 
       const session = JSON.parse(sessionJson);
 
-      // 2. Verify Fingerprint
+      // 3. Verify device fingerprint binding
       if (session.fingerprint !== fingerprint) {
         logger.warn(
           { module: "auth", userId },
@@ -555,7 +680,7 @@ export class AuthService {
         );
       }
 
-      // 3. Hash incoming refresh token and compare (Reuse Detection)
+      // 4. Compare SHA-256 hash of incoming refresh token (Reuse Detection)
       const incomingHash = createHash("sha256")
         .update(refreshToken)
         .digest("hex");
@@ -572,8 +697,18 @@ export class AuthService {
         );
       }
 
-      // 4. Generate NEW tokens (Rotation)
-      const user = await this.requireUser(session.userId);
+      // 5. Generate NEW rotated access and refresh token pair
+      const user = await this.repo.findById(session.userId);
+      if (!user) {
+        logger.warn(
+          { module: "auth", userId: session.userId },
+          "Refresh failed: user record not found",
+        );
+        throw new ApiError(
+          statusCode.unauthorized,
+          ERROR_CODES.INVALID_REFRESH_TOKEN,
+        );
+      }
 
       const accessToken = this.generateAccessToken(
         user.id,
@@ -585,7 +720,7 @@ export class AuthService {
         .update(newRefreshToken)
         .digest("hex");
 
-      // 5. Update session in Redis with new refresh token and expiry time
+      // 6. Update session record in Redis with rotated refresh token hash
       session.refreshTokenHash = newRefreshTokenHash;
       session.lastUsedAt = new Date().toISOString();
 
@@ -602,7 +737,7 @@ export class AuthService {
       );
 
       logger.info({ module: "auth", userId }, "Token refreshed successfully");
-      return AuthMapper.toAuthResponseDto(user, accessToken, newRefreshToken);
+      return UserMapper.toAuthResponseDto(user, accessToken, newRefreshToken);
     } catch (error) {
       if (error instanceof ApiError) throw error;
       throw new ApiError(
@@ -613,24 +748,33 @@ export class AuthService {
   }
 
   /**
-   * Retrieves all active sessions belonging to a user.
+   * Retrieves all active device sessions for a specific user.
    *
-   * Sensitive fields such as refresh token hashes are excluded
-   * from the returned payload.
+   * @remarks
+   * ### Responsibilities
+   * - Fetches the session keys associated with the user from Redis.
+   * - Filters out expired or stale sessions and cleans up the set index.
+   * - Strips sensitive fields (e.g. `refreshTokenHash`) from the returned
+   *   objects.
    *
-   * @param userId User identifier.
-   * @returns Active session metadata.
+   * ### Side Effects
+   * - **Redis**: Reads the per-user session set and individual session
+   *   keys; removes stale session IDs from the set index.
+   * @param userId - User identifier.
+   * @returns Array of active session summary DTOs.
    */
   async getSessions(userId: string): Promise<SessionSummaryDto[]> {
+    // 1. Retrieve session IDs belonging to the user from Redis set
     const sessionsKey = REDIS_KEYS.userSessions(userId);
     const sessionIds = await redis.smembers(sessionsKey);
 
+    // 2. Fetch session data objects and sanitize sensitive token hashes
     const sessions = await Promise.all(
       sessionIds.map(async (id): Promise<SessionSummaryDto | null> => {
         const authSessionKey = REDIS_KEYS.authSession(id);
         const data = await redis.get(authSessionKey);
         if (!data) {
-          // Clean up stale session ID from Redis
+          // Clean up stale session ID from Redis set index
           redis.srem(sessionsKey, id).catch((err) => {
             logger.error(
               { module: "auth", userId, sessionId: id },
@@ -640,39 +784,48 @@ export class AuthService {
           });
           return null;
         }
-        const parsed = JSON.parse(data) as AuthSessionRecord;
-        const safeSession = { ...parsed, refreshTokenHash: undefined };
+        const session = JSON.parse(data) as SessionRecord;
+        delete (session as Partial<SessionRecord>).refreshTokenHash;
 
         return {
           sessionId: id,
-          ...safeSession,
+          ...session,
         };
       }),
     );
 
+    // 3. Filter out null values from stale sessions and return
     return sessions.filter(
       (session): session is SessionSummaryDto => session !== null,
     );
   }
 
   /**
-   * Revokes a specific session owned by the user.
+   * Revokes a specific session by session ID after verifying ownership.
    *
-   * Ownership validation is performed before deletion to prevent
-   * one user from revoking another user's session.
+   * @remarks
+   * ### Responsibilities
+   * - Verifies that the requesting user owns the session before deletion.
+   * - Deletes the session payload and updates the user session set index
+   *   in Redis.
    *
-   * @param sessionId Session identifier.
-   * @param userId Current authenticated user.
-   *
+   * ### Side Effects
+   * - **Redis**: Deletes `auth:session:<sessionId>` and removes the ID
+   *   from `user:sessions:<userId>`.
+   * @param sessionId - Session identifier UUID to revoke.
+   * @param userId - Requesting authenticated user ID.
    * @throws {ApiError}
-   * - SESSION_OWNERSHIP_INVALID
+   * `SESSION_OWNERSHIP_INVALID` — Target session does not belong to the
+   * requesting user.
    */
   async revokeSession(sessionId: string, userId: string): Promise<void> {
+    // 1. Fetch session record from Redis
     const sessionKey = REDIS_KEYS.authSession(sessionId);
     const sessionJson = await redis.get(sessionKey);
 
     if (!sessionJson) return;
 
+    // 2. Validate session ownership to prevent cross-user session revocation
     const session = JSON.parse(sessionJson);
     if (session.userId !== userId) {
       logger.warn(
@@ -685,23 +838,26 @@ export class AuthService {
       );
     }
 
+    // 3. Delete session key and remove from user session index in Redis
     await redis.del(sessionKey);
     await redis.srem(REDIS_KEYS.userSessions(userId), sessionId);
     logger.info({ module: "auth", userId }, "Session revoked");
   }
 
   /**
-   * Logs out the current device by removing the associated session.
+   * Logs out the current device by deleting its active session.
    *
-   * Both the session record and the user's session index
-   * are cleaned up from Redis.
-   *
-   * @param sessionId Session identifier.
-   * @param userId User identifier.
+   * @remarks
+   * ### Side Effects
+   * - **Redis**: Removes `auth:session:<sessionId>` and the session ID from
+   *   `user:sessions:<userId>`.
+   * @param sessionId - Session UUID to delete.
+   * @param userId - User ID owning the session.
    */
-  async logout(sessionId: string, userId: string): Promise<void> {
+  private async logout(sessionId: string, userId: string): Promise<void> {
     logger.info({ module: "auth", userId }, "Logging out current device");
 
+    // 1. Delete session record and remove from user set index in Redis
     await redis.del(REDIS_KEYS.authSession(sessionId));
     await redis.srem(REDIS_KEYS.userSessions(userId), sessionId);
 
@@ -709,26 +865,33 @@ export class AuthService {
   }
 
   /**
-   * Revokes every active session belonging to the user.
+   * Revokes all active device sessions for a user.
    *
-   * This operation is used for:
-   * - Explicit logout-all requests
-   * - Refresh token reuse detection
-   * - Security incident response
+   * @remarks
+   * ### Responsibilities
+   * - Retrieves all session IDs owned by the user and deletes them in
+   *   batch.
+   * - Deletes the user session index set in Redis.
    *
-   * @param userId User identifier.
+   * ### Side Effects
+   * - **Redis**: Deletes all `auth:session:<sessionId>` keys and the
+   *   `user:sessions:<userId>` set.
+   * @param userId - User identifier whose sessions are being revoked.
    */
-  async logoutAll(userId: string): Promise<void> {
+  private async logoutAll(userId: string): Promise<void> {
     logger.info({ module: "auth", userId }, "Logging out all devices");
 
+    // 1. Fetch all session IDs associated with the user
     const sessionsKey = REDIS_KEYS.userSessions(userId);
     const sessions = await redis.smembers(sessionsKey);
 
+    // 2. Batch delete all session payload keys from Redis
     if (sessions.length > 0) {
       const sessionKeys = sessions.map((id) => REDIS_KEYS.authSession(id));
       await redis.del(...sessionKeys);
     }
 
+    // 3. Delete user session index set from Redis
     await redis.del(sessionsKey);
 
     logger.info(
@@ -738,28 +901,87 @@ export class AuthService {
   }
 
   /**
-   * Initiates the forgot password workflow.
+   * Gracefully revokes the active session associated with a refresh token
+   * cookie. Best-effort execution: invalid or expired refresh tokens fail
+   * silently. Use {@link logout} to log out a specific device.
    *
-   * Workflow:
-   * 1. Validate that the email is associated with an existing user.
-   * 2. Generate a random 6-digit OTP.
-   * 3. Store the OTP in Redis via OtpService (rate-limited).
-   * 4. Save the forgot password email session in Redis.
-   * 5. Publish an OTPRequestedV1 event to Kafka for async dispatch.
+   * @param refreshToken - Raw JWT refresh token string.
+   */
+  async logoutByRefreshToken(refreshToken?: string): Promise<void> {
+    if (!refreshToken) return;
+    const decoded = verifyRefreshToken(refreshToken);
+    if (!decoded?.sub || !decoded.sessionId) return;
+
+    try {
+      await this.logout(decoded.sessionId, decoded.sub);
+    } catch (err) {
+      logger.error(
+        {
+          module: "auth",
+          err,
+          userId: decoded.sub,
+          sessionId: decoded.sessionId,
+        },
+        "Session revocation failed during logoutByRefreshToken",
+      );
+    }
+  }
+
+  /**
+   * Gracefully revokes all active sessions for the user associated with a
+   * refresh token cookie. Best-effort execution: invalid or expired
+   * refresh tokens fail silently. Use {@link logoutAll} to revoke all
+   * sessions for a specific user.
    *
-   * @param data - Forgot password request DTO containing the user's email.
-   * @returns A promise resolving to the password reset session ID.
+   * @param refreshToken - Raw JWT refresh token string.
+   */
+  async logoutAllByRefreshToken(refreshToken?: string): Promise<void> {
+    if (!refreshToken) return;
+    const decoded = verifyRefreshToken(refreshToken);
+    if (!decoded?.sub) return;
+
+    try {
+      await this.logoutAll(decoded.sub);
+    } catch (err) {
+      logger.error(
+        { module: "auth", err, userId: decoded.sub },
+        "Session revocation failed during logoutAllByRefreshToken",
+      );
+    }
+  }
+
+  /**
+   * Initiates the password recovery workflow by dispatching a reset OTP.
+   *
+   * @remarks
+   * ### Responsibilities
+   * - Validates user existence in PostgreSQL.
+   * - Generates or reuses a 6-digit password reset OTP in Redis.
+   * - Dispatches an `OTPRequestedV1` event to Kafka for email delivery.
+   *
+   * ### Side Effects
+   * - **PostgreSQL**: Queries user by email.
+   * - **Redis**: Stores OTP and forgot-password session keys with TTL.
+   * - **Kafka**: Publishes `OTPRequestedV1` event.
+   *
+   * ### Consistency Guarantees
+   * - If Kafka event publication fails, newly generated forgot-password
+   *   Redis keys are rolled back.
+   * @param data - Forgot password request DTO containing email.
+   * @returns Forgot password response payload containing the reset
+   *   `sessionId`.
    * @throws {ApiError}
-   * - USER_NOT_FOUND
-   * - KAFKA_PUBLISH_FAILED
+   * `USER_NOT_FOUND` — Email is not registered in PostgreSQL.
+   * @throws {ApiError}
+   * `KAFKA_PUBLISH_FAILED` — OTP delivery event dispatch to Kafka failed.
    */
   async forgotPassword(
     data: ForgotPasswordRequestDto,
   ): Promise<ForgotPasswordResponseDto> {
-    // 1. Ensure the email is associated with an existing user
+    // 1. Ensure the email is associated with an existing user in PostgreSQL
     await this.requireUser(data.email);
 
-    // Check for an existing active OTP session for this email
+    // 2. Check for an existing active OTP session for this email
     const existingSessionId = await OtpService.findExistingOtpSession(
       data.email,
     );
@@ -789,7 +1011,7 @@ export class AuthService {
         "Reusing existing OTP session for forgot password with new OTP",
       );
     } else {
-      // New session
+      // New session setup
       sessionId = await OtpService.storeOtp(
         data.email,
         otp,
@@ -804,6 +1026,7 @@ export class AuthService {
       );
     }
 
+    // 3. Publish OTPRequestedV1 event to Kafka for email dispatch
     const event: OTPRequestedV1Type = {
       eventId: randomUUID(),
       email: data.email,
@@ -820,7 +1043,7 @@ export class AuthService {
         { module: "auth", err, eventId: event.eventId },
         "Forgot password OTP publish failed; rolling back Redis state",
       );
-      // Only roll back fully if this was a new session
+      // Roll back fully if this was a new session
       if (!existingSessionId) {
         await redis.del(
           REDIS_KEYS.otp(sessionId),
@@ -840,23 +1063,31 @@ export class AuthService {
   }
 
   /**
-   * Verifies the OTP sent for password reset and issues a temporary token.
+   * Verifies the password reset OTP and issues a single-use password
+   * reset token.
    *
-   * Workflow:
-   * 1. Retrieve the email linked to the session from Redis.
-   * 2. Verify the OTP using OtpService.
-   * 3. Issue a short-lived random password reset token (10 minutes).
-   * 4. Clean up the verification OTP and session from Redis.
+   * @remarks
+   * ### Responsibilities
+   * - Validates the session and OTP code using {@link OtpService}.
+   * - Generates a short-lived password reset token in Redis with a
+   *   `PASSWORD_RESET_TOKEN_TTL_SECONDS` TTL.
+   * - Consumes and deletes the verification OTP session data from Redis.
    *
-   * @param data - The session ID and OTP.
-   * @returns A promise resolving to the password reset token.
+   * ### Side Effects
+   * - **Redis**: Stores `password:reset:token:<token>`; deletes the OTP
+   *   session keys.
+   * @param data - DTO containing `sessionId` and the submitted OTP code.
+   * @returns Object containing the issued `passwordResetToken`.
    * @throws {ApiError}
-   * - OTP_SESSION_NOT_FOUND
-   * - OTP_INVALID or OTP_LOCKED
+   * `OTP_SESSION_NOT_FOUND` — Forgot-password session in Redis is missing
+   * or expired.
+   * @throws {ApiError}
+   * `INVALID_OTP` — Submitted OTP code is incorrect or expired.
    */
   async VerifyPasswordResetOtp(
     data: VerifyPasswordResetOtpRequestDto,
   ): Promise<VerifyPasswordResetOtpResponseDto> {
+    // 1. Retrieve email linked to the forgot password session from Redis
     const email = await redis.get(
       REDIS_KEYS.forgotPasswordSession(data.sessionId),
     );
@@ -872,10 +1103,10 @@ export class AuthService {
       );
     }
 
-    // Verify OTP (throws if invalid or locked due to excess attempts)
+    // 2. Verify OTP code (throws if invalid or locked due to excess attempts)
     await OtpService.verifyOtp(data.sessionId, data.otp);
 
-    // Generate short-lived password reset token
+    // 3. Generate short-lived single-use password reset token in Redis
     const token = randomUUID();
     await redis.set(
       REDIS_KEYS.passwordResetToken(token),
@@ -884,7 +1115,7 @@ export class AuthService {
       AUTH_DURATIONS.PASSWORD_RESET_TOKEN_TTL_SECONDS,
     );
 
-    // Clean up OTP session data since OTP has been verified
+    // 4. Clean up OTP session data from Redis
     await redis.del(
       REDIS_KEYS.otp(data.sessionId),
       REDIS_KEYS.forgotPasswordSession(data.sessionId),
@@ -900,20 +1131,30 @@ export class AuthService {
   }
 
   /**
-   * Completes the forgot password workflow by resetting the user's password.
+   * Resets the user password and revokes all active device sessions.
    *
-   * Workflow:
-   * 1. Retrieve the email linked to the password reset token from Redis.
-   * 2. Hash the new password and update the database record.
-   * 3. Revoke all active sessions for the user as a security measure.
-   * 4. Clean up the password reset token from Redis.
+   * @remarks
+   * ### Responsibilities
+   * - Validates the password reset token from Redis.
+   * - Hashes the new password with bcrypt and updates the user record in
+   *   PostgreSQL.
+   * - Revokes all existing active device sessions for security.
+   * - Deletes the consumed password reset token from Redis.
    *
-   * @param data - Reset password request DTO containing the reset token and new password.
+   * ### Side Effects
+   * - **PostgreSQL**: Updates the user `password` hash.
+   * - **Redis**: Revokes all user sessions; deletes the password reset
+   *   token.
+   * @param data - DTO containing the `passwordResetToken` and new password.
    * @throws {ApiError}
-   * - OTP_SESSION_NOT_FOUND
-   * - USER_NOT_FOUND
+   * `OTP_SESSION_NOT_FOUND` — Reset token is invalid, missing, or expired
+   * in Redis.
+   * @throws {ApiError}
+   * `USER_NOT_FOUND` — User email linked to the token does not exist in
+   * PostgreSQL.
    */
   async resetPassword(data: ResetPasswordRequestDto): Promise<void> {
+    // 1. Retrieve email linked to the password reset token from Redis
     const email = await redis.get(
       REDIS_KEYS.passwordResetToken(data.passwordResetToken),
     );
@@ -929,15 +1170,17 @@ export class AuthService {
       );
     }
 
+    // 2. Fetch user record from PostgreSQL
     const user = await this.requireUser(email);
 
+    // 3. Hash new password and update database record
     const hashedPassword = await bcrypt.hash(data.password, 10);
     await this.repo.update(user.id, { password: hashedPassword });
 
-    // Revoke all existing active sessions for security
+    // 4. Revoke all existing active device sessions for security
     await this.logoutAll(user.id);
 
-    // Clean up reset token
+    // 5. Clean up consumed password reset token from Redis
     await redis.del(REDIS_KEYS.passwordResetToken(data.passwordResetToken));
 
     logger.info(

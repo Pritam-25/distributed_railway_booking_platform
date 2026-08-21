@@ -17,54 +17,59 @@ import { Router } from "express";
 import { sessionMiddleware, trustGatewayHeaders } from "@middleware";
 
 /**
- * All routes for authentication and authorization
- * Base path: /api/v1/auth
+ * Authentication and session management routes.
+ *
+ * Registers HTTP endpoints under `/api/v1/auth` and applies the request
+ * validation and authentication middleware pipeline required by the auth
+ * domain.
+ *
+ * ### Responsibilities
+ * - Map authentication, password recovery, and session lifecycle endpoints
+ *   to {@link AuthController} handlers.
+ * - Apply Zod-based request body and path parameter validation.
+ * - Gate authenticated endpoints with {@link trustGatewayHeaders} and
+ *   {@link sessionMiddleware}.
+ *
+ * ### Middleware Pipeline
+ * - {@link trustGatewayHeaders} — Extracts identity claims from gateway-injected
+ *   headers and attaches them to `req.user`.
+ * - {@link sessionMiddleware} — Verifies the active session in Redis and
+ *   enforces immediate session revocation and sliding session windows.
+ * - {@link validateSchema} / {@link validateParams} — Zod-validates request
+ *   body and path parameters before delegating to the controller.
+ * - {@link asyncHandler} — Routes async controller exceptions to the global
+ *   error handler.
  */
 const router: Router = Router();
 
-/**
- * POST /api/v1/auth/send-otp
- * Send OTP to user for registration
- */
+// Send OTP for registration.
 router.post(
   "/send-otp",
   validateSchema(RegisterSchema),
   asyncHandler((req, res) => authController.sendOtp(req, res)),
 );
 
-/**
- * POST /api/v1/auth/verify-otp
- * Verify OTP sent to user for registration
- */
+// Verify OTP for registration.
 router.post(
   "/verify-otp",
   validateSchema(VerifyOtpRequestSchema),
   asyncHandler((req, res) => authController.verifyOtp(req, res)),
 );
 
-/**
- * POST /api/v1/auth/login
- * Login user with email and password
- */
+// Login
 router.post(
   "/login",
   validateSchema(LoginSchema),
   asyncHandler((req, res) => authController.login(req, res)),
 );
 
-/**
- * POST /api/v1/auth/refresh
- * Refresh access token using refresh token
- */
+// Refresh access token
 router.post(
   "/refresh",
   asyncHandler((req, res) => authController.refresh(req, res)),
 );
 
-/**
- * GET /api/v1/auth/sessions
- * Get all active sessions for the logged in user
- */
+// Get all active sessions for the authenticated user
 router.get(
   "/sessions",
   trustGatewayHeaders,
@@ -72,10 +77,7 @@ router.get(
   asyncHandler((req, res) => authController.getSessions(req, res)),
 );
 
-/**
- * DELETE /api/v1/auth/sessions/:sessionId
- * Revoke a specific session by ID
- */
+// Revoke a specific session
 router.delete(
   "/sessions/:sessionId",
   validateParams(SessionParamSchema),
@@ -84,48 +86,33 @@ router.delete(
   asyncHandler((req, res) => authController.revokeSession(req, res)),
 );
 
-/**
- * POST /api/v1/auth/logout
- * Logout user from current session
- */
+// Logout from current session
 router.post(
   "/logout",
   asyncHandler((req, res) => authController.logout(req, res)),
 );
 
-/**
- * POST /api/v1/auth/logout-all
- * Logout user from all sessions
- */
+// Logout from all sessions
 router.post(
   "/logout-all",
   asyncHandler((req, res) => authController.logoutAll(req, res)),
 );
 
-/**
- * POST /api/v1/auth/forgot-password
- * Request a password reset OTP using registered email
- */
+// Send OTP for password reset
 router.post(
   "/forgot-password",
   validateSchema(ForgotPasswordRequestSchema),
   asyncHandler((req, res) => authController.forgotPassword(req, res)),
 );
 
-/**
- * POST /api/v1/auth/verify-reset-otp
- * Verify password reset OTP and obtain reset token
- */
+// Verify OTP for password reset
 router.post(
   "/verify-reset-otp",
   validateSchema(VerifyPasswordResetOtpRequestSchema),
   asyncHandler((req, res) => authController.VerifyPasswordResetOtp(req, res)),
 );
 
-/**
- * POST /api/v1/auth/reset-password
- * Reset user password with verified reset token
- */
+// Reset password
 router.post(
   "/reset-password",
   validateSchema(ResetPasswordRequestSchema),

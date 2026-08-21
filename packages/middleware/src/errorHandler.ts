@@ -23,7 +23,6 @@ import { ApiError, COMMON_ERROR_CODES, normalizeError } from "@irctc/errors";
  * @param req - The current HTTP request.
  * @param res - The HTTP response used to send the standardized error payload.
  * @param next - Delegates to Express when the response has already started.
- *
  * @returns A standardized JSON error response, or delegates to the next
  * error handler if the response has already begun.
  */

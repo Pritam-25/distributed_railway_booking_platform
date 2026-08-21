@@ -1,0 +1,979 @@
+openapi: 3.1.0
+info:
+  title: Search Service API
+  version: 1.0.0
+  description: |2+
+
+      # Search Service API
+
+      The **Search Service API** exposes read-only search endpoints for the
+      IRCTC Railway Booking Platform. It is the canonical source for train
+      and station search queries served to end users.
+
+      ## Core Capabilities
+
+      ### Station Autocomplete
+
+      - Suggest Stations — Returns station suggestions for a user-entered
+        query term. Backed by an Elasticsearch projection of STATION_*
+        admin events.
+
+      ### Train Search
+
+      - Search Trains — Returns trains running between two stations on a
+        given date. Backed by an Elasticsearch projection of admin
+        SCHEDULE_CREATED events.
+
+servers:
+  - url: http://localhost:4000
+    description: API Gateway Proxy URL
+  - url: http://localhost:4004
+    description: Local Direct Search Service URL
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Enter JWT Access Token
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: access_token
+      description: Access token stored in HTTP-only cookie for browser clients
+  schemas:
+    StationSuggestResponse:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 3
+        stations:
+          type: array
+          items:
+            $ref: "#/components/schemas/StationSuggestion"
+      required:
+        - count
+        - stations
+    StationSuggestion:
+      type: object
+      properties:
+        stationId:
+          type: string
+          example: 550e8400-e29b-41d4-a716-446655440000
+        code:
+          type: string
+          example: NDLS
+        name:
+          type: string
+          example: New Delhi
+        zone:
+          type:
+            - string
+            - "null"
+          example: Northern Railway
+        state:
+          type:
+            - string
+            - "null"
+          example: Delhi
+        isActive:
+          type: boolean
+          example: true
+      required:
+        - stationId
+        - code
+        - name
+        - zone
+        - state
+        - isActive
+    TrainSearchResponse:
+      type: object
+      properties:
+        fromStation:
+          type: object
+          properties:
+            stationId:
+              type: string
+              example: 550e8400-e29b-41d4-a716-446655440013
+            code:
+              type: string
+              example: NDLS
+            name:
+              type: string
+              example: New Delhi
+          required:
+            - stationId
+            - code
+            - name
+        toStation:
+          type: object
+          properties:
+            stationId:
+              type: string
+              example: 550e8400-e29b-41d4-a716-446655440014
+            code:
+              type: string
+              example: HWH
+            name:
+              type: string
+              example: Howrah
+          required:
+            - stationId
+            - code
+            - name
+        date:
+          type: string
+          example: "2026-09-15"
+        count:
+          type: integer
+          example: 4
+        trains:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrainSearchResult"
+      required:
+        - fromStation
+        - toStation
+        - date
+        - count
+        - trains
+    TrainSearchResult:
+      type: object
+      properties:
+        scheduleId:
+          type: string
+          example: 550e8400-e29b-41d4-a716-446655440010
+        trainId:
+          type: string
+          example: 550e8400-e29b-41d4-a716-446655440011
+        trainNumber:
+          type: string
+          example: "12301"
+        trainName:
+          type: string
+          example: Rajdhani Express
+        category:
+          type: string
+          example: RAJDHANI
+        from:
+          type: object
+          properties:
+            stationId:
+              type: string
+              example: 550e8400-e29b-41d4-a716-446655440013
+            code:
+              type: string
+              example: NDLS
+            name:
+              type: string
+              example: New Delhi
+            departureTime:
+              type:
+                - string
+                - "null"
+              example: "2026-09-15T16:25:00.000Z"
+            platform:
+              type:
+                - string
+                - "null"
+              example: "9"
+          required:
+            - stationId
+            - code
+            - name
+            - departureTime
+            - platform
+        to:
+          type: object
+          properties:
+            stationId:
+              type: string
+              example: 550e8400-e29b-41d4-a716-446655440014
+            code:
+              type: string
+              example: HWH
+            name:
+              type: string
+              example: Howrah
+            arrivalTime:
+              type:
+                - string
+                - "null"
+              example: "2026-09-16T09:55:00.000Z"
+            platform:
+              type:
+                - string
+                - "null"
+              example: "9"
+          required:
+            - stationId
+            - code
+            - name
+            - arrivalTime
+            - platform
+        durationMinutes:
+          type:
+            - integer
+            - "null"
+          example: 1050
+        distanceKm:
+          type: integer
+          example: 1447
+        fareRange:
+          $ref: "#/components/schemas/FareRange"
+        availableSeats:
+          $ref: "#/components/schemas/AvailableSeats"
+        status:
+          type: string
+          enum:
+            - DRAFT
+            - ACTIVE
+            - CANCELLED
+          example: ACTIVE
+        operatingDays:
+          type: array
+          items:
+            type: string
+          example:
+            - SUN
+            - MON
+            - TUE
+            - WED
+            - THU
+            - FRI
+            - SAT
+      required:
+        - scheduleId
+        - trainId
+        - trainNumber
+        - trainName
+        - category
+        - from
+        - to
+        - durationMinutes
+        - distanceKm
+        - fareRange
+        - availableSeats
+        - status
+        - operatingDays
+    FareRange:
+      type: object
+      properties:
+        min:
+          type: number
+          example: 850
+        max:
+          type: number
+          example: 4250
+        currency:
+          type: string
+          enum:
+            - INR
+          example: INR
+      required:
+        - min
+        - max
+        - currency
+    AvailableSeats:
+      type: object
+      properties:
+        total:
+          type: integer
+          example: 432
+        byCoachType:
+          type: object
+          additionalProperties:
+            type: integer
+          example:
+            AC_2A: 48
+            AC_3A: 96
+            SL: 288
+      required:
+        - total
+        - byCoachType
+    SeatMapResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - OK
+            - SCHEDULE_NOT_FOUND
+            - SCHEDULE_INACTIVE
+          example: OK
+          description: OK | SCHEDULE_NOT_FOUND | SCHEDULE_INACTIVE
+        coaches:
+          type: array
+          items:
+            $ref: "#/components/schemas/SeatMapCoach"
+      required:
+        - status
+        - coaches
+    SeatMapCoach:
+      type: object
+      properties:
+        coachId:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        coachNumber:
+          type: string
+          example: A1
+        coachType:
+          type: string
+          example: AC_2A
+        totalSeats:
+          type: integer
+          example: 48
+        seats:
+          type: array
+          items:
+            $ref: "#/components/schemas/SeatMapSeat"
+      required:
+        - coachId
+        - coachNumber
+        - coachType
+        - totalSeats
+        - seats
+    SeatMapSeat:
+      type: object
+      properties:
+        seatId:
+          type: string
+          example: 550e8400-e29b-41d4-a716-446655440020
+        seatNumber:
+          type: integer
+          example: 12
+        seatType:
+          type: string
+          example: LOWER
+        berthType:
+          type: string
+          example: SEATER
+        price:
+          type: string
+          example: "2.5000"
+        isBooked:
+          type: boolean
+          example: false
+        quota:
+          type: string
+          example: GENERAL
+      required:
+        - seatId
+        - seatNumber
+        - seatType
+        - berthType
+        - price
+        - isBooked
+        - quota
+    ResponseMeta:
+      type: object
+      properties:
+        requestId:
+          type: string
+          example: 3e3c1f1a-6f7d-4a2b-9b5c-1f0e3a4b5c6d
+        traceId:
+          type: string
+          example: a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4
+        timestamp:
+          type: string
+          example: "2026-07-24T11:21:35.000Z"
+      required:
+        - requestId
+        - traceId
+        - timestamp
+    BadRequestErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          enum:
+            - false
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: INVALID_INPUT
+            message:
+              type: string
+              example: Invalid request input.
+            details: {}
+          required:
+            - code
+            - message
+          description: Error Detail Payload
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+      required:
+        - success
+        - error
+        - meta
+      description: Error Response Envelope (INVALID_INPUT)
+      x-sdk-ref: ErrorResponse
+      refId: BadRequestErrorResponse
+    RateLimitErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          enum:
+            - false
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: RATE_LIMIT_EXCEEDED
+            message:
+              type: string
+              example: Rate limit exceeded.
+            details: {}
+          required:
+            - code
+            - message
+          description: Error Detail Payload
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+      required:
+        - success
+        - error
+        - meta
+      description: Error Response Envelope (RATE_LIMIT_EXCEEDED)
+      x-sdk-ref: ErrorResponse
+      refId: RateLimitErrorResponse
+    InternalServerErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          enum:
+            - false
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: INTERNAL_ERROR
+            message:
+              type: string
+              example: Internal server error.
+            details: {}
+          required:
+            - code
+            - message
+          description: Error Detail Payload
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+      required:
+        - success
+        - error
+        - meta
+      description: Error Response Envelope (INTERNAL_ERROR)
+      x-sdk-ref: ErrorResponse
+      refId: InternalServerErrorResponse
+  parameters: {}
+paths:
+  /api/v1/search/stations/suggest:
+    get:
+      operationId: suggestStations
+      tags:
+        - Search
+      summary: Suggest stations for autocomplete
+      description: >-
+        Returns a list of station suggestions matching a user-entered query. Backed by an Elasticsearch projection of
+        `STATION_*` lifecycle events with a Redis read-through cache.
+
+
+        **Query Parameters:**
+
+        - `q` - The autocomplete search term. Minimum 2 characters; trimmed before lookup.
+
+        - `limit` - Maximum number of suggestions to return. Defaults to 10; max 20.
+
+
+        **Response:**
+
+        Returns a `StationSuggestResponse` containing `count` and a `stations[]` array. Each station carries its
+        canonical `stationId`, `code`, `name`, `zone`, `state`, and an `isActive` flag.
+
+
+        **Outcomes:**
+
+        - 200 OK - One or more stations matched (or zero, in which case `stations` is an empty array).
+
+        - 400 Bad Request - The query failed schema validation (e.g. `q` shorter than 2 characters, or `limit` out of
+        range).
+
+        - 429 Too Many Requests - The caller exceeded the platform rate limit.
+
+        - 500 Internal Server Error - Elasticsearch or Redis returned an unexpected error.
+
+
+        **Notes:**
+
+        - The endpoint is public — no authentication is required.
+
+        - Results are served from Redis when warm; cache TTL is bounded by `SUGGEST_CACHE_TTL_SECONDS`.
+      security: []
+      parameters:
+        - schema:
+            type: string
+            minLength: 2
+            maxLength: 64
+            example: HWR
+          required: true
+          name: q
+          in: query
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+            default: 10
+            example: 10
+          required: false
+          name: limit
+          in: query
+      responses:
+        "200":
+          description: Station suggestions retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                    example: true
+                  message:
+                    type: string
+                    example: Station suggestions retrieved successfully
+                  data:
+                    $ref: "#/components/schemas/StationSuggestResponse"
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - message
+                  - data
+                  - meta
+                description: Success Response Envelope
+        "400":
+          description: Bad Request - Validation or invalid input error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "429":
+          description: Too Many Requests - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitErrorResponse"
+        "500":
+          description: Internal Server Error - Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponse"
+  /api/v1/search/trains:
+    get:
+      operationId: searchTrains
+      tags:
+        - Search
+      summary: Search trains by from/to station and date
+      description: >-
+        Returns trains running between two stations on a given date, including timing, fare range, capacity, and
+        operating-days metadata. Backed by an Elasticsearch projection of `SCHEDULE_CREATED` admin events with a Redis
+        read-through cache.
+
+
+        **Query Parameters:**
+
+        - `fromStation` - Origin station code (e.g. `NDLS`) or UUID. Required.
+
+        - `toStation` - Destination station code (e.g. `HWH`) or UUID. Required.
+
+        - `date` - Travel date in `YYYY-MM-DD` format. Required.
+
+        - `category` - Optional filter by train category (e.g. `RAJDHANI`, `SHATABDI`).
+
+        - `limit` - Page size. Defaults to 10; max 50.
+
+        - `offset` - Pagination offset. Defaults to 0.
+
+
+        **Response:**
+
+        Returns a `TrainSearchResponse` containing the resolved `fromStation`, `toStation`, the requested `date`, the
+        total `count`, and a `trains[]` array. Each train carries timing, distance, fare range, capacity, and operating
+        days.
+
+
+        **Outcomes:**
+
+        - 200 OK - The query ran; the `trains` array may be empty when no schedules match.
+
+        - 400 Bad Request - The query failed schema validation (e.g. invalid date format, missing required field).
+
+        - 404 Not Found - Either `fromStation` or `toStation` could not be resolved against the `stations` index.
+
+        - 429 Too Many Requests - The caller exceeded the platform rate limit.
+
+        - 500 Internal Server Error - Elasticsearch or Redis returned an unexpected error.
+
+
+        **Notes:**
+
+        - The endpoint is public — no authentication is required.
+
+        - Stations are resolved upstream against the existing `stations` Elasticsearch index, then the schedule index is
+        queried with the resolved UUIDs.
+
+        - Cache TTL is bounded by `TRAIN_SEARCH_CACHE_TTL_SECONDS`.
+
+        - `availableSeats` is **capacity**, not live availability. Per-seat live counts are fetched by booking-service
+        from inventory-service at hold time.
+
+        - Snapshot data is frozen at `SCHEDULE_CREATED` time; edits to the underlying train or route do not trigger a
+        re-projection.
+      security: []
+      parameters:
+        - schema:
+            type: string
+            minLength: 2
+            maxLength: 64
+            example: Howrah Jn
+          required: true
+          name: fromStation
+          in: query
+        - schema:
+            type: string
+            minLength: 2
+            maxLength: 64
+            example: New Delhi
+          required: true
+          name: toStation
+          in: query
+        - schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+            example: "2026-08-03"
+          required: true
+          name: date
+          in: query
+        - schema:
+            type: string
+            enum:
+              - RAJDHANI
+              - SHATABDI
+              - VANDE_BHARAT
+              - DURONTO
+              - SUPERFAST
+              - PASSENGER
+              - EXPRESS
+              - DEMU
+              - MEMU
+            example: RAJDHANI
+          required: false
+          name: category
+          in: query
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+            example: 10
+          required: false
+          name: limit
+          in: query
+        - schema:
+            type:
+              - integer
+              - "null"
+            minimum: 0
+            default: 0
+            example: 0
+          required: false
+          name: offset
+          in: query
+      responses:
+        "200":
+          description: Train search results retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                    example: true
+                  message:
+                    type: string
+                    example: Train search results retrieved successfully
+                  data:
+                    $ref: "#/components/schemas/TrainSearchResponse"
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - message
+                  - data
+                  - meta
+                description: Success Response Envelope
+        "400":
+          description: Bad Request - Validation or invalid input error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "404":
+          description: One or both stations could not be resolved.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: STATION_NOT_FOUND
+                      message:
+                        type: string
+                        example: Station could not be resolved. Verify the code or id and try again.
+                      details: {}
+                    required:
+                      - code
+                      - message
+                    description: Error Detail Payload
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - error
+                  - meta
+                description: Error Response Envelope (STATION_NOT_FOUND)
+                x-sdk-ref: ErrorResponse
+        "429":
+          description: Too Many Requests - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitErrorResponse"
+        "500":
+          description: Internal Server Error - Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponse"
+  /api/v1/search/schedules/{scheduleId}/seat-map:
+    get:
+      operationId: getSeatMap
+      tags:
+        - Search
+      summary: Retrieve the seat-map for a schedule segment
+      description: >-
+        Returns the per-coach seat layout for a schedule, with a live `isBooked` overlay for seats whose booking
+        overlaps the requested `(fromStation, toStation)` segment. Backed by the inventory-service `getSeatMap` gRPC
+        call with a Redis read-through cache (60s TTL by default).
+
+
+        **Query Parameters:**
+
+        - `scheduleId` (path) - The schedule UUID.
+
+        - `fromStationId` (query) - Origin station UUID. Must differ from `toStationId`.
+
+        - `toStationId` (query) - Destination station UUID. Must differ from `fromStationId`.
+
+
+        **Response:**
+
+        Returns a `SeatMapResponse` whose `status` is one of `OK`, `SCHEDULE_NOT_FOUND`, or `SCHEDULE_INACTIVE`. On `OK`
+        the `coaches[]` array lists each coach with `coachNumber`, `coachType`, `totalSeats`, and a `seats[]` array of
+        `SeatMapSeat` rows (`seatNumber`, `seatType`, `berthType`, `price`, `isBooked`, `quota`).
+
+
+        **Outcomes:**
+
+        - 200 OK - Seat-map returned with booking overlay applied for the segment.
+
+        - 400 Bad Request - Path or query failed schema validation.
+
+        - 404 Not Found - The `scheduleId` does not exist.
+
+        - 409 Conflict - The schedule is cancelled or the requested segment is invalid.
+
+        - 429 Too Many Requests - Caller exceeded the platform rate limit.
+
+        - 500 Internal Server Error - Inventory gRPC returned an unexpected error.
+
+
+        **Notes:**
+
+        - The endpoint is public — no authentication is required.
+
+        - Cache TTL is bounded by `SEAT_MAP_CACHE_TTL_SECONDS`; the booking-service pre-flight `CheckAvailability`
+        closes the race window for stale reads.
+
+        - Only `CONFIRMED` allocations mark a seat `isBooked`. `HELD` allocations are intentionally hidden for a stable
+        UI.
+
+        - `coachType`, `berthType`, `quota` are best-effort defaults until those columns land on the seat inventory
+        model.
+      security: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            example: 550e8400-e29b-41d4-a716-446655440000
+          required: true
+          name: scheduleId
+          in: path
+        - schema:
+            type: string
+            minLength: 1
+            example: NDLS
+            description: Station UUID or Station Code (e.g. NDLS, HWH)
+          required: true
+          description: Station UUID or Station Code (e.g. NDLS, HWH)
+          name: fromStation
+          in: query
+        - schema:
+            type: string
+            minLength: 1
+            example: NDLS
+            description: Station UUID or Station Code (e.g. NDLS, HWH)
+          required: true
+          description: Station UUID or Station Code (e.g. NDLS, HWH)
+          name: toStation
+          in: query
+      responses:
+        "200":
+          description: Seat map retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                    example: true
+                  message:
+                    type: string
+                    example: Seat map retrieved successfully
+                  data:
+                    $ref: "#/components/schemas/SeatMapResponse"
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - message
+                  - data
+                  - meta
+                description: Success Response Envelope
+        "400":
+          description: Bad Request - Validation or invalid input error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "404":
+          description: Schedule not found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: SCHEDULE_NOT_FOUND
+                      message:
+                        type: string
+                        example: Schedule could not be found. Verify the scheduleId and try again.
+                      details: {}
+                    required:
+                      - code
+                      - message
+                    description: Error Detail Payload
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - error
+                  - meta
+                description: Error Response Envelope (SCHEDULE_NOT_FOUND)
+                x-sdk-ref: ErrorResponse
+        "409":
+          description: Schedule is not active or the requested segment is invalid.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: SCHEDULE_INACTIVE
+                      message:
+                        type: string
+                        example: Schedule is not active or the requested segment is invalid.
+                      details: {}
+                    required:
+                      - code
+                      - message
+                    description: Error Detail Payload
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - error
+                  - meta
+                description: Error Response Envelope (SCHEDULE_INACTIVE)
+                x-sdk-ref: ErrorResponse
+        "429":
+          description: Too Many Requests - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitErrorResponse"
+        "500":
+          description: Internal Server Error - Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponse"
+webhooks: {}

@@ -1,32 +1,42 @@
 import { KafkaJS } from "@confluentinc/kafka-javascript";
-import { logger } from "@irctc/logger";
+import type { LoggerLike } from "../consumer-runner/kafka-consumer-runner.js";
 
 const { Kafka: ConfluentKafka, logLevel } = KafkaJS;
 type Kafka = KafkaJS.Kafka;
 type KafkaConfig = KafkaJS.KafkaConfig;
 
+export type CreateKafkaClientOptions = Omit<Partial<KafkaConfig>, "logger"> & {
+  logger?: LoggerLike;
+};
+
 /**
  * Creates and initializes a Kafka client instance.
  *
- * It merges caller-supplied options (such as SSL, SASL credentials, timeouts,
- * and custom log creators) with predefined infrastructure defaults under the `kafkaJS` configuration block.
+ * Merges caller-supplied configuration options with infrastructure defaults under
+ * the `kafkaJS` nested configuration block required by `@confluentinc/kafka-javascript`.
  *
- * @param config - Optional configuration overrides to merge with client defaults.
- * @returns An initialized Kafka client instance.
+ * @param options - Configuration options or overrides (accepts `logger` as {@link LoggerLike}).
+ * @param loggerParam - Optional diagnostic logger satisfying {@link LoggerLike}.
+ * @returns An initialized {@link Kafka} client instance.
  */
-export const createKafkaClient = (config: Partial<KafkaConfig> = {}): Kafka => {
-  const cleanRetry = { ...(config.retry || {}) } as Record<string, unknown>;
-  delete cleanRetry.factor;
-  delete cleanRetry.multiplier;
+export const createKafkaClient = (
+  options: CreateKafkaClientOptions = {},
+  loggerParam?: LoggerLike,
+): Kafka => {
+  const { logger: loggerFromOptions, ...config } = options;
+  const logger = loggerParam ?? loggerFromOptions;
+
   // Merge user config, providing default values for standard fields
   const kafkaJSConfig: KafkaConfig = {
     ...config,
     clientId: config.clientId ?? "irctc-service",
-    brokers: config.brokers ?? ["localhost:9092"],
+    brokers: config.brokers ?? ["127.0.0.1:9092"],
+    connectionTimeout: config.connectionTimeout ?? 10_000,
+    requestTimeout: config.requestTimeout ?? 30_000,
     retry: {
       initialRetryTime: 100,
       retries: 8,
-      ...cleanRetry,
+      ...config.retry,
     },
     logLevel: config.logLevel ?? logLevel.NOTHING,
   };
@@ -34,6 +44,6 @@ export const createKafkaClient = (config: Partial<KafkaConfig> = {}): Kafka => {
   const kafka = new ConfluentKafka({
     kafkaJS: kafkaJSConfig,
   });
-  logger.info({ module: "kafka-client" }, "Kafka client initialized");
+  logger?.info({ module: "kafka-client" }, "Kafka client initialized.");
   return kafka;
 };

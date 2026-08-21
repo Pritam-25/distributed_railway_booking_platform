@@ -1,17 +1,19 @@
 import "@irctc/openapi";
 import { z } from "zod";
 import type { UserResponseDto } from "@dto";
+
 /**
  * Reusable email schema
  */
-
 export const emailSchema = z
   .email("Invalid email format")
   .trim()
   .openapi({ example: "jhon@example.com" });
 
 /**
- * Reusable uuid schema
+ * Reusable UUID schema factory with a configurable error message.
+ *
+ * @param message - Error message used when the value is not a valid UUID.
  */
 export const uuidSchema = (message = "Invalid UUID format") =>
   z.uuid(message).openapi({
@@ -19,7 +21,7 @@ export const uuidSchema = (message = "Invalid UUID format") =>
   });
 
 /**
- * Reusable first name schema
+ * Reusable first-name schema (3-50 characters, trimmed).
  */
 export const firstNameSchema = z
   .string()
@@ -29,7 +31,7 @@ export const firstNameSchema = z
   .openapi({ example: "Jhon" });
 
 /**
- * Reusable last name schema
+ * Reusable last-name schema (2-50 characters, trimmed).
  */
 export const lastNameSchema = z
   .string()
@@ -59,8 +61,7 @@ export const passwordSchema = z
   });
 
 /**
- * Reusable OTP Schema
- * - Must be exactly 6 digits
+ * Reusable OTP schema accepting exactly six numeric digits.
  */
 export const otpSchema = z
   .string()
@@ -69,7 +70,7 @@ export const otpSchema = z
   .openapi({ example: "123456" });
 
 /**
- * Registration Schema for User Sign-Up
+ * Registration request body schema for user sign-up.
  */
 export const RegisterSchema = z
   .object({
@@ -83,7 +84,7 @@ export const RegisterSchema = z
 export type RegisterRequestDto = z.infer<typeof RegisterSchema>;
 
 /**
- * Login DTO Schema
+ * Login request body schema (email + password).
  */
 export const LoginSchema = z
   .object({
@@ -95,7 +96,7 @@ export const LoginSchema = z
 export type LoginRequestDto = z.infer<typeof LoginSchema>;
 
 /**
- * OTP Verification DTO Schema
+ * OTP verification request body schema (6-digit code).
  */
 export const VerifyOtpRequestSchema = z
   .object({
@@ -105,6 +106,10 @@ export const VerifyOtpRequestSchema = z
 
 export type VerifyOtpRequestDto = z.infer<typeof VerifyOtpRequestSchema>;
 
+/**
+ * Authentication response payload containing the user profile and the
+ * JWT token pair.
+ */
 export interface AuthResponseDto {
   user: UserResponseDto;
   tokens: {
@@ -114,7 +119,9 @@ export interface AuthResponseDto {
 }
 
 /**
- * Session summary returned by the active sessions endpoint.
+ * Session summary returned by the active sessions endpoint. Strips the
+ * refresh-token hash and other server-only fields from the underlying
+ * Redis session record.
  */
 export const SessionSummarySchema = z
   .object({
@@ -130,16 +137,22 @@ export const SessionSummarySchema = z
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
     }),
     location: z.string().openapi({ example: "New Delhi, IN" }),
-    createdAt: z.date().openapi({ example: "2026-07-24T00:00:00.000Z" }),
-    lastUsedAt: z.date().openapi({ example: "2026-07-24T12:00:00.000Z" }),
-    expiresAt: z.date().openapi({ example: "2026-08-23T12:00:00.000Z" }),
+    createdAt: z.iso
+      .datetime()
+      .openapi({ example: "2026-07-24T00:00:00.000Z" }),
+    lastUsedAt: z.iso
+      .datetime()
+      .openapi({ example: "2026-07-24T12:00:00.000Z" }),
+    expiresAt: z.iso
+      .datetime()
+      .openapi({ example: "2026-08-23T12:00:00.000Z" }),
   })
   .openapi("SessionSummary");
 
 export type SessionSummaryDto = z.infer<typeof SessionSummarySchema>;
 
 /**
- * Forgot Password Request DTO Schema
+ * Forgot-password request body schema (email).
  */
 export const ForgotPasswordRequestSchema = z
   .object({
@@ -152,7 +165,7 @@ export type ForgotPasswordRequestDto = z.infer<
 >;
 
 /**
- * Verify Reset OTP DTO Schema
+ * Verify-password-reset-OTP request body schema (`sessionId` + OTP).
  */
 export const VerifyPasswordResetOtpRequestSchema = z
   .object({
@@ -166,7 +179,8 @@ export type VerifyPasswordResetOtpRequestDto = z.infer<
 >;
 
 /**
- * Reset Password DTO Schema
+ * Reset-password request body schema. Requires the reset token plus a
+ * matching new-password / confirm-password pair.
  */
 export const ResetPasswordRequestSchema = z
   .object({
@@ -185,7 +199,8 @@ export type ResetPasswordRequestDto = z.infer<
 >;
 
 /**
- * Active session payload returned to clients.
+ * Active session payload returned to clients, extending
+ * {@link SessionSummaryDto} with an `isCurrent` flag.
  */
 export const ActiveSessionSchema = SessionSummarySchema.extend({
   isCurrent: z.boolean().openapi({ example: true }),
@@ -194,14 +209,32 @@ export const ActiveSessionSchema = SessionSummarySchema.extend({
 export type ActiveSessionDto = z.infer<typeof ActiveSessionSchema>;
 
 /**
- * Auth Session Record used internally for session management.
+ * Internal session record stored in Redis. Includes the refresh-token
+ * hash so {@link AuthService.refresh} can detect token reuse. Never
+ * returned over the wire.
  */
-export type AuthSessionRecord = Omit<SessionSummaryDto, "sessionId"> & {
-  refreshTokenHash: string;
-};
+export const SessionRecordSchema = SessionSummarySchema.omit({
+  sessionId: true,
+}).extend({
+  refreshTokenHash: z.string(),
+});
+
+export type SessionRecord = z.infer<typeof SessionRecordSchema>;
 
 /**
- * Forgot Password Response Schema
+ * Public projection of the session record: everything in
+ * {@link SessionSummaryDto} except `sessionId`, which is supplied by the
+ * caller at the point of use. Use this whenever a Redis blob is parsed
+ * and intended to be returned to clients.
+ */
+export const PublicSessionDataSchema = SessionSummarySchema.omit({
+  sessionId: true,
+});
+
+export type PublicSessionData = z.infer<typeof PublicSessionDataSchema>;
+
+/**
+ * Forgot-password response payload (issued reset session ID).
  */
 export const ForgotPasswordResponseSchema = z
   .object({
@@ -214,7 +247,7 @@ export type ForgotPasswordResponseDto = z.infer<
 >;
 
 /**
- * Verify Password Reset OTP Response Schema
+ * Verify-password-reset-OTP response payload (single-use reset token).
  */
 export const VerifyPasswordResetOtpResponseSchema = z
   .object({
@@ -227,9 +260,8 @@ export type VerifyPasswordResetOtpResponseDto = z.infer<
 >;
 
 /**
- * Session Param Schema
+ * Path-parameter schema for `:sessionId` on session revocation endpoints.
  */
-
 export const SessionParamSchema = z
   .object({
     sessionId: uuidSchema("Session ID must be a valid UUID"),

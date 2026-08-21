@@ -3,12 +3,20 @@
   "info": {
     "title": "Railway Booking Platform API",
     "version": "1.0.0",
-    "description": "\n  # Railway Booking Platform API\n\n  Welcome to the **Railway Booking Platform API**. This document is the\n  unified public API contract for the IRCTC Railway Booking Platform,\n  combining every public endpoint exposed through the API Gateway.\n\n  ## Services\n\n  - **User Service** — Authentication, identity, and profile management.\n  - **Admin Service** — Administrator authentication and administrative operations.\n  - **Inventy Service** - Inventory Schedule Management. *(future)*\n  - **Booking Service** — Seat reservation and booking lifecycle. *(future)*\n  - **Search Service** — Train and station search. *(future)*\n  - **Payment Service** — Payment processing. *(future)*\n  - **Notification Service** — User-facing notifications. *(internal)*\n"
+    "description": "\n  # Railway Booking Platform API\n\n  Welcome to the **Railway Booking Platform API**. This document is the\n  unified public API contract for the IRCTC Railway Booking Platform,\n  combining every public endpoint exposed through the API Gateway.\n\n  ## Services\n\n  - **User Service** — Authentication, identity, and profile management.\n  - **Admin Service** — Administrator authentication and administrative operations.\n  - **Search Service** — Train and station search.\n  - **Inventory Service** - Inventory Schedule Management.\n  - **Booking Service** — Seat reservation and booking lifecycle. *(future)*\n  - **Payment Service** — Payment processing. *(future)*\n  - **Notification Service** — User-facing notifications. *(internal)*\n"
   },
   "tags": [
     {
       "name": "Admin",
       "x-displayName": "Admin"
+    },
+    {
+      "name": "Bookings",
+      "x-displayName": "Bookings"
+    },
+    {
+      "name": "Search",
+      "x-displayName": "Search"
     },
     {
       "name": "Authentication",
@@ -262,6 +270,1186 @@
                   },
                   "required": ["success", "error", "meta"],
                   "description": "Error Response Envelope (UNAUTHORIZED)",
+                  "x-sdk-ref": "ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests - Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalServerErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bookings": {
+      "servers": [
+        {
+          "url": "http://localhost:4000",
+          "description": "API Gateway Proxy URL"
+        },
+        {
+          "url": "http://localhost:4005",
+          "description": "Local Direct Booking Service URL"
+        }
+      ],
+      "post": {
+        "operationId": "bookingsCreateBooking",
+        "tags": ["Bookings"],
+        "summary": "Create Booking",
+        "description": "Initiates a new booking in the `PENDING` state for the authenticated user. Idempotent on the `idempotencyKey` request field — a retry with the same key returns the original response without re-running the saga.\n\n**Request Body Fields:**\n- `idempotencyKey` - Client-generated UUID that deduplicates retries.\n- `scheduleId` - UUID of the `ScheduleInventory` row to book against.\n- `fromStationId` / `toStationId` - Station UUIDs or station codes (e.g. BCK, HWR) of the segment endpoints (must differ).\n- `seatIds` - 1 to 6 seat UUIDs from the seat-map.\n- `passengers` - 1 to 6 passenger records, one per seat.\n\n**Response:**\nReturns the new booking's id, PNR, and current status in the success envelope's `data` field.\n\n**Outcomes:**\n- 201 Created - Booking was created in the `PENDING` state.\n- 400 Bad Request - The request body failed schema validation.\n- 401 Unauthorized - The JWT is missing or invalid.\n- 404 Not Found - The schedule or one of the seats does not exist.\n- 409 Conflict - The seats are already held by another booking or the saga cannot proceed.\n- 429 Too Many Requests - Booking attempts were rate-limited.\n- 500 Internal Server Error - The service could not complete the booking.\n\n**Notes:**\n- The PNR is generated server-side (10-character alphanumeric) and returned only once in the 201 response. Subsequent GETs on the booking id return the same PNR.\n- Idempotency keys are stored for the lifetime of the booking; reuse them only for genuine retries, not for distinct bookings.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBookingRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Booking created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [true],
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Booking created successfully"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CreateBookingResponse"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "message", "data", "meta"],
+                  "description": "Success Response Envelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Validation or invalid input error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - JWT is missing or invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "UNAUTHORIZED"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Authentication required."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (UNAUTHORIZED)",
+                  "x-sdk-ref": "ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - The schedule or one of the seats does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "BOOKING_NOT_FOUND"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Booking not found."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (BOOKING_NOT_FOUND)",
+                  "x-sdk-ref": "ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Seats are already held, or the saga cannot proceed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "BOOKING_INVALID_TRANSITION"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Booking cannot transition to the requested status from its current state."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (BOOKING_INVALID_TRANSITION)",
+                  "x-sdk-ref": "ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests - Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalServerErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bookings/{bookingId}": {
+      "servers": [
+        {
+          "url": "http://localhost:4000",
+          "description": "API Gateway Proxy URL"
+        },
+        {
+          "url": "http://localhost:4005",
+          "description": "Local Direct Booking Service URL"
+        }
+      ],
+      "get": {
+        "operationId": "bookingsGetBooking",
+        "tags": ["Bookings"],
+        "summary": "Get Booking",
+        "description": "Returns the booking with the given id, scoped to the authenticated user. Returns 404 if the booking does not exist or belongs to another user (ownership is enforced before the booking is loaded for non-admins).\n\n**Request Body Fields:**\n- `bookingId` (path) - UUID of the booking to fetch.\n\n**Response:**\nReturns the full booking record (status, version, segments, seat/passenger rows) in the success envelope's `data` field.\n\n**Outcomes:**\n- 200 OK - Booking was found and is owned by the authenticated user.\n- 401 Unauthorized - The JWT is missing or invalid.\n- 404 Not Found - The booking does not exist or belongs to another user.\n- 429 Too Many Requests - Polling exceeded the default rate limit.\n- 500 Internal Server Error - The service could not read the booking.\n\n**Notes:**\n- The status field reflects the most recent CAS transition. Subscribe to the booking-events SSE stream (Phase 2) for live updates instead of polling.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+            },
+            "required": true,
+            "name": "bookingId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Booking retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [true],
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Booking retrieved successfully"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CreateBookingResponse"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "message", "data", "meta"],
+                  "description": "Success Response Envelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Validation or invalid input error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - JWT is missing or invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "UNAUTHORIZED"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Authentication required."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (UNAUTHORIZED)",
+                  "x-sdk-ref": "ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Booking is owned by another user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "BOOKING_FORBIDDEN"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "You do not have access to this booking."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (BOOKING_FORBIDDEN)",
+                  "x-sdk-ref": "ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Booking does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "BOOKING_NOT_FOUND"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Booking not found."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (BOOKING_NOT_FOUND)",
+                  "x-sdk-ref": "ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests - Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalServerErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bookings/{bookingId}/cancel": {
+      "servers": [
+        {
+          "url": "http://localhost:4000",
+          "description": "API Gateway Proxy URL"
+        },
+        {
+          "url": "http://localhost:4005",
+          "description": "Local Direct Booking Service URL"
+        }
+      ],
+      "post": {
+        "operationId": "bookingsCancelBooking",
+        "tags": ["Bookings"],
+        "summary": "Cancel Booking",
+        "description": "Cancels a booking owned by the authenticated user. Drives the row through `CANCELLING` → `CANCELLED` and emits one `BookingStatusChangedV1` event per transition.\n\n**Request Body Fields:**\n- `bookingId` (path) - UUID of the booking to cancel.\n\n**Response:**\nReturns the cancelled booking record (status `CANCELLED`) in the success envelope's `data` field.\n\n**Outcomes:**\n- 200 OK - The booking was successfully cancelled.\n- 401 Unauthorized - The JWT is missing or invalid.\n- 404 Not Found - The booking does not exist or belongs to another user.\n- 409 Conflict - The booking is already in a terminal state and cannot be cancelled.\n- 429 Too Many Requests - Cancellation attempts were rate-limited.\n- 500 Internal Server Error - The service could not complete cancellation.\n\n**Notes:**\n- Cancellations on already-confirmed bookings will eventually trigger a refund via payment-service. The booking row flips to `CANCELLED` synchronously, but the refund is asynchronous.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+            },
+            "required": true,
+            "name": "bookingId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Booking cancelled successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [true],
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Booking cancelled successfully"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CreateBookingResponse"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "message", "data", "meta"],
+                  "description": "Success Response Envelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Validation or invalid input error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - JWT is missing or invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "UNAUTHORIZED"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Authentication required."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (UNAUTHORIZED)",
+                  "x-sdk-ref": "ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Booking is owned by another user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "BOOKING_FORBIDDEN"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "You do not have access to this booking."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (BOOKING_FORBIDDEN)",
+                  "x-sdk-ref": "ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found - Booking does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "BOOKING_NOT_FOUND"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Booking not found."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (BOOKING_NOT_FOUND)",
+                  "x-sdk-ref": "ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict - Booking is in a terminal state and cannot be cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "BOOKING_INVALID_TRANSITION"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Booking cannot transition to the requested status from its current state."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (BOOKING_INVALID_TRANSITION)",
+                  "x-sdk-ref": "ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests - Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalServerErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/search/stations/suggest": {
+      "servers": [
+        {
+          "url": "http://localhost:4000",
+          "description": "API Gateway Proxy URL"
+        },
+        {
+          "url": "http://localhost:4004",
+          "description": "Local Direct Search Service URL"
+        }
+      ],
+      "get": {
+        "operationId": "suggestStations",
+        "tags": ["Search"],
+        "summary": "Suggest stations for autocomplete",
+        "description": "Returns a list of station suggestions matching a user-entered query. Backed by an Elasticsearch projection of `STATION_*` lifecycle events with a Redis read-through cache.\n\n**Query Parameters:**\n- `q` - The autocomplete search term. Minimum 2 characters; trimmed before lookup.\n- `limit` - Maximum number of suggestions to return. Defaults to 10; max 20.\n\n**Response:**\nReturns a `StationSuggestResponse` containing `count` and a `stations[]` array. Each station carries its canonical `stationId`, `code`, `name`, `zone`, `state`, and an `isActive` flag.\n\n**Outcomes:**\n- 200 OK - One or more stations matched (or zero, in which case `stations` is an empty array).\n- 400 Bad Request - The query failed schema validation (e.g. `q` shorter than 2 characters, or `limit` out of range).\n- 429 Too Many Requests - The caller exceeded the platform rate limit.\n- 500 Internal Server Error - Elasticsearch or Redis returned an unexpected error.\n\n**Notes:**\n- The endpoint is public — no authentication is required.\n- Results are served from Redis when warm; cache TTL is bounded by `SUGGEST_CACHE_TTL_SECONDS`.",
+        "security": [],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 64,
+              "example": "HWR"
+            },
+            "required": true,
+            "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20,
+              "default": 10,
+              "example": 10
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Station suggestions retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [true],
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Station suggestions retrieved successfully"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/StationSuggestResponse"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "message", "data", "meta"],
+                  "description": "Success Response Envelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Validation or invalid input error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests - Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalServerErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/search/trains": {
+      "servers": [
+        {
+          "url": "http://localhost:4000",
+          "description": "API Gateway Proxy URL"
+        },
+        {
+          "url": "http://localhost:4004",
+          "description": "Local Direct Search Service URL"
+        }
+      ],
+      "get": {
+        "operationId": "searchTrains",
+        "tags": ["Search"],
+        "summary": "Search trains by from/to station and date",
+        "description": "Returns trains running between two stations on a given date, including timing, fare range, capacity, and operating-days metadata. Backed by an Elasticsearch projection of `SCHEDULE_CREATED` admin events with a Redis read-through cache.\n\n**Query Parameters:**\n- `fromStation` - Origin station code (e.g. `NDLS`) or UUID. Required.\n- `toStation` - Destination station code (e.g. `HWH`) or UUID. Required.\n- `date` - Travel date in `YYYY-MM-DD` format. Required.\n- `category` - Optional filter by train category (e.g. `RAJDHANI`, `SHATABDI`).\n- `limit` - Page size. Defaults to 10; max 50.\n- `offset` - Pagination offset. Defaults to 0.\n\n**Response:**\nReturns a `TrainSearchResponse` containing the resolved `fromStation`, `toStation`, the requested `date`, the total `count`, and a `trains[]` array. Each train carries timing, distance, fare range, capacity, and operating days.\n\n**Outcomes:**\n- 200 OK - The query ran; the `trains` array may be empty when no schedules match.\n- 400 Bad Request - The query failed schema validation (e.g. invalid date format, missing required field).\n- 404 Not Found - Either `fromStation` or `toStation` could not be resolved against the `stations` index.\n- 429 Too Many Requests - The caller exceeded the platform rate limit.\n- 500 Internal Server Error - Elasticsearch or Redis returned an unexpected error.\n\n**Notes:**\n- The endpoint is public — no authentication is required.\n- Stations are resolved upstream against the existing `stations` Elasticsearch index, then the schedule index is queried with the resolved UUIDs.\n- Cache TTL is bounded by `TRAIN_SEARCH_CACHE_TTL_SECONDS`.\n- `availableSeats` is **capacity**, not live availability. Per-seat live counts are fetched by booking-service from inventory-service at hold time.\n- Snapshot data is frozen at `SCHEDULE_CREATED` time; edits to the underlying train or route do not trigger a re-projection.",
+        "security": [],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 64,
+              "example": "Howrah Jn"
+            },
+            "required": true,
+            "name": "fromStation",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 64,
+              "example": "New Delhi"
+            },
+            "required": true,
+            "name": "toStation",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "example": "2026-08-03"
+            },
+            "required": true,
+            "name": "date",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "RAJDHANI",
+                "SHATABDI",
+                "VANDE_BHARAT",
+                "DURONTO",
+                "SUPERFAST",
+                "PASSENGER",
+                "EXPRESS",
+                "DEMU",
+                "MEMU"
+              ],
+              "example": "RAJDHANI"
+            },
+            "required": false,
+            "name": "category",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 10,
+              "example": 10
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": ["integer", "null"],
+              "minimum": 0,
+              "default": 0,
+              "example": 0
+            },
+            "required": false,
+            "name": "offset",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Train search results retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [true],
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Train search results retrieved successfully"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/TrainSearchResponse"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "message", "data", "meta"],
+                  "description": "Success Response Envelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Validation or invalid input error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "One or both stations could not be resolved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "STATION_NOT_FOUND"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Station could not be resolved. Verify the code or id and try again."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (STATION_NOT_FOUND)",
+                  "x-sdk-ref": "ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests - Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalServerErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/search/schedules/{scheduleId}/seat-map": {
+      "servers": [
+        {
+          "url": "http://localhost:4000",
+          "description": "API Gateway Proxy URL"
+        },
+        {
+          "url": "http://localhost:4004",
+          "description": "Local Direct Search Service URL"
+        }
+      ],
+      "get": {
+        "operationId": "getSeatMap",
+        "tags": ["Search"],
+        "summary": "Retrieve the seat-map for a schedule segment",
+        "description": "Returns the per-coach seat layout for a schedule, with a live `isBooked` overlay for seats whose booking overlaps the requested `(fromStation, toStation)` segment. Backed by the inventory-service `getSeatMap` gRPC call with a Redis read-through cache (60s TTL by default).\n\n**Query Parameters:**\n- `scheduleId` (path) - The schedule UUID.\n- `fromStationId` (query) - Origin station UUID. Must differ from `toStationId`.\n- `toStationId` (query) - Destination station UUID. Must differ from `fromStationId`.\n\n**Response:**\nReturns a `SeatMapResponse` whose `status` is one of `OK`, `SCHEDULE_NOT_FOUND`, or `SCHEDULE_INACTIVE`. On `OK` the `coaches[]` array lists each coach with `coachNumber`, `coachType`, `totalSeats`, and a `seats[]` array of `SeatMapSeat` rows (`seatNumber`, `seatType`, `berthType`, `price`, `isBooked`, `quota`).\n\n**Outcomes:**\n- 200 OK - Seat-map returned with booking overlay applied for the segment.\n- 400 Bad Request - Path or query failed schema validation.\n- 404 Not Found - The `scheduleId` does not exist.\n- 409 Conflict - The schedule is cancelled or the requested segment is invalid.\n- 429 Too Many Requests - Caller exceeded the platform rate limit.\n- 500 Internal Server Error - Inventory gRPC returned an unexpected error.\n\n**Notes:**\n- The endpoint is public — no authentication is required.\n- Cache TTL is bounded by `SEAT_MAP_CACHE_TTL_SECONDS`; the booking-service pre-flight `CheckAvailability` closes the race window for stale reads.\n- Only `CONFIRMED` allocations mark a seat `isBooked`. `HELD` allocations are intentionally hidden for a stable UI.\n- `coachType`, `berthType`, `quota` are best-effort defaults until those columns land on the seat inventory model.",
+        "security": [],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            },
+            "required": true,
+            "name": "scheduleId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "example": "NDLS",
+              "description": "Station UUID or Station Code (e.g. NDLS, HWH)"
+            },
+            "required": true,
+            "description": "Station UUID or Station Code (e.g. NDLS, HWH)",
+            "name": "fromStation",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "example": "NDLS",
+              "description": "Station UUID or Station Code (e.g. NDLS, HWH)"
+            },
+            "required": true,
+            "description": "Station UUID or Station Code (e.g. NDLS, HWH)",
+            "name": "toStation",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Seat map retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [true],
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Seat map retrieved successfully"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/SeatMapResponse"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "message", "data", "meta"],
+                  "description": "Success Response Envelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Validation or invalid input error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Schedule not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "SCHEDULE_NOT_FOUND"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Schedule could not be found. Verify the scheduleId and try again."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (SCHEDULE_NOT_FOUND)",
+                  "x-sdk-ref": "ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Schedule is not active or the requested segment is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [false],
+                      "example": false
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "example": "SCHEDULE_INACTIVE"
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Schedule is not active or the requested segment is invalid."
+                        },
+                        "details": {}
+                      },
+                      "required": ["code", "message"],
+                      "description": "Error Detail Payload"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ResponseMeta"
+                    }
+                  },
+                  "required": ["success", "error", "meta"],
+                  "description": "Error Response Envelope (SCHEDULE_INACTIVE)",
                   "x-sdk-ref": "ErrorResponse"
                 }
               }
@@ -1924,6 +3112,499 @@
         "type": "object",
         "properties": {}
       },
+      "CreateBookingResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+          },
+          "pnr": {
+            "type": "string",
+            "example": "K3M7NP2R4X",
+            "description": "10-character alphanumeric PNR."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "SEATS_HELD",
+              "PAYMENT_PENDING",
+              "CONFIRMING",
+              "CONFIRMED",
+              "CANCELLING",
+              "CANCELLED",
+              "EXPIRED",
+              "FAILED"
+            ],
+            "example": "PENDING"
+          }
+        },
+        "required": ["id", "pnr", "status"]
+      },
+      "CreateBookingRequest": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "format": "uuid",
+            "example": "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+          },
+          "scheduleId": {
+            "type": "string",
+            "format": "uuid",
+            "example": "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+          },
+          "fromStationId": {
+            "type": "string",
+            "format": "uuid",
+            "example": "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+          },
+          "toStationId": {
+            "type": "string",
+            "format": "uuid",
+            "example": "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+          },
+          "fromSequence": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "toSequence": {
+            "type": "integer",
+            "minimum": 2
+          },
+          "legIndices": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "seatIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "example": "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+            },
+            "minItems": 1,
+            "maxItems": 6
+          },
+          "passengers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Passenger"
+            },
+            "minItems": 1,
+            "maxItems": 6
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "scheduleId",
+          "fromStationId",
+          "toStationId",
+          "seatIds",
+          "passengers"
+        ]
+      },
+      "Passenger": {
+        "type": "object",
+        "properties": {
+          "fullName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "example": "Pritam Maity"
+          },
+          "age": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 120,
+            "example": 30
+          },
+          "gender": {
+            "type": "string",
+            "enum": ["MALE", "FEMALE", "OTHER"],
+            "example": "MALE"
+          },
+          "berthPreference": {
+            "type": "string",
+            "enum": [
+              "LOWER",
+              "MIDDLE",
+              "UPPER",
+              "SIDE_LOWER",
+              "SIDE_UPPER",
+              "NO_PREFERENCE"
+            ],
+            "example": "LOWER"
+          }
+        },
+        "required": ["fullName", "age", "gender"]
+      },
+      "StationSuggestResponse": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "example": 3
+          },
+          "stations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StationSuggestion"
+            }
+          }
+        },
+        "required": ["count", "stations"]
+      },
+      "StationSuggestion": {
+        "type": "object",
+        "properties": {
+          "stationId": {
+            "type": "string",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "code": {
+            "type": "string",
+            "example": "NDLS"
+          },
+          "name": {
+            "type": "string",
+            "example": "New Delhi"
+          },
+          "zone": {
+            "type": ["string", "null"],
+            "example": "Northern Railway"
+          },
+          "state": {
+            "type": ["string", "null"],
+            "example": "Delhi"
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": ["stationId", "code", "name", "zone", "state", "isActive"]
+      },
+      "TrainSearchResponse": {
+        "type": "object",
+        "properties": {
+          "fromStation": {
+            "type": "object",
+            "properties": {
+              "stationId": {
+                "type": "string",
+                "example": "550e8400-e29b-41d4-a716-446655440013"
+              },
+              "code": {
+                "type": "string",
+                "example": "NDLS"
+              },
+              "name": {
+                "type": "string",
+                "example": "New Delhi"
+              }
+            },
+            "required": ["stationId", "code", "name"]
+          },
+          "toStation": {
+            "type": "object",
+            "properties": {
+              "stationId": {
+                "type": "string",
+                "example": "550e8400-e29b-41d4-a716-446655440014"
+              },
+              "code": {
+                "type": "string",
+                "example": "HWH"
+              },
+              "name": {
+                "type": "string",
+                "example": "Howrah"
+              }
+            },
+            "required": ["stationId", "code", "name"]
+          },
+          "date": {
+            "type": "string",
+            "example": "2026-09-15"
+          },
+          "count": {
+            "type": "integer",
+            "example": 4
+          },
+          "trains": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrainSearchResult"
+            }
+          }
+        },
+        "required": ["fromStation", "toStation", "date", "count", "trains"]
+      },
+      "TrainSearchResult": {
+        "type": "object",
+        "properties": {
+          "scheduleId": {
+            "type": "string",
+            "example": "550e8400-e29b-41d4-a716-446655440010"
+          },
+          "trainId": {
+            "type": "string",
+            "example": "550e8400-e29b-41d4-a716-446655440011"
+          },
+          "trainNumber": {
+            "type": "string",
+            "example": "12301"
+          },
+          "trainName": {
+            "type": "string",
+            "example": "Rajdhani Express"
+          },
+          "category": {
+            "type": "string",
+            "example": "RAJDHANI"
+          },
+          "from": {
+            "type": "object",
+            "properties": {
+              "stationId": {
+                "type": "string",
+                "example": "550e8400-e29b-41d4-a716-446655440013"
+              },
+              "code": {
+                "type": "string",
+                "example": "NDLS"
+              },
+              "name": {
+                "type": "string",
+                "example": "New Delhi"
+              },
+              "departureTime": {
+                "type": ["string", "null"],
+                "example": "2026-09-15T16:25:00.000Z"
+              },
+              "platform": {
+                "type": ["string", "null"],
+                "example": "9"
+              }
+            },
+            "required": [
+              "stationId",
+              "code",
+              "name",
+              "departureTime",
+              "platform"
+            ]
+          },
+          "to": {
+            "type": "object",
+            "properties": {
+              "stationId": {
+                "type": "string",
+                "example": "550e8400-e29b-41d4-a716-446655440014"
+              },
+              "code": {
+                "type": "string",
+                "example": "HWH"
+              },
+              "name": {
+                "type": "string",
+                "example": "Howrah"
+              },
+              "arrivalTime": {
+                "type": ["string", "null"],
+                "example": "2026-09-16T09:55:00.000Z"
+              },
+              "platform": {
+                "type": ["string", "null"],
+                "example": "9"
+              }
+            },
+            "required": ["stationId", "code", "name", "arrivalTime", "platform"]
+          },
+          "durationMinutes": {
+            "type": ["integer", "null"],
+            "example": 1050
+          },
+          "distanceKm": {
+            "type": "integer",
+            "example": 1447
+          },
+          "fareRange": {
+            "$ref": "#/components/schemas/FareRange"
+          },
+          "availableSeats": {
+            "$ref": "#/components/schemas/AvailableSeats"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["DRAFT", "ACTIVE", "CANCELLED"],
+            "example": "ACTIVE"
+          },
+          "operatingDays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"]
+          }
+        },
+        "required": [
+          "scheduleId",
+          "trainId",
+          "trainNumber",
+          "trainName",
+          "category",
+          "from",
+          "to",
+          "durationMinutes",
+          "distanceKm",
+          "fareRange",
+          "availableSeats",
+          "status",
+          "operatingDays"
+        ]
+      },
+      "FareRange": {
+        "type": "object",
+        "properties": {
+          "min": {
+            "type": "number",
+            "example": 850
+          },
+          "max": {
+            "type": "number",
+            "example": 4250
+          },
+          "currency": {
+            "type": "string",
+            "enum": ["INR"],
+            "example": "INR"
+          }
+        },
+        "required": ["min", "max", "currency"]
+      },
+      "AvailableSeats": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "example": 432
+          },
+          "byCoachType": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "example": {
+              "AC_2A": 48,
+              "AC_3A": 96,
+              "SL": 288
+            }
+          }
+        },
+        "required": ["total", "byCoachType"]
+      },
+      "SeatMapResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["OK", "SCHEDULE_NOT_FOUND", "SCHEDULE_INACTIVE"],
+            "example": "OK",
+            "description": "OK | SCHEDULE_NOT_FOUND | SCHEDULE_INACTIVE"
+          },
+          "coaches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SeatMapCoach"
+            }
+          }
+        },
+        "required": ["status", "coaches"]
+      },
+      "SeatMapCoach": {
+        "type": "object",
+        "properties": {
+          "coachId": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "coachNumber": {
+            "type": "string",
+            "example": "A1"
+          },
+          "coachType": {
+            "type": "string",
+            "example": "AC_2A"
+          },
+          "totalSeats": {
+            "type": "integer",
+            "example": 48
+          },
+          "seats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SeatMapSeat"
+            }
+          }
+        },
+        "required": [
+          "coachId",
+          "coachNumber",
+          "coachType",
+          "totalSeats",
+          "seats"
+        ]
+      },
+      "SeatMapSeat": {
+        "type": "object",
+        "properties": {
+          "seatId": {
+            "type": "string",
+            "example": "550e8400-e29b-41d4-a716-446655440020"
+          },
+          "seatNumber": {
+            "type": "integer",
+            "example": 12
+          },
+          "seatType": {
+            "type": "string",
+            "example": "LOWER"
+          },
+          "berthType": {
+            "type": "string",
+            "example": "SEATER"
+          },
+          "price": {
+            "type": "string",
+            "example": "2.5000"
+          },
+          "isBooked": {
+            "type": "boolean",
+            "example": false
+          },
+          "quota": {
+            "type": "string",
+            "example": "GENERAL"
+          }
+        },
+        "required": [
+          "seatId",
+          "seatNumber",
+          "seatType",
+          "berthType",
+          "price",
+          "isBooked",
+          "quota"
+        ]
+      },
       "RegisterRequest": {
         "type": "object",
         "properties": {
@@ -2054,8 +3735,7 @@
             "maxLength": 50,
             "example": "Doe"
           }
-        },
-        "required": ["firstName", "lastName"]
+        }
       },
       "SessionSummary": {
         "type": "object",
@@ -2258,6 +3938,14 @@
     {
       "name": "Admin Service API",
       "tags": ["Admin"]
+    },
+    {
+      "name": "Booking Service API",
+      "tags": ["Bookings"]
+    },
+    {
+      "name": "Search Service API",
+      "tags": ["Search"]
     },
     {
       "name": "User Service API",

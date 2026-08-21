@@ -1,77 +1,54 @@
-import express from "express";
-import type { Request, Response, Application } from "express";
-import helmet from "helmet";
-import cookieParser from "cookie-parser";
+/**
+ * ## module/app
+ *
+ * `inventory-service` Express application. The framework boilerplate
+ * (helmet, body parsers, cookie parser, request id, request logger,
+ * `/health`, not-found handler, error handler) is wired by `createApp`
+ * from `@irctc/http`. Middleware is injected to avoid a cycle with
+ * `@irctc/middleware`.
+ *
+ * The root banner is appended here so the service-specific route
+ * catalogue stays alongside the routes.
+ */
+import type { Request, Response } from "express";
+import { successResponse, statusCode, createApp } from "@irctc/http";
 import {
   requestIdMiddleware,
   requestLoggerMiddleware,
   errorHandler,
   notFoundHandler,
 } from "@irctc/middleware";
-import { successResponse, statusCode } from "@irctc/http";
 import router, { healthRoutes } from "@routes";
 
-const app: Application = express();
-
 /**
- * Security headers (Defense-in-depth: protects service if accessed directly)
+ * Creates and configures the Express application.
  */
-app.use(
-  helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'none'"],
-        frameAncestors: ["'none'"],
-      },
-    },
-  }),
-);
-
-/**
- * Request body parsers
- */
-app.use(express.json({ limit: "1mb" }));
-app.use(express.urlencoded({ extended: true }));
-
-/**
- * Cookie parser (needed to read JWT from cookies)
- */
-app.use(cookieParser());
-
-/**
- * Request ID + structured logging
- */
-app.use(requestIdMiddleware);
-app.use(requestLoggerMiddleware);
-
-/**
- * Health probes (before routes so k8s always sees them)
- */
-app.use("/health", healthRoutes);
-
-/**
- * Root endpoint
- */
-app.get("/", (_req: Request, res: Response) => {
-  res.status(statusCode.success).json(
-    successResponse("Welcome to Inventory Service API", {
-      version: "1.0.0",
-      endpoints: {
-        health: "/health",
-      },
-    }),
-  );
+const app = createApp({
+  serviceName: "inventory-service",
+  router,
+  healthRouter: healthRoutes,
+  middleware: {
+    requestId: requestIdMiddleware,
+    requestLogger: requestLoggerMiddleware,
+    notFoundHandler,
+    errorHandler,
+  },
+  configure(app) {
+    /**
+     * Root endpoint — service banner.
+     */
+    app.get("/", (_req: Request, res: Response) => {
+      res.status(statusCode.success).json(
+        successResponse("Welcome to Inventory Service API", {
+          version: "1.0.0",
+          endpoints: {
+            health: "/health",
+            inventory: "/inventory",
+          },
+        }),
+      );
+    });
+  },
 });
-
-/**
- * API routes
- */
-app.use("/", router);
-
-/**
- * 404 + central error handler (always last)
- */
-app.use(notFoundHandler);
-app.use(errorHandler);
 
 export default app;

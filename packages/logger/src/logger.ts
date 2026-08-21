@@ -1,4 +1,4 @@
-import pino, { Logger } from "pino";
+import pino, { type Logger } from "pino";
 import { context, trace } from "@opentelemetry/api";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

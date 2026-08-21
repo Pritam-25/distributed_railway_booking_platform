@@ -1,4 +1,4 @@
-import type { Application, RequestHandler } from "express";
+import type { RequestHandler, Router } from "express";
 import { routes, type RouteConfig } from "@config";
 import { getRateLimitMiddleware } from "@ratelimit";
 import {
@@ -44,12 +44,12 @@ const resolveAuthMiddleware = (auth: RouteConfig["auth"]): RequestHandler => {
  * in `src/proxy/proxyMiddleware.ts`. This file owns the *which* —
  * which routes, which auth, which preset — not the *how*.
  */
-export const mountRoutes = (app: Application): void => {
+export const mountRoutes = (router: Router): void => {
   for (const route of routes) {
     const authMw = resolveAuthMiddleware(route.auth);
     const rateLimitMw = getRateLimitMiddleware(route.rateLimit);
     const proxyHandler = createProxyHandler(route);
 
-    app.use(route.prefix, authMw, rateLimitMw, proxyHandler);
+    router.use(route.prefix, authMw, rateLimitMw, proxyHandler);
   }
 };

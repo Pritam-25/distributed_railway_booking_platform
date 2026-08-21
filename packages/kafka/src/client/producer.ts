@@ -1,5 +1,5 @@
 import { KafkaJS } from "@confluentinc/kafka-javascript";
-import { logger } from "@irctc/logger";
+import type { LoggerLike } from "../consumer-runner/kafka-consumer-runner.js";
 
 type Kafka = KafkaJS.Kafka;
 type Producer = KafkaJS.Producer;
@@ -7,7 +7,7 @@ type Producer = KafkaJS.Producer;
 /**
  * Singleton manager class for creating, caching, and retrieving the shared Kafka Producer instance.
  *
- * It configures standard reliability patterns such as idempotency and auto-topic creation prevention.
+ * Configures standard reliability patterns such as idempotency and auto-topic creation prevention.
  */
 export class KafkaProducerManager {
   private static instance: Producer | null = null;
@@ -15,17 +15,24 @@ export class KafkaProducerManager {
   /**
    * Initializes and returns the shared Kafka Producer instance.
    *
-   * If an active instance already exists, it will be returned immediately.
-   * The connection to the Kafka broker is established before storing the instance,
-   * ensuring that `isConnected()` only returns true when the connection is live.
+   * If an active instance already exists, it is returned immediately.
+   * Establishes the broker connection before storing the instance to ensure
+   * `isConnected()` only returns true when the connection is live.
    *
-   * @param kafka - The initialized Kafka client instance.
-   * @returns A promise resolving to the initialized and connected Kafka Producer.
+   * @param kafka - Initialized {@link Kafka} client instance.
+   * @param logger - Optional diagnostic logger satisfying {@link LoggerLike}.
+   * @returns A promise resolving to the initialized and connected shared {@link Producer}.
    */
-  static async getProducer(kafka: Kafka): Promise<Producer> {
+  static async getProducer(
+    kafka: Kafka,
+    logger?: LoggerLike,
+  ): Promise<Producer> {
     if (this.instance) return this.instance;
 
-    logger.info({ module: "kafka-producer" }, "Initializing Kafka producer...");
+    logger?.info(
+      { module: "kafka-producer" },
+      "Initializing Kafka producer...",
+    );
 
     const producer = kafka.producer({
       kafkaJS: {
@@ -39,7 +46,7 @@ export class KafkaProducerManager {
     await producer.connect();
     this.instance = producer;
 
-    logger.info(
+    logger?.info(
       { module: "kafka-producer" },
       "Kafka producer connected successfully",
     );
@@ -47,9 +54,9 @@ export class KafkaProducerManager {
   }
 
   /**
-   * Checks whether the shared producer instance has been successfully initialized and connected.
+   * Checks whether the shared producer instance has been initialized and connected.
    *
-   * @returns True if the producer is connected, false otherwise.
+   * @returns `true` if the producer is connected, `false` otherwise.
    */
   static isConnected(): boolean {
     return this.instance !== null;
@@ -58,8 +65,8 @@ export class KafkaProducerManager {
   /**
    * Synchronously retrieves the active producer instance.
    *
-   * @returns The active Kafka Producer.
-   * @throws {Error} If the producer has not been connected at startup.
+   * @returns The active shared {@link Producer} instance.
+   * @throws {Error} If `getProducer()` was not called prior to calling this method.
    */
   static getProducerSync(): Producer {
     if (!this.instance) {
@@ -73,17 +80,18 @@ export class KafkaProducerManager {
   /**
    * Gracefully disconnects the shared Kafka producer from the broker and resets the cached instance.
    *
+   * @param logger - Optional diagnostic logger satisfying {@link LoggerLike}.
    * @returns A promise that resolves when the producer is disconnected.
    */
-  static async disconnect(): Promise<void> {
+  static async disconnect(logger?: LoggerLike): Promise<void> {
     if (this.instance) {
-      logger.info(
+      logger?.info(
         { module: "kafka-producer" },
         "Disconnecting Kafka producer...",
       );
       await this.instance.disconnect();
       this.instance = null;
-      logger.info({ module: "kafka-producer" }, "Kafka producer disconnected");
+      logger?.info({ module: "kafka-producer" }, "Kafka producer disconnected");
     }
   }
 }

@@ -14,6 +14,7 @@ export const COACH_CAPACITY = {
 
 /**
  * Zod validation utility for coach capacity.
+ *
  * @param coachType coach type
  * @param totalSeats total seats in the coach
  * @param ctx Zod refinement context

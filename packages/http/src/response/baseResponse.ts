@@ -5,6 +5,7 @@ type MetaExtra = Record<string, unknown>;
 
 /**
  * Creates metadata for a response.
+ *
  * @param extra Additional metadata.
  * @returns Metadata object.
  */

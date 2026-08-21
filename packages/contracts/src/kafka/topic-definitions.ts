@@ -1,25 +1,22 @@
-import { KAFKA_TOPICS } from "./topics.js";
+import { KAFKA_DLQ_TOPICS, KAFKA_TOPICS } from "./topics.js";
 
-interface TopicDefinition {
+export interface TopicDefinition {
   name: string;
   partitions: number;
   replicationFactor: number;
   retentionMs: number;
 }
 
+const DEFAULT_PARTITIONS = 1;
+const DEFAULT_REPLICATION_FACTOR = 1;
+const DEFAULT_RETENTION_MS = 604800000; // 7 days
+
 export const TOPIC_DEFINITIONS: TopicDefinition[] = [
-  // User OTP Requested
-  {
-    name: KAFKA_TOPICS.USER_OTP_REQUESTED,
-    partitions: 1,
-    replicationFactor: 1,
-    retentionMs: 604800000, // 7 days
-  },
-  // User Logged In
-  {
-    name: KAFKA_TOPICS.USER_LOGGED_IN,
-    partitions: 1,
-    replicationFactor: 1,
-    retentionMs: 604800000, // 7 days
-  },
-];
+  ...Object.values(KAFKA_TOPICS),
+  ...Object.values(KAFKA_DLQ_TOPICS),
+].map((topicName) => ({
+  name: topicName,
+  partitions: DEFAULT_PARTITIONS,
+  replicationFactor: DEFAULT_REPLICATION_FACTOR,
+  retentionMs: DEFAULT_RETENTION_MS,
+}));

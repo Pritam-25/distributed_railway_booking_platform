@@ -162,6 +162,12 @@ export async function shutdownTelemetry(): Promise<void> {
   if (!started || !sdk) return;
   try {
     await sdk.shutdown();
+  } catch (err) {
+    // Suppress OTLP exporter connection errors (e.g. ECONNREFUSED when collector is offline)
+    diag.debug(
+      "Telemetry shutdown flush failed (collector may be offline):",
+      err,
+    );
   } finally {
     sdk = null;
     started = false;

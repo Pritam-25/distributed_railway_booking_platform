@@ -120,6 +120,38 @@ const PRESERVED_COMPONENT_NAMES = new Set(["ErrorResponse", "ErrorDetail"])
 
 // ─── Service metadata loader ──────────────────────────────────────────────────
 
+const SERVICE_BLOCK_SPLIT_REGEX = /\n[ \t]*"[^"\r\n]+":[ \t]*\{/
+
+/**
+ * Extract block content up to the matching closing brace at brace depth 1.
+ */
+const extractBlockContent = (block: string): string => {
+  let depth = 1
+  let end = 0
+  for (; end < block.length && depth > 0; end++) {
+    const ch = block[end]
+    if (ch === "{") depth += 1
+    else if (ch === "}") depth -= 1
+  }
+  return block.slice(0, end - 1)
+}
+
+/**
+ * Harvest excluded tags from a service configuration entry block if generateSdk is false.
+ */
+const harvestTagsFromEntry = (entry: string, excluded: Set<string>): void => {
+  if (!/generateSdk:[ \t]*false\b/.test(entry)) return
+
+  const tagsMatch = /tags:[ \t]*\[([^\]]*)\]/.exec(entry)
+  if (!tagsMatch?.[1]) return
+
+  const tagList = tagsMatch[1]
+  for (const raw of tagList.split(",")) {
+    const tag = raw.replace(/["'\s]/g, "").trim()
+    if (tag.length > 0) excluded.add(tag)
+  }
+}
+
 /**
  * Read `scripts/services.config.ts` synchronously and extract every tag
  * emitted by a service with `generateSdk: false`. The transformer lives in
@@ -146,34 +178,11 @@ const loadExcludedTags = (): Set<string> => {
   const source = readFileSync(configPath, "utf-8")
 
   const excluded = new Set<string>()
-  // Match each service entry block and decide whether to harvest its tags.
-  // The regex is intentionally permissive — the config file is hand-written
-  // and the structure is `id: { ... "generateSdk": false, "tags": [...] }`.
-  // We walk the file once and track brace depth so each block's tags are
-  // attributed to the right service.
-  const blocks = source.split(/\n\s*"\w[\w-]*":\s*\{/g).slice(1)
+  const blocks = source.split(SERVICE_BLOCK_SPLIT_REGEX).slice(1)
 
   for (const block of blocks) {
-    // Extract everything up to the matching closing brace at this depth.
-    let depth = 1
-    let end = 0
-    for (; end < block.length && depth > 0; end++) {
-      const ch = block[end]
-      if (ch === "{") depth += 1
-      else if (ch === "}") depth -= 1
-    }
-    const entry = block.slice(0, end - 1)
-
-    const hasGenerateSdkFalse = /generateSdk:\s*false\b/.test(entry)
-    if (!hasGenerateSdkFalse) continue
-
-    const tagsMatch = entry.match(/tags:\s*\[([^\]]*)\]/)
-    if (!tagsMatch) continue
-    const tagList = tagsMatch[1]
-    for (const raw of tagList.split(",")) {
-      const tag = raw.replace(/["'\s]/g, "").trim()
-      if (tag.length > 0) excluded.add(tag)
-    }
+    const entry = extractBlockContent(block)
+    harvestTagsFromEntry(entry, excluded)
   }
 
   return excluded
@@ -366,6 +375,40 @@ function collectSchemaRefs(root: unknown): Set<string> {
   return refs
 }
 
+const expandReachableFrontier = (
+  schemas: Record<string, OpenApiSchema>,
+  reachability: Set<string>
+): void => {
+  let frontier = [...reachability]
+  while (frontier.length > 0) {
+    const next: string[] = []
+    for (const name of frontier) {
+      const schema = schemas[name]
+      if (!schema || typeof schema !== "object") continue
+      for (const ref of collectSchemaRefs(schema)) {
+        if (!reachability.has(ref)) {
+          reachability.add(ref)
+          next.push(ref)
+        }
+      }
+    }
+    frontier = next
+  }
+}
+
+const deleteUnreachableSchemas = (
+  schemas: Record<string, OpenApiSchema>,
+  reachability: Set<string>
+): number => {
+  let removed = 0
+  for (const name of Object.keys(schemas)) {
+    if (reachability.has(name)) continue
+    delete schemas[name]
+    removed += 1
+  }
+  return removed
+}
+
 /**
  * Remove schemas from `components.schemas` whose names are not reachable
  * from anything outside the schemas map. A schema is reachable if it is
@@ -384,32 +427,56 @@ function pruneOrphanSchemas(spec: OpenAPIObject): number {
 
   // Close over `components.schemas`: a reachable schema can rescue another
   // schema it references. Iterate the frontier until it stops growing.
-  let frontier = [...reachability]
-  while (frontier.length > 0) {
-    const next: string[] = []
-    for (const name of frontier) {
-      const schema = schemas[name]
-      if (!schema || typeof schema !== "object") continue
-      for (const ref of collectSchemaRefs(schema)) {
-        if (!reachability.has(ref)) {
-          reachability.add(ref)
-          next.push(ref)
-        }
-      }
-    }
-    frontier = next
-  }
+  expandReachableFrontier(schemas, reachability)
 
-  let removed = 0
-  for (const name of Object.keys(schemas)) {
-    if (reachability.has(name)) continue
-    delete schemas[name]
-    removed += 1
-  }
-  return removed
+  return deleteUnreachableSchemas(schemas, reachability)
 }
 
 // ─── Core Transformer ─────────────────────────────────────────────────────────
+
+const applyServiceGating = (spec: OpenAPIObject): void => {
+  const excludedTags = loadExcludedTags()
+  if (!spec.paths || excludedTags.size === 0) return
+
+  const dropped = dropExcludedPaths(spec.paths, excludedTags)
+  if (dropped > 0) {
+    // After dropping paths, prune the schemas that lose their only
+    // references (e.g. admin models that nothing else referenced).
+    pruneOrphanSchemas(spec)
+  }
+}
+
+const deduplicateErrorComponents = (spec: OpenAPIObject): void => {
+  const schemas = spec.components?.schemas
+  if (!schemas) return
+
+  const componentExamples = new Map<string, Record<string, unknown>>()
+  const deduplicatedNames: string[] = []
+
+  for (const [name, schema] of Object.entries(schemas)) {
+    if (PRESERVED_COMPONENT_NAMES.has(name)) continue
+
+    // Authoritative marker: error variants are tagged with
+    // `x-sdk-ref: "ErrorResponse"` by `createErrorResponseSchema`.
+    if (schema[SDK_REF_MARKER] !== "ErrorResponse") continue
+
+    const example = extractExampleFromSchema(schema)
+    if (example) {
+      componentExamples.set(name, example)
+    }
+    deduplicatedNames.push(name)
+  }
+
+  if (spec.paths) {
+    rewriteErrorResponses(spec.paths, componentExamples)
+  }
+
+  // Remove the deduplicated variants from `components.schemas` so that
+  // orval does not emit a TypeScript file per error variant.
+  for (const name of deduplicatedNames) {
+    delete schemas[name]
+  }
+}
 
 /**
  * Orval Input Transformer entry point.
@@ -421,47 +488,11 @@ export default function transformOpenApiSpec(
 
   // Pass 1: per-service SDK gating. Drop paths whose tags are excluded
   // before orval sees them, so the generated client doesn't import them.
-  const excludedTags = loadExcludedTags()
-  if (spec.paths && excludedTags.size > 0) {
-    const dropped = dropExcludedPaths(spec.paths, excludedTags)
-    if (dropped > 0) {
-      // After dropping paths, prune the schemas that lose their only
-      // references (e.g. admin models that nothing else referenced).
-      pruneOrphanSchemas(spec)
-    }
-  }
+  applyServiceGating(spec)
 
   // Pass 2: error component deduplication. The existing logic is unchanged;
   // it runs after the gating pass so it sees the same shape as before.
-  const schemas = spec.components?.schemas
-  if (schemas) {
-    const componentExamples = new Map<string, Record<string, unknown>>()
-    const deduplicatedNames: string[] = []
-
-    for (const [name, schema] of Object.entries(schemas)) {
-      if (PRESERVED_COMPONENT_NAMES.has(name)) continue
-
-      // Authoritative marker: error variants are tagged with
-      // `x-sdk-ref: "ErrorResponse"` by `createErrorResponseSchema`.
-      if (schema[SDK_REF_MARKER] !== "ErrorResponse") continue
-
-      const example = extractExampleFromSchema(schema)
-      if (example) {
-        componentExamples.set(name, example)
-      }
-      deduplicatedNames.push(name)
-    }
-
-    if (spec.paths) {
-      rewriteErrorResponses(spec.paths, componentExamples)
-    }
-
-    // Remove the deduplicated variants from `components.schemas` so that
-    // orval does not emit a TypeScript file per error variant.
-    for (const name of deduplicatedNames) {
-      delete schemas[name]
-    }
-  }
+  deduplicateErrorComponents(spec)
 
   return spec
 }

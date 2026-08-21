@@ -13,6 +13,7 @@ import type {
 import { StationEventMapper } from "@mappers";
 import { KAFKA_HEADERS } from "@irctc/kafka";
 import { EVENT_TYPES, KAFKA_TOPICS } from "@irctc/contracts";
+import { logger } from "@irctc/logger";
 
 /**
  * Service class that handles station domain logic, business validations,
@@ -92,6 +93,10 @@ export class StationService {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === "P2002"
       ) {
+        logger.warn(
+          { module: "station-service" },
+          "station with this code already exists",
+        );
         throw new ApiError(
           statusCode.conflict,
           ERROR_CODES.STATION_ALREADY_EXISTS,

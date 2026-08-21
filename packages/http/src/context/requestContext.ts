@@ -11,6 +11,7 @@ const requestContextStorage = new AsyncLocalStorage<RequestContext>();
 
 /**
  * Runs a function with a request context.
+ *
  * @param context Request context.
  * @param fn Function to run.
  * @returns Result of the function.
@@ -22,6 +23,7 @@ export const runWithRequestContext = <T>(
 
 /**
  * Retrieves the request context.
+ *
  * @returns Request context.
  */
 export const getRequestContext = (): RequestContext | undefined =>

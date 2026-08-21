@@ -1,33 +1,8 @@
 {
-  "extends": "@repo/typescript-config/base.json",
+  "extends": "@repo/typescript-config/node.json",
   "compilerOptions": {
-    // File Layout
     "rootDir": "./src",
     "outDir": "./dist",
-
-    // Environment Settings
-    // See also https://aka.ms/tsconfig/module
-    "module": "nodenext",
-    "target": "esnext",
-    "types": ["node"],
-    "lib": ["esnext"],
-    "sourceMap": true,
-    "declaration": true,
-    "declarationMap": true,
-
-    // Stricter Typechecking Options
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
-
-    // Style Options
-    "noImplicitReturns": true,
-    "noImplicitOverride": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true,
-    "noPropertyAccessFromIndexSignature": true,
-
-    // path aliases
     "paths": {
       "@config": ["./src/config/index.js"],
       "@container": ["./src/container/index.js"],
@@ -38,20 +13,11 @@
       "@middleware": ["./src/middleware/index.js"],
       "@utils/errors": ["./src/utils/errors/index.js"],
       "@utils/constants": ["./src/utils/constants/index.js"],
-      "@utils": ["./src/utils/index.ts"],
-      "@dto": ["./src/dto/index.ts"],
+      "@dto": ["./src/dto/index.js"],
       "@mappers": ["./src/mappers/index.js"],
+      "@health": ["./src/health/index.js"],
       "@generated/*": ["./src/generated/*"]
-    },
-
-    // Recommended Options
-
-    "strict": true,
-    "verbatimModuleSyntax": true,
-    "isolatedModules": true,
-    "noUncheckedSideEffectImports": true,
-    "moduleDetection": "force",
-    "skipLibCheck": true
+    }
   },
   "include": ["src/**/*.ts", "test/**/*.ts"],
   "exclude": ["node_modules", "dist", "prisma.config.ts", "vitest.config.ts"]

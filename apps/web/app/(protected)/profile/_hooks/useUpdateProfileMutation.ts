@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { updateProfile, UpdateProfileRequest } from "@/generated"
+import { updateProfile, type UpdateProfileRequest } from "@/generated"
 import { toast } from "@/components/ui/toast"
 import { getErrorMessage } from "@/lib/utils/error"
 import { profileKeys } from "./keys"

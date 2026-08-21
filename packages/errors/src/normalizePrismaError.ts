@@ -7,6 +7,7 @@ type PrismaKnownError = { code: string };
 
 /**
  * Checks if the given error is a known Prisma error (e.g. starts with P followed by 4 digits).
+ *
  * @param error The error to check.
  * @returns True if the error is a Prisma known error.
  */
@@ -23,6 +24,7 @@ export const isPrismaKnownError = (
 
 /**
  * Normalizes a known Prisma database error into a corresponding API ErrorCode.
+ *
  * @param error The error to normalize.
  * @returns The matched ErrorCode, or null if the error is not a Prisma error.
  */

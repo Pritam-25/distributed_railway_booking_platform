@@ -7,9 +7,9 @@
 // ─── Direction of merging ────────────────────────────────────────────────────
 //
 //   apps/user-service/openapi.yaml      ─┐
-//                                       │
+//                                        │
 //   apps/admin-service/openapi.yaml     ─┼──>  redocly join  ──>  apps/api-gateway/openapi.yaml
-//                                       │       (multi-input, deep-merge)
+//                                        │       (multi-input, deep-merge)
 //   (any future service)                ─┘
 //
 //   Output is byte-faithful to what redocly produces for the YAML/JSON body,
@@ -58,11 +58,13 @@
 
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
 import { SERVICES } from "../../../scripts/services.config.js";
 
+const require = createRequire(import.meta.url);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -89,9 +91,9 @@ const GATEWAY_INFO = {
 
   - **User Service** — Authentication, identity, and profile management.
   - **Admin Service** — Administrator authentication and administrative operations.
-  - **Inventy Service** - Inventory Schedule Management. *(future)*
+  - **Search Service** — Train and station search.
+  - **Inventory Service** - Inventory Schedule Management.
   - **Booking Service** — Seat reservation and booking lifecycle. *(future)*
-  - **Search Service** — Train and station search. *(future)*
   - **Payment Service** — Payment processing. *(future)*
   - **Notification Service** — User-facing notifications. *(internal)*
 `,
@@ -114,6 +116,13 @@ type ServiceSpecSource = {
 // services.config.ts — including it would cause the merge to read its
 // own previous output as an input, which is a self-reference at best and
 // a circular consistency violation at worst.
+//
+// Note: directory names use spaces (`apps/search service/`) while the
+// `SERVICES` map uses hyphens (`search-service`). We normalise the
+// directory name to a service id by lowercasing and collapsing whitespace.
+const normaliseServiceId = (dirName: string): string =>
+  dirName.trim().toLowerCase().replace(/\s+/g, "-");
+
 const collectMergeInputs = (): ServiceSpecSource[] => {
   if (!fs.existsSync(APPS_DIR)) return [];
 
@@ -122,14 +131,15 @@ const collectMergeInputs = (): ServiceSpecSource[] => {
   const sources: ServiceSpecSource[] = entries
     .filter((entry) => entry.isDirectory())
     .map((entry) => {
-      const metadata = SERVICES[entry.name];
+      const serviceId = normaliseServiceId(entry.name);
+      const metadata = SERVICES[serviceId];
       if (metadata?.publish !== true) return null;
       if (metadata.mergeInput === false) return null;
 
       const specPath = path.join(APPS_DIR, entry.name, "openapi.yaml");
       if (!fs.existsSync(specPath)) return null;
 
-      return { id: entry.name, specPath };
+      return { id: serviceId, specPath };
     })
     .filter((source): source is ServiceSpecSource => source !== null);
 
@@ -146,25 +156,55 @@ const collectMergeInputs = (): ServiceSpecSource[] => {
 // the gateway's target YAML path. Output is the merged YAML; we'll read it
 // back as JSON for the .json sibling.
 //
-// We invoke the binary via `pnpm exec` rather than the unqualified path
-// `apps/api-gateway/node_modules/.bin/redocly(.cmd)` because on Windows,
-// `child_process.execFileSync` against a `.cmd` shim can fail with EINVAL
-// under certain Node versions. Routing through pnpm exec keeps the same
-// pnpm-managed resolution but avoids the spawn constraint.
+const resolveRedoclyBin = (): string => {
+  try {
+    const pkgJsonPath = require.resolve("@redocly/cli/package.json");
+    const pkgDir = path.dirname(pkgJsonPath);
+    const pkgJson = JSON.parse(fs.readFileSync(pkgJsonPath, "utf-8")) as {
+      bin?: string | Record<string, string>;
+    };
+    const binRel =
+      typeof pkgJson.bin === "string"
+        ? pkgJson.bin
+        : (pkgJson.bin?.redocly ?? "bin/cli.js");
+    return path.resolve(pkgDir, binRel);
+  } catch {
+    return path.join(
+      TARGET_DIR,
+      "node_modules",
+      "@redocly",
+      "cli",
+      "bin",
+      "cli.js",
+    );
+  }
+};
+
+// Invokes `redocly join` directly through Node.
 const runRedoclyJoin = (sources: ServiceSpecSource[]): void => {
+  const inputFiles = sources.map((s) => path.resolve(REPO_ROOT, s.specPath));
   const redoclyArgs = [
     "join",
-    ...sources.map((s) => path.relative(REPO_ROOT, s.specPath)),
+    ...inputFiles,
     "--output",
-    path.relative(REPO_ROOT, TARGET_YAML),
+    path.resolve(REPO_ROOT, TARGET_YAML),
   ];
-  console.log(`→ pnpm exec redocly ${redoclyArgs.join(" ")}`);
+  console.log(`→ node redocly ${redoclyArgs.join(" ")}`);
 
   try {
-    execFileSync("pnpm", ["exec", "redocly", ...redoclyArgs], {
+    // Invoke the redocly JS entry directly via Node. Two reasons we skip
+    // the `pnpm exec redocly` wrapper:
+    //   1. On Windows, `execFileSync("pnpm", ...)` with `shell: true`
+    //      passes args through cmd.exe, which mangles paths containing
+    //      spaces (e.g. `apps/search service/openapi.yaml`).
+    //   2. With `shell: false`, Node looks for `pnpm` (not `pnpm.cmd`)
+    //      and fails with ENOENT.
+    // Going through Node + cli.js avoids both problems and saves a layer
+    // of process overhead.
+    const redoclyBin = resolveRedoclyBin();
+    execFileSync(process.execPath, [redoclyBin, ...redoclyArgs], {
       stdio: ["ignore", "inherit", "inherit"],
-      cwd: REPO_ROOT,
-      shell: process.platform === "win32",
+      cwd: TARGET_DIR,
     });
   } catch (err) {
     console.error("❌ redocly join failed");

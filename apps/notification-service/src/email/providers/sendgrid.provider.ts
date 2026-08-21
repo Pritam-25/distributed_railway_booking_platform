@@ -2,6 +2,17 @@ import { logger as irctcLogger } from "@irctc/logger";
 import type { EmailProvider, SendEmailOptions } from "../email-provider.js";
 import sgMail from "@sendgrid/mail";
 
+interface SendGridErrorResponseBody {
+  errors?: Array<{ message?: string }>;
+}
+
+interface SendGridErrorLike {
+  code?: number;
+  response?: {
+    body?: SendGridErrorResponseBody;
+  };
+}
+
 /**
  * Concrete Strategy implementation of EmailProvider that dispatches email messages via SendGrid's API.
  * Uses Constructor Dependency Injection to receive credentials.
@@ -60,7 +71,33 @@ export class SendGridProvider implements EmailProvider {
         ),
       ]);
       this.logger.info({ module: "email-sendgrid" }, "Email sent via SendGrid");
-    } catch (err) {
+    } catch (err: unknown) {
+      const sgErr = err as SendGridErrorLike | undefined;
+      const errorsList = sgErr?.response?.body?.errors;
+
+      const isQuotaOrAuthError =
+        sgErr?.code === 401 ||
+        sgErr?.code === 403 ||
+        (Array.isArray(errorsList) &&
+          errorsList.some((e) =>
+            /credit|exceeded|unauthorized|forbidden|invalid api key/i.test(
+              e.message ?? "",
+            ),
+          ));
+
+      if (isQuotaOrAuthError) {
+        this.logger.warn(
+          {
+            module: "email-sendgrid",
+            to,
+            subject: content.subject,
+            text: content.text,
+          },
+          "SendGrid API credit limit exceeded or unauthorized API key. Fallback: Dispatched email content to log.",
+        );
+        return;
+      }
+
       this.logger.error(
         { module: "email-sendgrid", err },
         "Failed to send email via SendGrid",

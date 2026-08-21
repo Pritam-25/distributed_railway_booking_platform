@@ -5,6 +5,7 @@ type MetaExtra = Record<string, unknown>;
 
 /**
  * Generic success response.
+ *
  * @param message Success message.
  * @param data Response data.
  * @param metaExtra Additional metadata.
@@ -21,11 +22,7 @@ export const successResponse = <T>(
   meta: createMeta(metaExtra),
 });
 
-/**
- * Pagination options interface.
- * @field skip The number of records to skip.
- * @field take The number of records to take.
- */
+/** Pagination options interface. */
 export interface PaginationOptions {
   skip: number;
   take: number;
@@ -46,6 +43,7 @@ export interface PaginatedResult<T> {
 
 /**
  * Paginated response for API results.
+ *
  * @param message Success message.
  * @param result Paginated result containing data and metadata.
  * @param metaExtra Additional metadata.
@@ -67,6 +65,7 @@ export const paginatedResponse = <T>(
 
 /**
  * Error response for API errors.
+ *
  * @param error Error object.
  * @param metaExtra Additional metadata.
  * @returns Error response object.

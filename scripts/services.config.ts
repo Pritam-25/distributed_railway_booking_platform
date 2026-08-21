@@ -94,6 +94,16 @@ export const SERVICES: Readonly<Record<string, ServiceMetadata>> = {
     generateSdk: false,
     tags: ["Admin"],
   },
+  "search-service": {
+    displayName: "Search Service API",
+    publish: true,
+    tags: ["Search"],
+  },
+  "booking-service": {
+    displayName: "Booking Service API",
+    publish: true,
+    tags: ["Bookings"],
+  },
   "api-gateway": {
     displayName: "Railway Booking Platform API",
     publish: true,
@@ -104,6 +114,5 @@ export const SERVICES: Readonly<Record<string, ServiceMetadata>> = {
   // "inventory-service":   { displayName: "Inventory Service API",  publish: true,  tags: ["Inventory"] },
   // "booking-service":     { displayName: "Booking Service API",    publish: true,  tags: ["Bookings"] },
   // "payment-service":     { displayName: "Payment Service API",    publish: true,  tags: ["Payments"] },
-  // "search-service":      { displayName: "Search Service API",     publish: true,  tags: ["Stations", "Trains"] },
   // "notification-service":{ displayName: "Notification Service API", publish: false, tags: ["Notifications"] },
 };

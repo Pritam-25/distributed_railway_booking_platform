@@ -1,5 +1,8 @@
-import type { Request, RequestHandler } from "express";
-import { createProxyMiddleware } from "http-proxy-middleware";
+import type { RequestHandler } from "express";
+import {
+  createProxyMiddleware as createHPM,
+  fixRequestBody,
+} from "http-proxy-middleware";
 import type {
   Options as HPMOptions,
   RequestHandler as HPMRequestHandler,
@@ -12,7 +15,7 @@ import {
 import { getBreaker } from "@resilience";
 import { ApiError } from "@irctc/errors";
 import { statusCode } from "@irctc/http";
-import { ERROR_CODES } from "@utils";
+import { ERROR_CODES } from "@utils/error";
 import type { RouteConfig } from "@config";
 
 /**
@@ -33,10 +36,12 @@ const getOrCreateProxy = (
     target: baseUrl,
     changeOrigin: true,
     pathRewrite: (_path, req) => {
-      // Reconstruct path from originalUrl (since Express app.use strips baseUrl from req.url)
-      return (req as Request).originalUrl.replace(/^\/api\/v1/, "");
+      const originalUrl = (req as unknown as { originalUrl?: string })
+        .originalUrl;
+      return String(originalUrl ?? req.url ?? "").replace(/^\/api\/v1/, "");
     },
     on: {
+      proxyReq: fixRequestBody,
       error: (err, _req, res) => {
         // Connection-level failure (ECONNREFUSED, ECONNRESET, DNS error).
         // We log here so the failure is recorded with the upstream name
@@ -46,12 +51,16 @@ const getOrCreateProxy = (
           `Proxy error for upstream "${upstreamName}"`,
         );
         // Emit the error so the per-request promise in runProxy can reject.
-        res.emit("proxyError", err);
+        (
+          res as unknown as {
+            emit?: (event: string, ...args: unknown[]) => void;
+          }
+        ).emit?.("proxyError", err);
       },
     },
   };
 
-  const proxy = createProxyMiddleware(options);
+  const proxy = createHPM(options);
   proxyCache.set(upstreamName, proxy);
   return proxy;
 };
@@ -126,11 +135,12 @@ export const createProxyHandler = (route: RouteConfig): RequestHandler => {
 
     const startTime = Date.now();
     const requestId =
-      req.requestId ??
+      (req as { requestId?: string }).requestId ??
       (req.headers["x-request-id"] as string | undefined) ??
       "";
     const traceId = (res.getHeader("X-Trace-Id") as string | undefined) ?? "";
-    const userId = req.user?.userId ?? "anonymous";
+    const userId =
+      (req as { user?: { userId?: string } }).user?.userId ?? "anonymous";
     const upstream = route.upstream.name;
     const circuitName = route.upstream.circuitName;
     const logBase = {

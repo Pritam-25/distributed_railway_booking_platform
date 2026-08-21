@@ -1,9 +1,15 @@
-import type { EachMessagePayload, KafkaConsumerRunner } from "@irctc/kafka";
+import {
+  createDlqConsumerHandler,
+  type EachMessagePayload,
+  type KafkaConsumerRunner,
+  type Producer,
+} from "@irctc/kafka";
 import type { logger as irctcLogger } from "@irctc/logger";
 import type { ScheduleService } from "@services";
-import { KAFKA_TOPICS } from "@irctc/contracts";
-import { ZodError } from "zod";
+import { KAFKA_TOPICS, ScheduleStatusChangedEventV1 } from "@irctc/contracts";
 import { ApiError } from "@irctc/errors";
+import { statusCode } from "@irctc/http";
+import { ERROR_CODES } from "@utils/errors";
 
 /**
  * Kafka event consumer for the schedule status changed topic.
@@ -13,75 +19,43 @@ export class ScheduleStatusChangedConsumer {
   /**
    * Creates an instance of ScheduleStatusChangedConsumer.
    *
+   * @param producer - Shared Kafka producer used by DLQ wrapper.
    * @param runner - The generic consumer runner executing the subscription loop.
    * @param service - Service containing business logic to process schedule status changed events.
    * @param logger - Logger instance.
    */
   constructor(
+    private readonly producer: Producer,
     private readonly runner: KafkaConsumerRunner,
     private readonly service: ScheduleService,
     private readonly logger: typeof irctcLogger,
-  ) {
-    this.logger = logger.child({ module: "schedule-status-changed-consumer" });
-  }
-
-  /**
-   * Evaluates the raw incoming event payload, catches any operational issues
-   * to ensure offset progression, and executes the business logic.
-   *
-   * @param payload - Raw Kafka broker payload context.
-   */
-  private async handle(payload: EachMessagePayload): Promise<void> {
-    const { message, heartbeat } = payload;
-
-    if (message.value === null) return;
-
-    try {
-      const event = JSON.parse(message.value.toString("utf8"));
-      await this.service.processStatusChanged(event);
-    } catch (err) {
-      const isNonRetryableError =
-        err instanceof SyntaxError ||
-        err instanceof ZodError ||
-        (err instanceof ApiError &&
-          err.statusCode >= 400 &&
-          err.statusCode < 500);
-
-      if (isNonRetryableError) {
-        this.logger.error(
-          {
-            err:
-              err instanceof Error
-                ? { message: err.message, stack: err.stack }
-                : err,
-            messageKey: message.key?.toString("utf8"),
-          },
-          "Failed to parse schedule status changed notification payload (non-retryable). Committing offset and discarding.",
-        );
-      } else {
-        this.logger.error(
-          {
-            err:
-              err instanceof Error
-                ? { message: err.message, stack: err.stack }
-                : err,
-            messageKey: message.key?.toString("utf8"),
-          },
-          "Transient error processing schedule status changed notification. Rethrowing for retry.",
-        );
-        throw err;
-      }
-    } finally {
-      await heartbeat();
-    }
-  }
+  ) {}
 
   /**
    * Boots the subscriber loop on the Schedule Status Changed Kafka topic.
    */
   async start(): Promise<void> {
-    await this.runner.run(KAFKA_TOPICS.SCHEDULE_STATUS_CHANGED, (payload) =>
-      this.handle(payload),
+    await this.runner.run(
+      KAFKA_TOPICS.SCHEDULE_STATUS_CHANGED,
+      this.createHandler(),
+    );
+  }
+
+  /**
+   * Creates the DLQ-wrapped message handler for schedule status changed events.
+   */
+  private createHandler(): (payload: EachMessagePayload) => Promise<void> {
+    return createDlqConsumerHandler(
+      this.producer,
+      this.logger,
+      ScheduleStatusChangedEventV1,
+      (event) => this.service.processStatusChanged(event),
+      {
+        isCustomNonRetryable: (e) =>
+          e instanceof ApiError &&
+          e.statusCode === statusCode.notFound &&
+          e.code === ERROR_CODES.SCHEDULE_INVENTORY_NOT_FOUND,
+      },
     );
   }
 

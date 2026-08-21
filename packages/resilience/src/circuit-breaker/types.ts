@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { LoggerLike } from "../rate-limiter/types.js";
+import type { LoggerLike } from "../rate-limiter/types.js";
 
 /**
  * TypeScript interface representing configuration options for the CircuitBreaker.
@@ -119,6 +119,9 @@ export enum CircuitBreakerState {
  * Base class for all CircuitBreaker-related errors.
  */
 export class CircuitBreakerError extends Error {
+  /**
+   *
+   */
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = "CircuitBreakerError";
@@ -129,6 +132,9 @@ export class CircuitBreakerError extends Error {
  * Error thrown when an execution times out.
  */
 export class CircuitBreakerTimeoutError extends CircuitBreakerError {
+  /**
+   *
+   */
   constructor(options?: ErrorOptions) {
     super("Circuit breaker timeout", options);
     this.name = "CircuitBreakerTimeoutError";
@@ -139,6 +145,9 @@ export class CircuitBreakerTimeoutError extends CircuitBreakerError {
  * Error thrown when trying to execute an operation and the circuit is OPEN.
  */
 export class CircuitBreakerOpenError extends CircuitBreakerError {
+  /**
+   *
+   */
   constructor(options?: ErrorOptions) {
     super("Circuit breaker is open", options);
     this.name = "CircuitBreakerOpenError";
@@ -149,6 +158,9 @@ export class CircuitBreakerOpenError extends CircuitBreakerError {
  * Error thrown when trials capacity in HALF_OPEN state is exceeded.
  */
 export class CircuitBreakerHalfOpenError extends CircuitBreakerError {
+  /**
+   *
+   */
   constructor(options?: ErrorOptions) {
     super("Circuit breaker is half-open", options);
     this.name = "CircuitBreakerHalfOpenError";

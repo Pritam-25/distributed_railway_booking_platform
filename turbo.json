@@ -1,12 +1,26 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
+  "globalEnv": [
+    "NODE_ENV",
+    "SERVICE_NAME",
+    "DEPLOYMENT_ENVIRONMENT",
+    "OTEL_EXPORTER_OTLP_ENDPOINT",
+    "OTEL_DEBUG",
+    "NEXT_PUBLIC_API_URL",
+    "DATABASE_URL"
+  ],
   "ui": "tui",
   "tasks": {
     "build:spec": {
       "cache": false
     },
     "api-gateway#build:spec": {
-      "dependsOn": ["user-service#build:spec", "admin-service#build:spec"],
+      "dependsOn": [
+        "user-service#build:spec",
+        "admin-service#build:spec",
+        "search-service#build:spec",
+        "booking-service#build:spec"
+      ],
       "cache": false
     },
     "generate:api": {

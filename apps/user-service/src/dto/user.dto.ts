@@ -3,7 +3,7 @@ import "@irctc/openapi";
 import { z } from "zod";
 
 /**
- * Schema for User Response DTO
+ * Public user profile response payload.
  */
 export const UserResponseSchema = z
   .object({
@@ -18,13 +18,20 @@ export const UserResponseSchema = z
 export type UserResponseDto = z.infer<typeof UserResponseSchema>;
 
 /**
- * Schema for validating user profile update requests.
+ * Profile update request body schema. At least one updatable field
+ * (`firstName`, `lastName`) must be supplied.
  */
 export const UpdateProfileSchema = z
   .object({
-    firstName: firstNameSchema,
-    lastName: lastNameSchema,
+    firstName: firstNameSchema.optional(),
+    lastName: lastNameSchema.optional(),
   })
+  .refine(
+    (data) => data.firstName !== undefined || data.lastName !== undefined,
+    {
+      message: "At least one field must be provided.",
+    },
+  )
   .openapi("UpdateProfileRequest");
 
 export type UpdateProfileDto = z.infer<typeof UpdateProfileSchema>;
