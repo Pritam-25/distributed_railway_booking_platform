@@ -1,9 +1,8 @@
-import { Router } from "express";
-import { liveCheck, readyCheck } from "@controllers";
+import { createHealthRouter } from "@irctc/http";
+import { healthDependencies } from "@health";
 
-const router: Router = Router();
+const healthRoutes = createHealthRouter({
+  dependencies: healthDependencies,
+});
 
-router.get("/live", liveCheck);
-router.get("/ready", readyCheck);
-
-export default router;
+export default healthRoutes;

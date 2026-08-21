@@ -1,1 +1,1 @@
-export * from "./health.service.js";
+export {};

@@ -10,11 +10,11 @@ import { logger } from "@irctc/logger";
  * IMPORTANT: Must be instantiated AFTER initKafka() has completed
  * (server.ts guarantees this via dynamic import of container).
  */
-export class BookingContainer {
+export class PaymentContainer {
   /**
-   * Singleton instance of the BookingContainer.
+   * Singleton instance of the PaymentContainer.
    */
-  private static instance: BookingContainer;
+  private static instance: PaymentContainer;
 
   /**
    * Outbox repository instance.
@@ -34,24 +34,24 @@ export class BookingContainer {
    * @returns A promise that resolves when both consumers have started.
    */
   async start(): Promise<void> {
-    logger.info({ module: "container" }, "Starting booking event consumers...");
+    logger.info({ module: "container" }, "Starting payment event consumers...");
     logger.info(
       { module: "container" },
-      "Booking service event consumer loops started successfully.",
+      "Payment service event consumer loops started successfully.",
     );
   }
 
   /**
    * Retrieves the singleton container instance.
    *
-   * @returns The singleton instance of BookingContainer.
+   * @returns The singleton instance of PaymentContainer.
    */
-  static getInstance(): BookingContainer {
-    if (!BookingContainer.instance) {
-      BookingContainer.instance = new BookingContainer();
+  static getInstance(): PaymentContainer {
+    if (!PaymentContainer.instance) {
+      PaymentContainer.instance = new PaymentContainer();
     }
 
-    return BookingContainer.instance;
+    return PaymentContainer.instance;
   }
 
   /**
