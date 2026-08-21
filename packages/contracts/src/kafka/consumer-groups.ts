@@ -11,4 +11,8 @@ export const CONSUMER_GROUPS = {
   SEARCH_SCHEDULE_STATUS_CHANGED:
     "search-service-schedule-status-change-consumer",
   BOOKING_STATUS_BROADCAST: "booking-service-status-broadcast-consumer",
+  BOOKING_SEATS_RESULT: "booking-service-seats-result-consumer",
+  INVENTORY_HOLD_SEATS_REQUESTED:
+    "inventory-service-hold-seats-requested-consumer",
+  BOOKING_AUTO_CONFIRM: "booking-service-auto-confirm-consumer",
 } as const;

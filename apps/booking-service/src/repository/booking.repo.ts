@@ -16,7 +16,7 @@ import {
  * the repository falls back to the shared `PrismaClient`.
  *
  * CAS transitions on the `status` column use an `updateMany` with a
- * `version: { lt: newVersion }` guard so concurrent transition attempts
+ * `version: { lt: expectedVersion }` guard so concurrent transition attempts
  * serialise through the database — exactly one writer wins, the rest
  * observe `updated: false` and abort.
  */
@@ -51,6 +51,21 @@ export class BookingRepository {
   ): Promise<Booking | null> {
     return this.getClient(tx).booking.findUnique({
       where: { id: bookingId },
+    });
+  }
+
+  /**
+   * Loads a booking by its UUID together with its seat rows. Used by the
+   * saga orchestrator after `SeatsHeldV1` arrives so it can map the
+   * inventory-side `seatInventoryId` onto the booking-side `seatId`.
+   *
+   * @param bookingId - The booking UUID.
+   * @param tx - Optional transaction client.
+   */
+  async findByIdWithSeats(bookingId: string, tx?: Prisma.TransactionClient) {
+    return this.getClient(tx).booking.findUnique({
+      where: { id: bookingId },
+      include: { seats: true },
     });
   }
 
@@ -185,6 +200,50 @@ export class BookingRepository {
     return this.getClient(tx).bookingPassenger.createMany({
       data: passengers,
     });
+  }
+
+  /**
+   * Maps inventory-side allocation rows onto the booking-side seat rows
+   * written during `createBooking`, and persists the enriched metadata.
+   *
+   * Called by `BookingSagaOrchestrator.handleSeatsHeld` after the
+   * inventory reply carries the canonical `coachNumber`, `seatNumber`,
+   * `seatType`, `seatInventoryId`, and price for each allocation. The
+   * join key is the booking-side `seatId`, which the orchestrator keys
+   * from the `HoldSeatsRequestedV1` payload (the booking service picked
+   * a `seatId` per passenger when it created the booking).
+   *
+   * @param bookingId - The booking UUID.
+   * @param updates - One update per booking-side seat row, keyed by `seatId`.
+   * @param tx - Optional transaction client.
+   */
+  async updatePassengers(
+    bookingId: string,
+    updates: ReadonlyArray<{
+      seatId: string;
+      seatInventoryId: string;
+      coachNumber: string;
+      seatNumber: number;
+      seatType: string;
+      price: number;
+    }>,
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
+    const client = this.getClient(tx);
+    await Promise.all(
+      updates.map((u) =>
+        client.bookingSeat.updateMany({
+          where: { bookingId, seatId: u.seatId },
+          data: {
+            seatInventoryId: u.seatInventoryId,
+            coachNumber: u.coachNumber,
+            seatNumber: u.seatNumber,
+            seatType: u.seatType,
+            price: u.price,
+          },
+        }),
+      ),
+    );
   }
 
   /**

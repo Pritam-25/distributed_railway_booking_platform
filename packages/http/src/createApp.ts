@@ -71,6 +71,8 @@ const DEFAULT_CORS_ALLOWED_HEADERS = [
   "X-Request-ID",
   "traceparent",
   "baggage",
+  "Cache-Control",
+  "Pragma",
 ];
 
 const DEFAULT_CORS_EXPOSED_HEADERS = [

@@ -88,12 +88,18 @@ export class SeatMapService {
 
     const cacheKey = this.buildCacheKey(params.scheduleId, query);
 
-    logger.debug(
-      { module: "seat-map-service", cacheKey },
-      "2. Reading Redis cache",
-    );
-    const cached = await this.tryReadCache(cacheKey);
-    if (cached) return cached;
+    const noCache =
+      headers?.["cache-control"]?.includes("no-cache") ||
+      headers?.["pragma"] === "no-cache";
+
+    if (!noCache) {
+      logger.debug(
+        { module: "seat-map-service", cacheKey },
+        "2. Reading Redis cache",
+      );
+      const cached = await this.tryReadCache(cacheKey);
+      if (cached) return cached;
+    }
 
     logger.debug(
       { module: "seat-map-service", scheduleId: params.scheduleId },
@@ -108,8 +114,8 @@ export class SeatMapService {
     const grpcResponse = await this.callInventoryGetSeatMap(
       {
         scheduleId: params.scheduleId,
-        fromStationId: query.fromStationId,
-        toStationId: query.toStationId,
+        fromStationId: query.fromStation,
+        toStationId: query.toStation,
       },
       headers,
     );
@@ -133,14 +139,14 @@ export class SeatMapService {
    * Builds a deterministic SHA-1 cache key from the normalized query parameters.
    *
    * @param scheduleId - Schedule UUID string.
-   * @param query - Validated seat-map query DTO containing fromStationId and toStationId.
+   * @param query - Validated seat-map query DTO containing fromStation and toStation.
    * @returns Cache key string formatted as `cache:seat-map:v1:<16-char-hash>`.
    */
   private buildCacheKey(scheduleId: string, query: SeatMapQueryDto): string {
     const normalized = [
       scheduleId.trim().toLowerCase(),
-      query.fromStationId.trim().toLowerCase(),
-      query.toStationId.trim().toLowerCase(),
+      query.fromStation.trim().toLowerCase(),
+      query.toStation.trim().toLowerCase(),
     ].join("|");
 
     const hash = createHash("sha1")

@@ -1,4 +1,4 @@
-import { KAFKA_TOPICS } from "./topics.js";
+import { KAFKA_DLQ_TOPICS, KAFKA_TOPICS } from "./topics.js";
 
 export interface TopicDefinition {
   name: string;
@@ -11,9 +11,10 @@ const DEFAULT_PARTITIONS = 1;
 const DEFAULT_REPLICATION_FACTOR = 1;
 const DEFAULT_RETENTION_MS = 604800000; // 7 days
 
-export const TOPIC_DEFINITIONS: TopicDefinition[] = Object.values(
-  KAFKA_TOPICS,
-).map((topicName) => ({
+export const TOPIC_DEFINITIONS: TopicDefinition[] = [
+  ...Object.values(KAFKA_TOPICS),
+  ...Object.values(KAFKA_DLQ_TOPICS),
+].map((topicName) => ({
   name: topicName,
   partitions: DEFAULT_PARTITIONS,
   replicationFactor: DEFAULT_REPLICATION_FACTOR,

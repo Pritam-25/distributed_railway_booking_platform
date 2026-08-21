@@ -39,16 +39,16 @@ export const stationIdentifierSchema = (
 
 export const seatMapQuerySchema = z
   .object({
-    fromStationId: stationIdentifierSchema("fromStationId is required."),
-    toStationId: stationIdentifierSchema("toStationId is required."),
+    fromStation: stationIdentifierSchema("fromStation is required."),
+    toStation: stationIdentifierSchema("toStation is required."),
   })
   .refine(
     (value) =>
-      value.fromStationId.trim().toUpperCase() !==
-      value.toStationId.trim().toUpperCase(),
+      value.fromStation.trim().toUpperCase() !==
+      value.toStation.trim().toUpperCase(),
     {
-      message: "fromStationId and toStationId must be different.",
-      path: ["toStationId"],
+      message: "fromStation and toStation must be different.",
+      path: ["toStation"],
     },
   )
   .openapi("SeatMapQueryParams");

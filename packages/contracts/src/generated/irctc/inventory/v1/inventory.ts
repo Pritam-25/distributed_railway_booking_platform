@@ -7,6 +7,7 @@
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 import type { CallContext, CallOptions } from "nice-grpc-common";
+import { Timestamp } from "../../../google/protobuf/timestamp.js";
 
 export const protobufPackage = "irctc.inventory.v1";
 
@@ -20,6 +21,12 @@ export interface GetSeatDetailsRequest {
 export interface GetSeatDetailsResponse {
   scheduleId: string;
   seatId: string;
+  /**
+   * Inventory-side row UUID. Booking-service needs this when emitting
+   * BOOKING_HOLD_SEATS_REQUESTED so the consumer can write the matching
+   * SeatAllocation rows.
+   */
+  seatInventoryId: string;
   trainId: string;
   coachId: string;
   coachNumber: string;
@@ -69,6 +76,41 @@ export interface SeatMapSeat {
   price: string;
   isBooked: boolean;
   quota: string;
+}
+
+/**
+ * ValidateBookingRequest is the synchronous pre-flight payload sent by
+ * BookingService.createBooking. Carries enough information for inventory-service
+ * to reject the obvious schedule-level failures before the booking row is
+ * written.
+ */
+export interface ValidateBookingRequest {
+  scheduleId: string;
+  fromStationId: string;
+  toStationId: string;
+  /**
+   * The wall-clock instant at which the booking-side handler began processing
+   * the request. Used to compare against the schedule's departure date so
+   * both services agree on "has the train left?".
+   */
+  clientRequestedAt?: Date | undefined;
+}
+
+/**
+ * ValidateBookingResponse carries a simple status discriminator:
+ *
+ *   - "OK"                    : schedule is active and the train has not yet departed.
+ *   - "SCHEDULE_NOT_FOUND"    : no schedule with `schedule_id` exists.
+ *   - "SCHEDULE_INACTIVE"     : schedule exists but is cancelled.
+ *   - "TRAIN_ALREADY_DEPARTED": departure date has passed (with a small
+ *                               clock-skew tolerance — see inventory handler).
+ *
+ * `departure_at` is populated only when status == OK, as an ISO-8601 UTC
+ * string the caller can echo back to the user.
+ */
+export interface ValidateBookingResponse {
+  status: string;
+  departureAt: string;
 }
 
 function createBaseGetSeatDetailsRequest(): GetSeatDetailsRequest {
@@ -156,6 +198,7 @@ function createBaseGetSeatDetailsResponse(): GetSeatDetailsResponse {
   return {
     scheduleId: "",
     seatId: "",
+    seatInventoryId: "",
     trainId: "",
     coachId: "",
     coachNumber: "",
@@ -176,6 +219,9 @@ export const GetSeatDetailsResponse: MessageFns<GetSeatDetailsResponse> = {
     }
     if (message.seatId !== "") {
       writer.uint32(18).string(message.seatId);
+    }
+    if (message.seatInventoryId !== "") {
+      writer.uint32(82).string(message.seatInventoryId);
     }
     if (message.trainId !== "") {
       writer.uint32(26).string(message.trainId);
@@ -226,6 +272,14 @@ export const GetSeatDetailsResponse: MessageFns<GetSeatDetailsResponse> = {
           }
 
           message.seatId = reader.string();
+          continue;
+        }
+        case 10: {
+          if (tag !== 82) {
+            break;
+          }
+
+          message.seatInventoryId = reader.string();
           continue;
         }
         case 3: {
@@ -305,6 +359,11 @@ export const GetSeatDetailsResponse: MessageFns<GetSeatDetailsResponse> = {
         : isSet(object.seat_id)
           ? globalThis.String(object.seat_id)
           : "",
+      seatInventoryId: isSet(object.seatInventoryId)
+        ? globalThis.String(object.seatInventoryId)
+        : isSet(object.seat_inventory_id)
+          ? globalThis.String(object.seat_inventory_id)
+          : "",
       trainId: isSet(object.trainId)
         ? globalThis.String(object.trainId)
         : isSet(object.train_id)
@@ -346,6 +405,9 @@ export const GetSeatDetailsResponse: MessageFns<GetSeatDetailsResponse> = {
     }
     if (message.seatId !== "") {
       obj.seatId = message.seatId;
+    }
+    if (message.seatInventoryId !== "") {
+      obj.seatInventoryId = message.seatInventoryId;
     }
     if (message.trainId !== "") {
       obj.trainId = message.trainId;
@@ -856,6 +918,212 @@ export const SeatMapSeat: MessageFns<SeatMapSeat> = {
   },
 };
 
+function createBaseValidateBookingRequest(): ValidateBookingRequest {
+  return {
+    scheduleId: "",
+    fromStationId: "",
+    toStationId: "",
+    clientRequestedAt: undefined,
+  };
+}
+
+export const ValidateBookingRequest: MessageFns<ValidateBookingRequest> = {
+  encode(
+    message: ValidateBookingRequest,
+    writer: BinaryWriter = new BinaryWriter(),
+  ): BinaryWriter {
+    if (message.scheduleId !== "") {
+      writer.uint32(10).string(message.scheduleId);
+    }
+    if (message.fromStationId !== "") {
+      writer.uint32(18).string(message.fromStationId);
+    }
+    if (message.toStationId !== "") {
+      writer.uint32(26).string(message.toStationId);
+    }
+    if (message.clientRequestedAt !== undefined) {
+      Timestamp.encode(
+        toTimestamp(message.clientRequestedAt),
+        writer.uint32(34).fork(),
+      ).join();
+    }
+    return writer;
+  },
+
+  decode(
+    input: BinaryReader | Uint8Array,
+    length?: number,
+  ): ValidateBookingRequest {
+    const reader =
+      input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseValidateBookingRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.scheduleId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.fromStationId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.toStationId = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.clientRequestedAt = fromTimestamp(
+            Timestamp.decode(reader, reader.uint32()),
+          );
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ValidateBookingRequest {
+    return {
+      scheduleId: isSet(object.scheduleId)
+        ? globalThis.String(object.scheduleId)
+        : isSet(object.schedule_id)
+          ? globalThis.String(object.schedule_id)
+          : "",
+      fromStationId: isSet(object.fromStationId)
+        ? globalThis.String(object.fromStationId)
+        : isSet(object.from_station_id)
+          ? globalThis.String(object.from_station_id)
+          : "",
+      toStationId: isSet(object.toStationId)
+        ? globalThis.String(object.toStationId)
+        : isSet(object.to_station_id)
+          ? globalThis.String(object.to_station_id)
+          : "",
+      clientRequestedAt: isSet(object.clientRequestedAt)
+        ? fromJsonTimestamp(object.clientRequestedAt)
+        : isSet(object.client_requested_at)
+          ? fromJsonTimestamp(object.client_requested_at)
+          : undefined,
+    };
+  },
+
+  toJSON(message: ValidateBookingRequest): unknown {
+    const obj: any = {};
+    if (message.scheduleId !== "") {
+      obj.scheduleId = message.scheduleId;
+    }
+    if (message.fromStationId !== "") {
+      obj.fromStationId = message.fromStationId;
+    }
+    if (message.toStationId !== "") {
+      obj.toStationId = message.toStationId;
+    }
+    if (message.clientRequestedAt !== undefined) {
+      obj.clientRequestedAt = message.clientRequestedAt.toISOString();
+    }
+    return obj;
+  },
+};
+
+function createBaseValidateBookingResponse(): ValidateBookingResponse {
+  return { status: "", departureAt: "" };
+}
+
+export const ValidateBookingResponse: MessageFns<ValidateBookingResponse> = {
+  encode(
+    message: ValidateBookingResponse,
+    writer: BinaryWriter = new BinaryWriter(),
+  ): BinaryWriter {
+    if (message.status !== "") {
+      writer.uint32(10).string(message.status);
+    }
+    if (message.departureAt !== "") {
+      writer.uint32(18).string(message.departureAt);
+    }
+    return writer;
+  },
+
+  decode(
+    input: BinaryReader | Uint8Array,
+    length?: number,
+  ): ValidateBookingResponse {
+    const reader =
+      input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseValidateBookingResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.status = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.departureAt = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ValidateBookingResponse {
+    return {
+      status: isSet(object.status) ? globalThis.String(object.status) : "",
+      departureAt: isSet(object.departureAt)
+        ? globalThis.String(object.departureAt)
+        : isSet(object.departure_at)
+          ? globalThis.String(object.departure_at)
+          : "",
+    };
+  },
+
+  toJSON(message: ValidateBookingResponse): unknown {
+    const obj: any = {};
+    if (message.status !== "") {
+      obj.status = message.status;
+    }
+    if (message.departureAt !== "") {
+      obj.departureAt = message.departureAt;
+    }
+    return obj;
+  },
+};
+
 /** InventoryService provides RPC methods to query seat inventory details. */
 export type InventoryServiceDefinition = typeof InventoryServiceDefinition;
 export const InventoryServiceDefinition = {
@@ -883,6 +1151,21 @@ export const InventoryServiceDefinition = {
       responseStream: false,
       options: {},
     },
+    /**
+     * ValidateBooking is the synchronous schedule-level pre-flight called by
+     * BookingService.createBooking before any booking row is written. It surfaces
+     * the cheap invariants (schedule exists, schedule ACTIVE, departure time
+     * still in the future) that would otherwise produce a useless PENDING →
+     * SagaLog(HOLD_SEATS) → INVENTORY_SEATS_HOLD_FAILED round-trip.
+     */
+    validateBooking: {
+      name: "ValidateBooking",
+      requestType: ValidateBookingRequest as typeof ValidateBookingRequest,
+      requestStream: false,
+      responseType: ValidateBookingResponse as typeof ValidateBookingResponse,
+      responseStream: false,
+      options: {},
+    },
   },
 } as const;
 
@@ -900,6 +1183,17 @@ export interface InventoryServiceImplementation<CallContextExt = {}> {
     request: GetSeatMapRequest,
     context: CallContext & CallContextExt,
   ): Promise<GetSeatMapResponse>;
+  /**
+   * ValidateBooking is the synchronous schedule-level pre-flight called by
+   * BookingService.createBooking before any booking row is written. It surfaces
+   * the cheap invariants (schedule exists, schedule ACTIVE, departure time
+   * still in the future) that would otherwise produce a useless PENDING →
+   * SagaLog(HOLD_SEATS) → INVENTORY_SEATS_HOLD_FAILED round-trip.
+   */
+  validateBooking(
+    request: ValidateBookingRequest,
+    context: CallContext & CallContextExt,
+  ): Promise<ValidateBookingResponse>;
 }
 
 export interface InventoryServiceClient<CallOptionsExt = {}> {
@@ -916,6 +1210,39 @@ export interface InventoryServiceClient<CallOptionsExt = {}> {
     request: GetSeatMapRequest,
     options?: CallOptions & CallOptionsExt,
   ): Promise<GetSeatMapResponse>;
+  /**
+   * ValidateBooking is the synchronous schedule-level pre-flight called by
+   * BookingService.createBooking before any booking row is written. It surfaces
+   * the cheap invariants (schedule exists, schedule ACTIVE, departure time
+   * still in the future) that would otherwise produce a useless PENDING →
+   * SagaLog(HOLD_SEATS) → INVENTORY_SEATS_HOLD_FAILED round-trip.
+   */
+  validateBooking(
+    request: ValidateBookingRequest,
+    options?: CallOptions & CallOptionsExt,
+  ): Promise<ValidateBookingResponse>;
+}
+
+function toTimestamp(date: Date): Timestamp {
+  const seconds = Math.trunc(date.getTime() / 1_000);
+  const nanos = (date.getTime() % 1_000) * 1_000_000;
+  return { seconds, nanos };
+}
+
+function fromTimestamp(t: Timestamp): Date {
+  let millis = (t.seconds || 0) * 1_000;
+  millis += (t.nanos || 0) / 1_000_000;
+  return new globalThis.Date(millis);
+}
+
+function fromJsonTimestamp(o: any): Date {
+  if (o instanceof globalThis.Date) {
+    return o;
+  } else if (typeof o === "string") {
+    return new globalThis.Date(o);
+  } else {
+    return fromTimestamp(Timestamp.fromJSON(o));
+  }
 }
 
 function isSet(value: any): boolean {

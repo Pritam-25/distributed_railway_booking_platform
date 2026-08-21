@@ -25,7 +25,7 @@ export const getInventoryGrpcClient = (): InventoryServiceClient => {
     const res = createGrpcClient(
       InventoryServiceDefinition,
       env.INVENTORY_GRPC_URL,
-      { defaultTimeoutMs: 3000 },
+      { defaultTimeoutMs: 5000 },
     );
 
     channel = res.channel;

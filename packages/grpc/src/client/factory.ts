@@ -11,6 +11,7 @@ import { clientLoggingMiddleware } from "./middlewares/logging.middleware.js";
 export interface CreateGrpcClientFactoryOptions {
   /**
    * Default timeout in milliseconds for gRPC calls.
+   *
    * @default 3000
    */
   defaultTimeoutMs?: number;
