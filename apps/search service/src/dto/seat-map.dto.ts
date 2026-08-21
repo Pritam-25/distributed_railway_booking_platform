@@ -43,9 +43,9 @@ export const seatMapQuerySchema = z
     toStation: stationIdentifierSchema("toStation is required."),
   })
   .refine(
-    (value) =>
-      value.fromStation.trim().toUpperCase() !==
-      value.toStation.trim().toUpperCase(),
+    (data) =>
+      data.fromStation.trim().toUpperCase() !==
+      data.toStation.trim().toUpperCase(),
     {
       message: "fromStation and toStation must be different.",
       path: ["toStation"],

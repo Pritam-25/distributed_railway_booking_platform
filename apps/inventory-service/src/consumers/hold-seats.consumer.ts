@@ -1,27 +1,11 @@
-/**
- * ## module/hold-seats-consumer
- *
- * Kafka consumer for `BOOKING_HOLD_SEATS_REQUESTED`. Drives the
- * inventory-side seat-hold critical section in
- * {@link SeatAllocationService} and writes its own outbox row
- * (`SeatsHeldV1` or `SeatsHoldFailedV1`); the consumer itself is just
- * a parser + DLQ wrapper.
- *
- * @packageDocumentation
- */
-
 import {
+  createDlqConsumerHandler,
   type EachMessagePayload,
   type KafkaConsumerRunner,
   type Producer,
-  wrapWithDlq,
 } from "@irctc/kafka";
 import type { logger as irctcLogger } from "@irctc/logger";
-import {
-  HoldSeatsRequestedV1,
-  KAFKA_DLQ_TOPICS,
-  KAFKA_TOPICS,
-} from "@irctc/contracts";
+import { HoldSeatsRequestedV1, KAFKA_TOPICS } from "@irctc/contracts";
 
 import { type SeatAllocationService } from "@services";
 
@@ -67,24 +51,21 @@ export class HoldSeatsConsumer {
    * @returns A promise that resolves when the subscription is active.
    */
   async start(): Promise<void> {
-    const handle = async (payload: EachMessagePayload): Promise<void> => {
-      if (payload.message.value === null) return;
-      const raw = JSON.parse(payload.message.value.toString("utf8"));
-      const parsed = HoldSeatsRequestedV1.parse(raw);
-      await this.service.holdSeats(parsed);
-      await payload.heartbeat();
-    };
-
-    const dlqWrapped = wrapWithDlq(
-      this.producer,
-      { dlqTopic: KAFKA_DLQ_TOPICS.BOOKING_HOLD_SEATS_REQUESTED_DLQ },
-      this.logger,
-      handle,
-    );
-
     await this.runner.run(
       KAFKA_TOPICS.BOOKING_HOLD_SEATS_REQUESTED,
-      dlqWrapped,
+      this.createHandler(),
+    );
+  }
+
+  /**
+   * Creates the DLQ-wrapped message handler for hold seats requests.
+   */
+  private createHandler(): (payload: EachMessagePayload) => Promise<void> {
+    return createDlqConsumerHandler(
+      this.producer,
+      this.logger,
+      HoldSeatsRequestedV1,
+      (event) => this.service.holdSeats(event),
     );
   }
 

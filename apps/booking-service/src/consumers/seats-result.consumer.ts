@@ -1,18 +1,14 @@
 import {
-  type SeatsHeldV1Type,
-  type SeatsHoldFailedV1Type,
-  type SeatHoldExpiredV1Type,
   SeatsHeldV1,
   SeatsHoldFailedV1,
   SeatHoldExpiredV1,
-  KAFKA_DLQ_TOPICS,
   KAFKA_TOPICS,
 } from "@irctc/contracts";
 import {
+  createDlqConsumerHandler,
   KafkaConsumerRunner,
-  wrapWithDlq,
-  type Producer,
   type EachMessagePayload,
+  type Producer,
 } from "@irctc/kafka";
 import type { logger as irctcLogger } from "@irctc/logger";
 
@@ -59,62 +55,60 @@ export class SeatsResultConsumer {
    *   active.
    */
   async start(): Promise<void> {
-    const handleHeld = async (payload: EachMessagePayload): Promise<void> => {
-      if (payload.message.value === null) return;
-      const event = JSON.parse(payload.message.value.toString("utf8"));
-      const parsed: SeatsHeldV1Type = SeatsHeldV1.parse(event);
-      await this.orchestrator.handleSeatsHeld(parsed);
-      await payload.heartbeat();
-    };
-
-    const handleFailed = async (payload: EachMessagePayload): Promise<void> => {
-      if (payload.message.value === null) return;
-      const event = JSON.parse(payload.message.value.toString("utf8"));
-      const parsed: SeatsHoldFailedV1Type = SeatsHoldFailedV1.parse(event);
-      await this.orchestrator.handleSeatsHoldFailed(parsed);
-      await payload.heartbeat();
-    };
-
-    const handleExpired = async (
-      payload: EachMessagePayload,
-    ): Promise<void> => {
-      if (payload.message.value === null) return;
-      const event = JSON.parse(payload.message.value.toString("utf8"));
-      const parsed: SeatHoldExpiredV1Type = SeatHoldExpiredV1.parse(event);
-      await this.orchestrator.handleSeatHoldExpired(parsed);
-      await payload.heartbeat();
-    };
-
-    const heldDlq = wrapWithDlq(
-      this.producer,
-      { dlqTopic: KAFKA_DLQ_TOPICS.INVENTORY_SEATS_HELD_DLQ },
-      this.logger,
-      handleHeld,
-    );
-    const failedDlq = wrapWithDlq(
-      this.producer,
-      { dlqTopic: KAFKA_DLQ_TOPICS.INVENTORY_SEATS_HOLD_FAILED_DLQ },
-      this.logger,
-      handleFailed,
-    );
-    const expiredDlq = wrapWithDlq(
-      this.producer,
-      { dlqTopic: KAFKA_DLQ_TOPICS.INVENTORY_SEAT_HOLD_EXPIRED_DLQ },
-      this.logger,
-      handleExpired,
-    );
-
     await Promise.all([
-      this.heldRunner.run(KAFKA_TOPICS.INVENTORY_SEATS_HELD, heldDlq),
+      this.heldRunner.run(
+        KAFKA_TOPICS.INVENTORY_SEATS_HELD,
+        this.createHeldHandler(),
+      ),
       this.failedRunner.run(
         KAFKA_TOPICS.INVENTORY_SEATS_HOLD_FAILED,
-        failedDlq,
+        this.createFailedHandler(),
       ),
       this.expiredRunner.run(
         KAFKA_TOPICS.INVENTORY_SEAT_HOLD_EXPIRED,
-        expiredDlq,
+        this.createExpiredHandler(),
       ),
     ]);
+  }
+
+  /**
+   * Creates the DLQ-wrapped message handler for INVENTORY_SEATS_HELD events.
+   */
+  private createHeldHandler(): (payload: EachMessagePayload) => Promise<void> {
+    return createDlqConsumerHandler(
+      this.producer,
+      this.logger,
+      SeatsHeldV1,
+      (event) => this.orchestrator.handleSeatsHeld(event),
+    );
+  }
+
+  /**
+   * Creates the DLQ-wrapped message handler for INVENTORY_SEATS_HOLD_FAILED events.
+   */
+  private createFailedHandler(): (
+    payload: EachMessagePayload,
+  ) => Promise<void> {
+    return createDlqConsumerHandler(
+      this.producer,
+      this.logger,
+      SeatsHoldFailedV1,
+      (event) => this.orchestrator.handleSeatsHoldFailed(event),
+    );
+  }
+
+  /**
+   * Creates the DLQ-wrapped message handler for INVENTORY_SEAT_HOLD_EXPIRED events.
+   */
+  private createExpiredHandler(): (
+    payload: EachMessagePayload,
+  ) => Promise<void> {
+    return createDlqConsumerHandler(
+      this.producer,
+      this.logger,
+      SeatHoldExpiredV1,
+      (event) => this.orchestrator.handleSeatHoldExpired(event),
+    );
   }
 
   /**

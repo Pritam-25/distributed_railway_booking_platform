@@ -1,4 +1,4 @@
-import { elasticsearch, env, kafka, redis } from "@config";
+import { elasticsearch, env, kafka, redis, getProducerSync } from "@config";
 import {
   createConsumer,
   KafkaConsumerRunner,
@@ -154,6 +154,7 @@ export class SearchContainer {
 
     // 5. Wire consumer orchestrators
     this.stationConsumer = new StationConsumer(
+      getProducerSync(),
       createdRunner,
       updatedRunner,
       deactivatedRunner,
@@ -162,6 +163,7 @@ export class SearchContainer {
     );
 
     this.scheduleConsumer = new ScheduleConsumer(
+      getProducerSync(),
       scheduleCreatedRunner,
       scheduleStatusRunner,
       this.scheduleProjectionService,

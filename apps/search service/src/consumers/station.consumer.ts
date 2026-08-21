@@ -1,6 +1,10 @@
-import type { EachMessagePayload, KafkaConsumerRunner } from "@irctc/kafka";
+import {
+  createDlqConsumerHandler,
+  type EachMessagePayload,
+  type KafkaConsumerRunner,
+  type Producer,
+} from "@irctc/kafka";
 import type { logger as irctcLogger } from "@irctc/logger";
-import type { z } from "zod";
 import {
   KAFKA_TOPICS,
   StationCreatedEventV1,
@@ -8,8 +12,6 @@ import {
   StationDeactivatedEventV1,
 } from "@irctc/contracts";
 import type { StationProjectionService } from "@services";
-
-type AnyStationEventSchema = z.ZodTypeAny;
 
 /**
  * ## StationConsumer
@@ -34,11 +36,11 @@ export class StationConsumer {
   private readonly createdRunner: KafkaConsumerRunner;
   private readonly updatedRunner: KafkaConsumerRunner;
   private readonly deactivatedRunner: KafkaConsumerRunner;
-  private readonly scopedLogger: ReturnType<typeof irctcLogger.child>;
 
   /**
    * Creates an instance of StationConsumer.
    *
+   * @param producer - Shared Kafka producer for writing to DLQ topics.
    * @param createdRunner - Injected runner for `admin.station-created.v1` topic.
    * @param updatedRunner - Injected runner for `admin.station-updated.v1` topic.
    * @param deactivatedRunner - Injected runner for `admin.station-deactivated.v1` topic.
@@ -46,16 +48,16 @@ export class StationConsumer {
    * @param logger - Module-level logger used to construct a consumer-scoped child logger.
    */
   constructor(
+    private readonly producer: Producer,
     createdRunner: KafkaConsumerRunner,
     updatedRunner: KafkaConsumerRunner,
     deactivatedRunner: KafkaConsumerRunner,
     private readonly projectionService: StationProjectionService,
-    logger: typeof irctcLogger,
+    private readonly logger: typeof irctcLogger,
   ) {
     this.createdRunner = createdRunner;
     this.updatedRunner = updatedRunner;
     this.deactivatedRunner = deactivatedRunner;
-    this.scopedLogger = logger.child({ module: "station-consumer" });
   }
 
   /**
@@ -73,24 +75,62 @@ export class StationConsumer {
    * - Broker connection failures or topic subscription errors propagate to the caller.
    */
   async start(): Promise<void> {
-    // 1. Subscribe and start created, updated, and deactivated station event consumer runners concurrently
     await Promise.all([
-      this.createdRunner.run(KAFKA_TOPICS.STATION_CREATED, (payload) =>
-        this.handleStationEvent(payload, StationCreatedEventV1, (event) =>
-          this.projectionService.applyUpsert(event),
-        ),
+      this.createdRunner.run(
+        KAFKA_TOPICS.STATION_CREATED,
+        this.createCreatedHandler(),
       ),
-      this.updatedRunner.run(KAFKA_TOPICS.STATION_UPDATED, (payload) =>
-        this.handleStationEvent(payload, StationUpdatedEventV1, (event) =>
-          this.projectionService.applyUpsert(event),
-        ),
+      this.updatedRunner.run(
+        KAFKA_TOPICS.STATION_UPDATED,
+        this.createUpdatedHandler(),
       ),
-      this.deactivatedRunner.run(KAFKA_TOPICS.STATION_DEACTIVATED, (payload) =>
-        this.handleStationEvent(payload, StationDeactivatedEventV1, (event) =>
-          this.projectionService.applyDeactivated(event),
-        ),
+      this.deactivatedRunner.run(
+        KAFKA_TOPICS.STATION_DEACTIVATED,
+        this.createDeactivatedHandler(),
       ),
     ]);
+  }
+
+  /**
+   * Creates the DLQ-wrapped message handler for station created events.
+   */
+  private createCreatedHandler(): (
+    payload: EachMessagePayload,
+  ) => Promise<void> {
+    return createDlqConsumerHandler(
+      this.producer,
+      this.logger,
+      StationCreatedEventV1,
+      (event) => this.projectionService.applyUpsert(event),
+    );
+  }
+
+  /**
+   * Creates the DLQ-wrapped message handler for station updated events.
+   */
+  private createUpdatedHandler(): (
+    payload: EachMessagePayload,
+  ) => Promise<void> {
+    return createDlqConsumerHandler(
+      this.producer,
+      this.logger,
+      StationUpdatedEventV1,
+      (event) => this.projectionService.applyUpsert(event),
+    );
+  }
+
+  /**
+   * Creates the DLQ-wrapped message handler for station deactivated events.
+   */
+  private createDeactivatedHandler(): (
+    payload: EachMessagePayload,
+  ) => Promise<void> {
+    return createDlqConsumerHandler(
+      this.producer,
+      this.logger,
+      StationDeactivatedEventV1,
+      (event) => this.projectionService.applyDeactivated(event),
+    );
   }
 
   /**
@@ -101,55 +141,10 @@ export class StationConsumer {
    * - **Kafka**: Closes consumer TCP socket channels and leaves consumer groups.
    */
   async stop(): Promise<void> {
-    // 1. Disconnect all three consumer runners concurrently
     await Promise.all([
       this.createdRunner.disconnect(),
       this.updatedRunner.disconnect(),
       this.deactivatedRunner.disconnect(),
     ]);
-  }
-
-  /**
-   * Parses, projects, and acknowledges a single station event payload.
-   *
-   * @remarks
-   * ### Responsibilities
-   * - Parses raw message buffer into JSON and validates against Zod schema.
-   * - Invokes target projection callback.
-   * - Emits Kafka heartbeat signal in `finally` block to maintain group membership.
-   *
-   * ### Failure Guarantees
-   * - Poison-pill payloads (malformed JSON syntax errors) are logged non-fatally and swallowed to prevent partition starvation.
-   * - Projection and network failures are rethrown for runner retry policies.
-   * @param payload - Kafka message payload containing raw value buffer and heartbeat function.
-   * @param schema - Zod schema used to validate and type the event payload.
-   * @param project - Projection callback function executing Elasticsearch updates.
-   */
-  private async handleStationEvent<T extends AnyStationEventSchema>(
-    payload: EachMessagePayload,
-    schema: T,
-    project: (event: z.infer<T>) => Promise<unknown>,
-  ): Promise<void> {
-    const { message, heartbeat } = payload;
-    if (message.value === null) return;
-
-    try {
-      // 1. Parse raw message buffer into JSON and validate against versioned Zod event schema
-      const eventVal = JSON.parse(message.value.toString("utf8"));
-      const event = schema.parse(eventVal);
-
-      // 2. Delegate projection write execution to StationProjectionService
-      await project(event);
-    } catch (err) {
-      this.scopedLogger.error(
-        { err, messageKey: message.key?.toString("utf8") },
-        "failed to process station event",
-      );
-      // 3. Swallow malformed JSON SyntaxError (poison pills); rethrow all other errors for retry/DLQ
-      if (!(err instanceof SyntaxError)) throw err;
-    } finally {
-      // 4. Send Kafka heartbeat signal to prevent consumer group rebalance
-      await heartbeat();
-    }
   }
 }

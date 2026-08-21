@@ -50,12 +50,25 @@ export const KAFKA_TOPICS = {
 } as const;
 
 /**
- * Dead-letter topic names, derived from the canonical topic constants. The
- * DLQ wrapper in `@irctc/kafka` (`wrapWithDlq`) writes to `<TOPIC>_DLQ`.
+ * Derives the standard Dead Letter Queue (DLQ) topic name for any given Kafka topic.
+ * Follows the system-wide naming convention: `<topic_name>.dlq`
+ *
+ * @param topic - The canonical Kafka topic name.
+ * @returns The corresponding DLQ topic name.
  */
-export const KAFKA_DLQ_TOPICS = {
-  BOOKING_HOLD_SEATS_REQUESTED_DLQ: `${KAFKA_TOPICS.BOOKING_HOLD_SEATS_REQUESTED}.dlq`,
-  INVENTORY_SEATS_HELD_DLQ: `${KAFKA_TOPICS.INVENTORY_SEATS_HELD}.dlq`,
-  INVENTORY_SEATS_HOLD_FAILED_DLQ: `${KAFKA_TOPICS.INVENTORY_SEATS_HOLD_FAILED}.dlq`,
-  INVENTORY_SEAT_HOLD_EXPIRED_DLQ: `${KAFKA_TOPICS.INVENTORY_SEAT_HOLD_EXPIRED}.dlq`,
-} as const;
+export function getDlqTopic<T extends string>(topic: T): `${T}.dlq` {
+  return `${topic}.dlq`;
+}
+
+/**
+ * Dead-letter topic names, automatically derived for all topics in KAFKA_TOPICS.
+ * The DLQ wrapper in `@irctc/kafka` (`wrapWithDlq`) automatically defaults to `<TOPIC>.dlq`.
+ */
+export const KAFKA_DLQ_TOPICS = Object.freeze(
+  Object.fromEntries(
+    Object.entries(KAFKA_TOPICS).map(([key, topic]) => [
+      `${key}_DLQ`,
+      getDlqTopic(topic),
+    ]),
+  ),
+) as Record<`${keyof typeof KAFKA_TOPICS}_DLQ`, string>;

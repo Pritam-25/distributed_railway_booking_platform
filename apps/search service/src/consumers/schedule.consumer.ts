@@ -1,14 +1,16 @@
-import type { EachMessagePayload, KafkaConsumerRunner } from "@irctc/kafka";
+import {
+  createDlqConsumerHandler,
+  type EachMessagePayload,
+  type KafkaConsumerRunner,
+  type Producer,
+} from "@irctc/kafka";
 import type { logger as irctcLogger } from "@irctc/logger";
-import type { z } from "zod";
 import {
   KAFKA_TOPICS,
   ScheduleCreatedEventV1,
   ScheduleStatusChangedEventV1,
 } from "@irctc/contracts";
 import type { ScheduleProjectionService } from "@services";
-
-type AnyScheduleEventSchema = z.ZodTypeAny;
 
 /**
  * ## ScheduleConsumer
@@ -32,25 +34,25 @@ type AnyScheduleEventSchema = z.ZodTypeAny;
 export class ScheduleConsumer {
   private readonly createdRunner: KafkaConsumerRunner;
   private readonly statusRunner: KafkaConsumerRunner;
-  private readonly scopedLogger: ReturnType<typeof irctcLogger.child>;
 
   /**
    * Creates an instance of ScheduleConsumer.
    *
+   * @param producer - Shared Kafka producer for writing to DLQ topics.
    * @param createdRunner - Injected runner for `admin.schedule-created.v1`.
    * @param statusRunner - Injected runner for `admin.schedule-status-changed.v1`.
    * @param projectionService - Service owning the schedule projection pipeline.
    * @param logger - Module-level logger for the consumer scope.
    */
   constructor(
+    private readonly producer: Producer,
     createdRunner: KafkaConsumerRunner,
     statusRunner: KafkaConsumerRunner,
     private readonly projectionService: ScheduleProjectionService,
-    logger: typeof irctcLogger,
+    private readonly logger: typeof irctcLogger,
   ) {
     this.createdRunner = createdRunner;
     this.statusRunner = statusRunner;
-    this.scopedLogger = logger.child({ module: "schedule-consumer" });
   }
 
   /**
@@ -66,19 +68,43 @@ export class ScheduleConsumer {
    */
   async start(): Promise<void> {
     await Promise.all([
-      this.createdRunner.run(KAFKA_TOPICS.SCHEDULE_CREATED, (payload) =>
-        this.handleScheduleEvent(payload, ScheduleCreatedEventV1, (event) =>
-          this.projectionService.applyCreated(event),
-        ),
+      this.createdRunner.run(
+        KAFKA_TOPICS.SCHEDULE_CREATED,
+        this.createCreatedHandler(),
       ),
-      this.statusRunner.run(KAFKA_TOPICS.SCHEDULE_STATUS_CHANGED, (payload) =>
-        this.handleScheduleEvent(
-          payload,
-          ScheduleStatusChangedEventV1,
-          (event) => this.projectionService.applyStatusChange(event),
-        ),
+      this.statusRunner.run(
+        KAFKA_TOPICS.SCHEDULE_STATUS_CHANGED,
+        this.createStatusHandler(),
       ),
     ]);
+  }
+
+  /**
+   * Creates the DLQ-wrapped message handler for schedule created events.
+   */
+  private createCreatedHandler(): (
+    payload: EachMessagePayload,
+  ) => Promise<void> {
+    return createDlqConsumerHandler(
+      this.producer,
+      this.logger,
+      ScheduleCreatedEventV1,
+      (event) => this.projectionService.applyCreated(event),
+    );
+  }
+
+  /**
+   * Creates the DLQ-wrapped message handler for schedule status changed events.
+   */
+  private createStatusHandler(): (
+    payload: EachMessagePayload,
+  ) => Promise<void> {
+    return createDlqConsumerHandler(
+      this.producer,
+      this.logger,
+      ScheduleStatusChangedEventV1,
+      (event) => this.projectionService.applyStatusChange(event),
+    );
   }
 
   /**
@@ -93,41 +119,5 @@ export class ScheduleConsumer {
       this.createdRunner.disconnect(),
       this.statusRunner.disconnect(),
     ]);
-  }
-
-  /**
-   * Parses, projects, and acknowledges a single schedule event payload.
-   *
-   * @remarks
-   * ### Failure Guarantees
-   * - Poison-pill JSON syntax errors are swallowed to prevent partition
-   *   starvation; schema and projection errors propagate for retry/DLQ.
-   * @param payload - Kafka message payload.
-   * @param schema - Zod schema used to validate the payload.
-   * @param project - Projection callback.
-   */
-  private async handleScheduleEvent<T extends AnyScheduleEventSchema>(
-    payload: EachMessagePayload,
-    schema: T,
-    project: (event: z.infer<T>) => Promise<unknown>,
-  ): Promise<void> {
-    const { message, heartbeat } = payload;
-    if (message.value === null) return;
-
-    try {
-      const eventVal = JSON.parse(message.value.toString("utf8"));
-      const event = schema.parse(eventVal);
-      await project(event);
-    } catch (err) {
-      this.scopedLogger.error(
-        { err, messageKey: message.key?.toString("utf8") },
-        "failed to process schedule event",
-      );
-      // Swallow malformed JSON SyntaxError (poison pills); rethrow others.
-      if (!(err instanceof SyntaxError)) throw err;
-    } finally {
-      // Always send heartbeat to keep consumer group membership alive.
-      await heartbeat();
-    }
   }
 }

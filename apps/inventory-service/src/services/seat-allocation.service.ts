@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import {
   AllocationStatus,
   ScheduleInventoryStatus,
@@ -25,6 +24,7 @@ import {
   type SeatAllocationRepository,
   type SeatInventoryRepository,
 } from "@repository";
+import { deriveDeterministicUuid } from "@utils";
 import { type SeatLockService } from "./seat-lock.service.js";
 
 /**
@@ -34,7 +34,8 @@ import { type SeatLockService } from "./seat-lock.service.js";
  */
 export type HoldSeatsOutcome =
   | { kind: "held"; payload: SeatsHeldV1Type }
-  | { kind: "failed"; payload: SeatsHoldFailedV1Type };
+  | { kind: "failed"; payload: SeatsHoldFailedV1Type }
+  | { kind: "duplicate" };
 
 export interface SeatLifecycleEventArgs {
   eventId: string;
@@ -91,11 +92,7 @@ export class SeatAllocationService {
 
     // 1. Idempotency Check
     if (await this.idempotencyRepository.exists(eventKey)) {
-      return this.buildAlreadyProcessedOutcome(
-        eventKey,
-        bookingId,
-        seatInventoryIds,
-      );
+      return this.buildAlreadyProcessedOutcome(eventKey, bookingId);
     }
 
     // 2. Schedule validation via repository
@@ -176,23 +173,12 @@ export class SeatAllocationService {
   private buildAlreadyProcessedOutcome(
     eventKey: string,
     bookingId: string,
-    seatInventoryIds: string[],
   ): HoldSeatsOutcome {
     logger.info(
       { module: "seat-allocation-service", eventKey, bookingId },
-      "Hold event already processed, skipping",
+      "Hold event already processed, returning neutral duplicate outcome",
     );
-    return {
-      kind: "failed",
-      payload: {
-        eventId: crypto.randomUUID(),
-        bookingId,
-        reason: "SEAT_ALREADY_HELD",
-        message: "Event already processed.",
-        failedSeatInventoryIds: [...seatInventoryIds],
-        createdAt: new Date(),
-      },
-    };
+    return { kind: "duplicate" };
   }
 
   private async isScheduleActive(scheduleId: string): Promise<boolean> {
@@ -304,6 +290,25 @@ export class SeatAllocationService {
       };
     });
 
+    const replyEventId = deriveDeterministicUuid(`held:${event.eventId}`);
+    const heldPayload: SeatsHeldV1Type = {
+      eventId: replyEventId,
+      bookingId,
+      allocations: allocationRows.map((row) => {
+        const seat = seatById.get(row.seatInventoryId)!;
+        return {
+          seatId: seat.seatId,
+          seatInventoryId: row.seatInventoryId,
+          coachNumber: seat.coachNumber,
+          seatNumber: seat.seatNumber,
+          seatType: seat.seatType,
+          price: row.price,
+        } satisfies SeatAllocationV1Type;
+      }),
+      holdExpiresAt,
+      createdAt: new Date(),
+    };
+
     try {
       await this.prisma.$transaction(async (tx) => {
         if (await this.idempotencyRepository.exists(eventKey, tx)) return;
@@ -346,25 +351,7 @@ export class SeatAllocationService {
           aggregateId: bookingId,
           eventType: EVENT_TYPES.INVENTORY_SEATS_HELD,
           topic: KAFKA_TOPICS.INVENTORY_SEATS_HELD,
-          payload: {
-            eventId: crypto.randomUUID(),
-            bookingId,
-            allocations: seatInventoryIds.map((id) => {
-              const seat = seatById.get(id)!;
-              return {
-                seatId: seat.seatId,
-                seatInventoryId: id,
-                coachNumber: seat.coachNumber,
-                seatNumber: seat.seatNumber,
-                seatType: seat.seatType,
-                price: Number(
-                  (Number(seat.pricePerKm) * Math.max(distance, 1)).toFixed(2),
-                ),
-              } satisfies SeatAllocationV1Type;
-            }),
-            holdExpiresAt,
-            createdAt: new Date(),
-          } satisfies SeatsHeldV1Type,
+          payload: heldPayload,
         });
       });
     } catch (err: unknown) {
@@ -415,23 +402,7 @@ export class SeatAllocationService {
 
     return {
       kind: "held",
-      payload: {
-        eventId: crypto.randomUUID(),
-        bookingId,
-        allocations: allocationRows.map((row) => {
-          const seat = seatById.get(row.seatInventoryId)!;
-          return {
-            seatId: seat.seatId,
-            seatInventoryId: row.seatInventoryId,
-            coachNumber: seat.coachNumber,
-            seatNumber: seat.seatNumber,
-            seatType: seat.seatType,
-            price: row.price,
-          } satisfies SeatAllocationV1Type;
-        }),
-        holdExpiresAt,
-        createdAt: new Date(),
-      },
+      payload: heldPayload,
     };
   }
 
@@ -603,8 +574,11 @@ export class SeatAllocationService {
     message: string,
     failedSeatInventoryIds?: string[],
   ): Promise<{ kind: "failed"; payload: SeatsHoldFailedV1Type }> {
+    const replyEventId = deriveDeterministicUuid(
+      `failed:${event.eventId}:${reason}`,
+    );
     const payload: SeatsHoldFailedV1Type = {
-      eventId: crypto.randomUUID(),
+      eventId: replyEventId,
       bookingId: event.bookingId,
       reason,
       message,

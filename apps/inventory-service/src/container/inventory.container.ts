@@ -156,12 +156,14 @@ export class InventoryContainer {
 
     // 6. Instantiate the high-level event consumers to execute business logic
     this.scheduleCreatedConsumer = new ScheduleCreatedConsumer(
+      getProducerSync(),
       scheduleCreatedRunner,
       scheduleService,
       logger,
     );
 
     this.scheduleStatusChangedConsumer = new ScheduleStatusChangedConsumer(
+      getProducerSync(),
       scheduleStatusChangedRunner,
       scheduleService,
       logger,

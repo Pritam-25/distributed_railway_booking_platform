@@ -11,6 +11,7 @@
       "@repository": ["./src/repository/index.js"],
       "@controllers": ["./src/controllers/index.js"],
       "@consumers": ["./src/consumers/index.js"],
+      "@utils": ["./src/utils/index.js"],
       "@utils/errors": ["./src/utils/errors/index.js"],
       "@health": ["./src/health/index.js"],
       "@generated/*": ["./src/generated/*"]
