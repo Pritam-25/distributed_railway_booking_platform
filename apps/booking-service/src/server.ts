@@ -1,14 +1,12 @@
 /**
  * ## module/server
  *
- * `inventory-service` bootstrap. Registers the user-facing error messages,
- * wires dependencies, then delegates the full lifecycle to
- * `startServer` from `@irctc/http`.
+ * `booking-service` bootstrap. Registers user-facing error messages,
+ * wires network dependencies, then delegates full HTTP lifecycle management
+ * to `startServer` from `@irctc/http`.
  *
- * Service-specific glue (Kafka consumer start/stop) is owned by
- * `InventoryContainer.start()` / `InventoryContainer.disconnect()` and is
- * driven from the `afterListen` / `beforeShutdown` hooks. The framework
- * does not know about it.
+ * Background tasks (Kafka consumers, outbox publisher) are managed via
+ * `BookingContainer` in the `afterListen` and `beforeShutdown` hooks.
  *
  * `startServer` owns:
  * - HTTP bind + signal handlers
@@ -20,15 +18,16 @@ import {
   env,
   initPrisma,
   disconnectPrisma,
-  initKafka,
-  disconnectKafka,
   initRedis,
   disconnectRedis,
+  initKafka,
+  disconnectKafka,
 } from "@config";
 import { logger } from "@irctc/logger";
 import { registerErrorMessages } from "@irctc/errors";
 import { withTimeout, startServer, runBootstrap } from "@irctc/http";
 import { ERROR_MESSAGES } from "@utils/errors";
+import { closeInventoryGrpcChannel, closePaymentGrpcChannel } from "@grpc";
 
 // 1. Register user-facing error messages with the @irctc/errors registry.
 registerErrorMessages(ERROR_MESSAGES);
@@ -45,10 +44,9 @@ await runBootstrap({
       "All dependencies connected successfully.",
     );
 
-    // 3. Import container, app.js, and gRPC server.
-    const { InventoryContainer } = await import("@container");
+    // 3. Dynamically import container and app.js after dependencies are ready.
+    const { BookingContainer } = await import("@container");
     const { default: app } = await import("./app.js");
-    const { startGrpcServer, stopGrpcServer } = await import("@grpc");
 
     await startServer({
       app,
@@ -58,22 +56,27 @@ await runBootstrap({
       afterListen: async () => {
         logger.info(
           { module: "server" },
-          "Starting inventory event consumers and outbox publisher worker...",
+          "Starting booking event consumers and outbox publisher worker...",
         );
-        const container = InventoryContainer.getInstance();
+        const container = BookingContainer.getInstance();
         await container.start();
-
-        await startGrpcServer(env.GRPC_PORT, container.inventoryGrpcHandler);
       },
       beforeShutdown: async () => {
         logger.info(
           { module: "server" },
-          "Stopping gRPC server and inventory event consumers...",
+          "Stopping booking event consumers and outbox publisher worker...",
         );
-        await withTimeout("gRPC server stop", stopGrpcServer());
-        await InventoryContainer.getInstance().disconnect();
+        await BookingContainer.getInstance().disconnect();
       },
       afterShutdown: async () => {
+        await withTimeout(
+          "Inventory gRPC client channel close",
+          closeInventoryGrpcChannel(),
+        );
+        await withTimeout(
+          "Payment gRPC client channel close",
+          closePaymentGrpcChannel(),
+        );
         await withTimeout("Kafka disconnect", disconnectKafka());
         await withTimeout("Redis disconnect", disconnectRedis());
         await withTimeout("Prisma disconnect", disconnectPrisma());
@@ -81,10 +84,14 @@ await runBootstrap({
     });
   },
   onFailure: async () => {
-    const { stopGrpcServer } = await import("@grpc").catch(() => ({
-      stopGrpcServer: async () => {},
-    }));
-    await withTimeout("gRPC server stop", stopGrpcServer()).catch(() => {});
+    await withTimeout(
+      "Inventory gRPC client channel close",
+      closeInventoryGrpcChannel(),
+    ).catch(() => {});
+    await withTimeout(
+      "Payment gRPC client channel close",
+      closePaymentGrpcChannel(),
+    ).catch(() => {});
     await withTimeout("Kafka disconnect", disconnectKafka()).catch(() => {});
     await withTimeout("Redis disconnect", disconnectRedis()).catch(() => {});
     await withTimeout("Prisma disconnect", disconnectPrisma()).catch(() => {});

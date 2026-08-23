@@ -4,11 +4,20 @@ import { z } from "zod";
 
 export const env = createEnv({
   server: {
-    PORT: z.string().default("4003"),
+    PORT: z.coerce.number().int().min(1).max(65535).default(4003),
+    GRPC_PORT: z.coerce.number().int().min(1).max(65535).default(50051),
+    GRPC_INTERNAL_AUTH_TOKEN: z
+      .string()
+      .min(32, "GRPC_INTERNAL_AUTH_TOKEN must be at least 32 characters"),
     NODE_ENV: z
       .enum(["development", "production", "test"])
       .default("development"),
-    DATABASE_URL: z.url(),
+    DATABASE_URL: z
+      .url()
+      .refine(
+        (u) => u.startsWith("postgres:") || u.startsWith("postgresql:"),
+        "DATABASE_URL must be a PostgreSQL connection URL",
+      ),
     REDIS_URL: z.url().refine(
       (value) => {
         const protocol = new URL(value).protocol;
@@ -35,6 +44,15 @@ export const env = createEnv({
         message: "KAFKA_BROKERS must include at least one broker",
       }),
     KAFKA_CLIENT_ID: z.string().default("inventory-service"),
+
+    /**
+     * TTL for inventory-side Redis seat-segment locks. These only guard the
+     * short critical section around the SeatAllocation Prisma transaction, so
+     * the default is intentionally small (30s) — long enough to cover the
+     * worst-case tx time, short enough that a crashed consumer cannot leave
+     * keys pinned for the booking-side TTL (~10 min).
+     */
+    SEAT_LOCK_TTL_SEC: z.coerce.number().int().min(1).max(300).default(30),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,

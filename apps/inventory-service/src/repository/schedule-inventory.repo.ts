@@ -36,7 +36,7 @@ export class ScheduleInventoryRepository {
   async findByScheduleId(scheduleId: string, tx?: Prisma.TransactionClient) {
     return this.getClient(tx).scheduleInventory.findUnique({
       where: { scheduleId },
-      select: { version: true },
+      select: { version: true, status: true, departureDate: true },
     });
   }
 

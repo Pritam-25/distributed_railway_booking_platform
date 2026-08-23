@@ -58,7 +58,10 @@ export const env = createEnv({
     KAFKA_CLIENT_ID: z.string().default("search-service"),
 
     // Inventory configuration environment for service-to-service communication
-    INVENTORY_GRPC_URL: z.string().default("localhost:50051"),
+    INVENTORY_GRPC_URL: z.string().default("127.0.0.1:50051"),
+    GRPC_INTERNAL_AUTH_TOKEN: z
+      .string()
+      .min(32, "GRPC_INTERNAL_AUTH_TOKEN must be at least 32 characters"),
     INVENTORY_UPSTREAM: z.url().default("localhost:4003"),
 
     // Two-phase Redis idempotency for station projection consumers. The
@@ -89,6 +92,13 @@ export const env = createEnv({
     // occasional staleness is acceptable.
     TRAIN_SEARCH_CACHE_TTL_SECONDS: z.coerce.number().int().min(1).default(60),
     TRAIN_SEARCH_CACHE_KEY_PREFIX: z.string().default("cache:train-search"),
+
+    // Seat-map query cache — cached per (scheduleId, fromStationId,
+    // toStationId) tuple. The 60s window is bounded by the booking-service
+    // pre-flight `CheckAvailability` call, which closes the race even on a
+    // stale read.
+    SEAT_MAP_CACHE_TTL_SECONDS: z.coerce.number().int().min(1).default(60),
+    SEAT_MAP_CACHE_KEY_PREFIX: z.string().default("cache:seat-map"),
 
     // Telemetry configuration environment
     OTEL_EXPORTER_OTLP_ENDPOINT: z.url().default("http://localhost:4318"),
