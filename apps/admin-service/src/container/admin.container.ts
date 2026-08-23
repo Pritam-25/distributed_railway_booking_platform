@@ -7,11 +7,7 @@ import {
   RouteRepository,
   ScheduleRepository,
 } from "@repository";
-import {
-  PostgresOutboxRepository,
-  OutboxPublisherWorker,
-  type OutboxRepository,
-} from "@irctc/kafka";
+import { PostgresOutboxRepository, OutboxPublisherWorker } from "@irctc/kafka";
 import {
   StationService,
   AdminAuthService,
@@ -44,7 +40,6 @@ import { logger } from "@irctc/logger";
 export class AdminContainer {
   private static instance: AdminContainer;
 
-  public readonly outboxRepository: OutboxRepository;
   private readonly outboxWorker: OutboxPublisherWorker;
 
   public readonly stationController: StationController;
@@ -64,26 +59,27 @@ export class AdminContainer {
     const seatRepository = new SeatRepository(prisma);
     const routeRepository = new RouteRepository(prisma);
     const scheduleRepository = new ScheduleRepository(prisma);
-    this.outboxRepository = new PostgresOutboxRepository(prisma);
+    const outboxRepository = new PostgresOutboxRepository(prisma);
+
     this.outboxWorker = new OutboxPublisherWorker(
-      this.outboxRepository,
+      outboxRepository,
       getProducerSync,
       logger,
     );
 
-    // 3. Services
+    // 2. Services
     const adminAuthService = new AdminAuthService(adminAuthRepository);
 
     const stationService = new StationService(
       prisma,
       stationRepository,
-      this.outboxRepository,
+      outboxRepository,
     );
 
     const trainService = new TrainService(
       prisma,
       trainRepository,
-      this.outboxRepository,
+      outboxRepository,
       scheduleRepository,
     );
 
@@ -92,14 +88,14 @@ export class AdminContainer {
       coachRepository,
       trainRepository,
       seatRepository,
-      this.outboxRepository,
+      outboxRepository,
     );
 
     const seatService = new SeatService(
       prisma,
       coachRepository,
       seatRepository,
-      this.outboxRepository,
+      outboxRepository,
     );
 
     const routeService = new RouteService(
@@ -107,7 +103,7 @@ export class AdminContainer {
       routeRepository,
       trainRepository,
       stationRepository,
-      this.outboxRepository,
+      outboxRepository,
     );
 
     const scheduleService = new ScheduleService(
@@ -115,10 +111,10 @@ export class AdminContainer {
       scheduleRepository,
       trainRepository,
       routeRepository,
-      this.outboxRepository,
+      outboxRepository,
     );
 
-    // 4. Controllers
+    // 3. Controllers
     this.stationController = new StationController(stationService);
     this.adminAuthController = new AdminAuthController(adminAuthService);
     this.trainController = new TrainController(trainService);

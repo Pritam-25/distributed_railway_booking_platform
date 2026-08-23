@@ -2,9 +2,11 @@ export * from "./errors/mapper.js";
 export * from "./server/factory.js";
 export * from "./server/middlewares/logging.middleware.js";
 export * from "./server/middlewares/error.middleware.js";
+export * from "./server/middlewares/auth.middleware.js";
 export * from "./client/factory.js";
 export * from "./client/middlewares/deadline.middleware.js";
 export * from "./client/middlewares/logging.middleware.js";
+export * from "./client/middlewares/auth.middleware.js";
 export * from "./metadata/index.js";
 
 // Re-export core nice-grpc transport primitives

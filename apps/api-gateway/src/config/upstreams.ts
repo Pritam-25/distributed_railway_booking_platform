@@ -39,4 +39,9 @@ export const upstreams = {
     baseUrl: env.SEARCH_UPSTREAM,
     circuitName: "search-service",
   },
+  payment: {
+    name: "payment",
+    baseUrl: env.PAYMENT_UPSTREAM,
+    circuitName: "payment-service",
+  },
 } satisfies Record<string, Upstream>;

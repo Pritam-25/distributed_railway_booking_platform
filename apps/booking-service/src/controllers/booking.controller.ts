@@ -106,16 +106,15 @@ export class BookingController {
     const userId = this.requireUserId(req);
     const { bookingId } = req.params as unknown as BookingIdParamDto;
 
-    await this.bookingService.confirmPayment(bookingId, userId);
-    const booking = await this.bookingService.findByIdForUser(
-      userId,
+    const paymentOrder = await this.bookingService.createPaymentOrder(
       bookingId,
+      userId,
     );
 
     res
       .status(statusCode.success)
       .json(
-        successResponse("Payment completed and booking confirmed", booking),
+        successResponse("Payment order created successfully", paymentOrder),
       );
   }
 

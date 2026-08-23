@@ -111,4 +111,16 @@ export const routes: readonly RouteConfig[] = [
     auth: "none",
     rateLimit: "default",
   },
+  {
+    prefix: "/api/v1/payments/webhook",
+    upstream: upstreams.payment,
+    auth: "none",
+    rateLimit: "default",
+  },
+  {
+    prefix: "/api/v1/payments",
+    upstream: upstreams.payment,
+    auth: "required",
+    rateLimit: "default",
+  },
 ];

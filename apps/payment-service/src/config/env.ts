@@ -5,7 +5,6 @@ import { z } from "zod";
 export const env = createEnv({
   server: {
     PORT: z.coerce.number().int().min(1).max(65535).default(4006),
-    BOOKING_GRPC_URL: z.string().default("localhost:50051"),
     NODE_ENV: z
       .enum(["development", "production", "test"])
       .default("development"),
@@ -41,6 +40,13 @@ export const env = createEnv({
         message: "KAFKA_BROKERS must include at least one broker",
       }),
     KAFKA_CLIENT_ID: z.string().default("payment-service"),
+    GRPC_PORT: z.coerce.number().int().default(50052),
+    GRPC_INTERNAL_AUTH_TOKEN: z
+      .string()
+      .min(32, "GRPC_INTERNAL_AUTH_TOKEN must be at least 32 characters"),
+    RAZORPAY_KEY_ID: z.string().default("rzp_test_dummy"),
+    RAZORPAY_KEY_SECRET: z.string().default("dummy_secret"),
+    RAZORPAY_WEBHOOK_SECRET: z.string().default("dummy_webhook_secret"),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,

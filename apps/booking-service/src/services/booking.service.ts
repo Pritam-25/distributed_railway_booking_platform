@@ -13,10 +13,10 @@ import {
   type HoldSeatsRequestedV1Type,
 } from "@irctc/contracts";
 import { type OutboxRepository } from "@irctc/kafka";
-import { ApiError } from "@irctc/errors";
+import { ApiError, COMMON_ERROR_CODES } from "@irctc/errors";
 import { statusCode } from "@irctc/http";
 import { logger } from "@irctc/logger";
-import { InventoryAdapter } from "@grpc";
+import { InventoryAdapter, PaymentAdapter } from "@grpc";
 
 import { env } from "@config";
 import { type BookingRepository, type SagaRepository } from "@repository";
@@ -74,6 +74,7 @@ export class BookingService {
    * @param outboxRepository - Transactional outbox repository.
    * @param seatLockService - Service for managing Redis distributed seat locks.
    * @param inventoryAdapter - Inventory gRPC client adapter.
+   * @param paymentAdapter - Payment gRPC client adapter.
    * @param sagaRepository - Booking saga repository.
    */
   constructor(
@@ -82,6 +83,7 @@ export class BookingService {
     private readonly outboxRepository: OutboxRepository,
     private readonly seatLockService: SeatLockService,
     private readonly inventoryAdapter: InventoryAdapter,
+    private readonly paymentAdapter: PaymentAdapter,
     private readonly sagaRepository: SagaRepository,
   ) {}
 
@@ -105,10 +107,6 @@ export class BookingService {
     dto: CreateBookingDto,
   ): Promise<CreateBookingResponse> {
     // 1. HTTP Idempotency Check (Fast path)
-    logger.debug(
-      { module: "booking-service", idempotencyKey: dto.idempotencyKey },
-      "Step 1: Checking fast-path idempotency key table",
-    );
 
     const existingCheck = await this.bookingRepository.findIdempotencyKey(
       dto.idempotencyKey,
@@ -116,14 +114,6 @@ export class BookingService {
 
     if (existingCheck) {
       const responseBody = existingCheck.responseBody as CreateBookingResponse;
-      logger.info(
-        {
-          module: "booking-service",
-          idempotencyKey: dto.idempotencyKey,
-          bookingId: responseBody.id,
-        },
-        "Step 2: Idempotent createBooking replay (fast path)",
-      );
       return responseBody;
     }
 
@@ -162,17 +152,6 @@ export class BookingService {
       );
     }
 
-    logger.debug(
-      {
-        module: "booking-service",
-        bookingId,
-        scheduleId: dto.scheduleId,
-        seatIds: dto.seatIds,
-        legIndices,
-      },
-      "Step 3: Acquiring Redis distributed seat locks",
-    );
-
     const locksAcquired = await this.seatLockService.acquireSeatLocks({
       scheduleId: dto.scheduleId,
       seatIds: dto.seatIds,
@@ -194,14 +173,7 @@ export class BookingService {
       result = await this.prisma.$transaction(
         async (tx) => {
           // 4. Re-verify idempotency inside transaction
-          logger.debug(
-            {
-              module: "booking-service",
-              bookingId,
-              idempotencyKey: dto.idempotencyKey,
-            },
-            "Step 4: Re-verifying idempotency inside DB transaction",
-          );
+
           const existing = await this.bookingRepository.findIdempotencyKey(
             dto.idempotencyKey,
             tx,
@@ -212,10 +184,7 @@ export class BookingService {
 
           // 5. Generate PNR + insert booking row.
           const pnr = generatePnr();
-          logger.debug(
-            { module: "booking-service", bookingId, pnr },
-            "Step 5: Generated PNR and inserting booking row in PENDING state",
-          );
+
           const booking = await this.bookingRepository.create(
             {
               id: bookingId,
@@ -231,15 +200,7 @@ export class BookingService {
           );
 
           // 6. Persist seat rows + passenger rows.
-          logger.debug(
-            {
-              module: "booking-service",
-              bookingId,
-              seatCount: dto.seatIds.length,
-              passengerCount: dto.passengers.length,
-            },
-            "Step 6: Persisting booking seats and passenger records",
-          );
+
           await this.bookingRepository.createSeats(
             dto.seatIds.map((seatId) => ({
               bookingId: booking.id,
@@ -259,10 +220,7 @@ export class BookingService {
           );
 
           // 7. Emit first BookingStatusChangedV1 row (PENDING with no previous status) to transactional outbox.
-          logger.debug(
-            { module: "booking-service", bookingId, status: booking.status },
-            "Step 7: Emitting initial BookingStatusChangedV1 outbox event",
-          );
+
           const statusChangedPayload: BookingStatusChangedV1Type = {
             eventId: crypto.randomUUID(),
             bookingId: booking.id,
@@ -285,10 +243,7 @@ export class BookingService {
 
           // 7b. Saga log row (HOLD_SEATS, PENDING) so the orchestrator can
           //     advance the step to COMPLETED once the inventory reply lands.
-          logger.debug(
-            { module: "booking-service", bookingId, step: SagaStep.HOLD_SEATS },
-            "Step 7b: Recording saga log HOLD_SEATS / PENDING",
-          );
+
           await this.sagaRepository.create(
             {
               bookingId: booking.id,
@@ -297,19 +252,27 @@ export class BookingService {
             },
             tx,
           );
+          await this.sagaRepository.create(
+            {
+              bookingId: booking.id,
+              step: SagaStep.CREATE_PAYMENT,
+              status: SagaStatus.PENDING,
+            },
+            tx,
+          );
+          await this.sagaRepository.create(
+            {
+              bookingId: booking.id,
+              step: SagaStep.CONFIRM_SEATS,
+              status: SagaStatus.PENDING,
+            },
+            tx,
+          );
 
           // 7d. Emit BOOKING_HOLD_SEATS_REQUESTED outbox event. Inventory's
           //     hold-seats consumer will pick this up, allocate seats, and
           //     emit INVENTORY_SEATS_HELD (or _FAILED) back to us.
-          logger.debug(
-            {
-              module: "booking-service",
-              bookingId,
-              scheduleId: booking.scheduleId,
-              seatInventoryCount: seatInventoryIds.length,
-            },
-            "Step 7d: Emitting BOOKING_HOLD_SEATS_REQUESTED outbox event",
-          );
+
           const holdSeatsPayload: HoldSeatsRequestedV1Type = {
             eventId: crypto.randomUUID(),
             bookingId: booking.id,
@@ -333,14 +296,7 @@ export class BookingService {
           });
 
           // 8. Record the idempotency mapping so a retry returns the same booking.
-          logger.debug(
-            {
-              module: "booking-service",
-              bookingId,
-              idempotencyKey: dto.idempotencyKey,
-            },
-            "Step 8: Recording idempotency mapping in DB",
-          );
+
           const responseBody: CreateBookingResponse = {
             id: booking.id,
             pnr: booking.pnr,
@@ -583,6 +539,67 @@ export class BookingService {
   }
 
   /**
+   * Initiates payment for a booking in `SEATS_HELD` / `PAYMENT_PENDING` state
+   * by calling payment-service over gRPC to create a Razorpay order.
+   *
+   * @param bookingId - The booking UUID.
+   * @param userId - The authenticated user's UUID.
+   */
+  async createPaymentOrder(bookingId: string, userId: string) {
+    const booking = await this.bookingRepository.findById(bookingId);
+    if (!booking) {
+      throw new ApiError(statusCode.notFound, ERROR_CODES.BOOKING_NOT_FOUND);
+    }
+    if (booking.userId !== userId) {
+      throw new ApiError(statusCode.forbidden, ERROR_CODES.BOOKING_FORBIDDEN);
+    }
+
+    let paymentOrder;
+    try {
+      paymentOrder = await this.paymentAdapter.createOrder({
+        bookingId: booking.id,
+        userId: booking.userId,
+        amount: Math.round(Number(booking.totalPrice) * 100),
+        currency: "INR",
+      });
+    } catch (err) {
+      logger.error(
+        { module: "booking-service", bookingId, err },
+        "gRPC call to payment-service failed for order creation.",
+      );
+      await this.sagaRepository
+        .update(
+          bookingId,
+          SagaStep.CREATE_PAYMENT,
+          SagaStatus.FAILED,
+          err instanceof Error ? err.message : "Payment service unavailable",
+        )
+        .catch(() => {});
+
+      throw new ApiError(
+        statusCode.serviceUnavailable,
+        COMMON_ERROR_CODES.INTERNAL_ERROR,
+        "Payment service is currently unavailable. Please try again.",
+      );
+    }
+
+    await this.sagaRepository
+      .update(bookingId, SagaStep.CREATE_PAYMENT, SagaStatus.COMPLETED, null)
+      .catch(() => {});
+
+    if (booking.status === BookingStatus.SEATS_HELD) {
+      await this.markPaymentPending(bookingId, paymentOrder.paymentOrderId);
+    }
+
+    return {
+      paymentOrderId: paymentOrder.paymentOrderId,
+      razorpayOrderId: paymentOrder.razorpayOrderId,
+      keyId: paymentOrder.keyId,
+      status: paymentOrder.status,
+    };
+  }
+
+  /**
    * Simulates payment confirmation for a booking at `SEATS_HELD` or `PAYMENT_PENDING`.
    * Drives the booking row through `CONFIRMING → CONFIRMED` and completes the saga step.
    * Emits `BookingStatusChangedV1` outbox events for each status transition.
@@ -593,18 +610,10 @@ export class BookingService {
   async confirmPayment(bookingId: string, userId: string): Promise<void> {
     const booking = await this.bookingRepository.findById(bookingId);
     if (!booking) {
-      throw new ApiError(
-        statusCode.notFound,
-        ERROR_CODES.BOOKING_NOT_FOUND,
-        `Booking not found for bookingId=${bookingId}.`,
-      );
+      throw new ApiError(statusCode.notFound, ERROR_CODES.BOOKING_NOT_FOUND);
     }
     if (booking.userId !== userId) {
-      throw new ApiError(
-        statusCode.forbidden,
-        ERROR_CODES.BOOKING_FORBIDDEN,
-        `Booking ${bookingId} does not belong to this user.`,
-      );
+      throw new ApiError(statusCode.forbidden, ERROR_CODES.BOOKING_FORBIDDEN);
     }
 
     if (booking.status === BookingStatus.SEATS_HELD) {

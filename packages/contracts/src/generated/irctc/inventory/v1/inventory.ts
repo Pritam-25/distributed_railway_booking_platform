@@ -17,6 +17,17 @@ export interface GetSeatDetailsRequest {
   seatId: string;
 }
 
+/** GetSeatsDetailsBatchRequest contains the parameters for fetching batch seat details. */
+export interface GetSeatsDetailsBatchRequest {
+  scheduleId: string;
+  seatIds: string[];
+}
+
+/** GetSeatsDetailsBatchResponse contains batch detailed seat information. */
+export interface GetSeatsDetailsBatchResponse {
+  seats: GetSeatDetailsResponse[];
+}
+
 /** GetSeatDetailsResponse contains detailed seat information. */
 export interface GetSeatDetailsResponse {
   scheduleId: string;
@@ -66,7 +77,7 @@ export interface Coach {
   seats: SeatMapSeat[];
 }
 
-/** SeatMapSeat is a single seat within a coach, with a live booking flag. */
+/** SeatMapSeat is a single seat within a coach, with a live booking flag and status. */
 export interface SeatMapSeat {
   seatId: string;
   seatNumber: number;
@@ -76,6 +87,8 @@ export interface SeatMapSeat {
   price: string;
   isBooked: boolean;
   quota: string;
+  /** "AVAILABLE", "HELD", "BOOKED" */
+  status: string;
 }
 
 /**
@@ -193,6 +206,151 @@ export const GetSeatDetailsRequest: MessageFns<GetSeatDetailsRequest> = {
     return obj;
   },
 };
+
+function createBaseGetSeatsDetailsBatchRequest(): GetSeatsDetailsBatchRequest {
+  return { scheduleId: "", seatIds: [] };
+}
+
+export const GetSeatsDetailsBatchRequest: MessageFns<GetSeatsDetailsBatchRequest> =
+  {
+    encode(
+      message: GetSeatsDetailsBatchRequest,
+      writer: BinaryWriter = new BinaryWriter(),
+    ): BinaryWriter {
+      if (message.scheduleId !== "") {
+        writer.uint32(10).string(message.scheduleId);
+      }
+      for (const v of message.seatIds) {
+        writer.uint32(18).string(v!);
+      }
+      return writer;
+    },
+
+    decode(
+      input: BinaryReader | Uint8Array,
+      length?: number,
+    ): GetSeatsDetailsBatchRequest {
+      const reader =
+        input instanceof BinaryReader ? input : new BinaryReader(input);
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseGetSeatsDetailsBatchRequest();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.scheduleId = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.seatIds.push(reader.string());
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    },
+
+    fromJSON(object: any): GetSeatsDetailsBatchRequest {
+      return {
+        scheduleId: isSet(object.scheduleId)
+          ? globalThis.String(object.scheduleId)
+          : isSet(object.schedule_id)
+            ? globalThis.String(object.schedule_id)
+            : "",
+        seatIds: globalThis.Array.isArray(object?.seatIds)
+          ? object.seatIds.map((e: any) => globalThis.String(e))
+          : globalThis.Array.isArray(object?.seat_ids)
+            ? object.seat_ids.map((e: any) => globalThis.String(e))
+            : [],
+      };
+    },
+
+    toJSON(message: GetSeatsDetailsBatchRequest): unknown {
+      const obj: any = {};
+      if (message.scheduleId !== "") {
+        obj.scheduleId = message.scheduleId;
+      }
+      if (message.seatIds?.length) {
+        obj.seatIds = message.seatIds;
+      }
+      return obj;
+    },
+  };
+
+function createBaseGetSeatsDetailsBatchResponse(): GetSeatsDetailsBatchResponse {
+  return { seats: [] };
+}
+
+export const GetSeatsDetailsBatchResponse: MessageFns<GetSeatsDetailsBatchResponse> =
+  {
+    encode(
+      message: GetSeatsDetailsBatchResponse,
+      writer: BinaryWriter = new BinaryWriter(),
+    ): BinaryWriter {
+      for (const v of message.seats) {
+        GetSeatDetailsResponse.encode(v!, writer.uint32(10).fork()).join();
+      }
+      return writer;
+    },
+
+    decode(
+      input: BinaryReader | Uint8Array,
+      length?: number,
+    ): GetSeatsDetailsBatchResponse {
+      const reader =
+        input instanceof BinaryReader ? input : new BinaryReader(input);
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseGetSeatsDetailsBatchResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.seats.push(
+              GetSeatDetailsResponse.decode(reader, reader.uint32()),
+            );
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    },
+
+    fromJSON(object: any): GetSeatsDetailsBatchResponse {
+      return {
+        seats: globalThis.Array.isArray(object?.seats)
+          ? object.seats.map((e: any) => GetSeatDetailsResponse.fromJSON(e))
+          : [],
+      };
+    },
+
+    toJSON(message: GetSeatsDetailsBatchResponse): unknown {
+      const obj: any = {};
+      if (message.seats?.length) {
+        obj.seats = message.seats.map((e) => GetSeatDetailsResponse.toJSON(e));
+      }
+      return obj;
+    },
+  };
 
 function createBaseGetSeatDetailsResponse(): GetSeatDetailsResponse {
   return {
@@ -754,6 +912,7 @@ function createBaseSeatMapSeat(): SeatMapSeat {
     price: "",
     isBooked: false,
     quota: "",
+    status: "",
   };
 }
 
@@ -782,6 +941,9 @@ export const SeatMapSeat: MessageFns<SeatMapSeat> = {
     }
     if (message.quota !== "") {
       writer.uint32(58).string(message.quota);
+    }
+    if (message.status !== "") {
+      writer.uint32(66).string(message.status);
     }
     return writer;
   },
@@ -850,6 +1012,14 @@ export const SeatMapSeat: MessageFns<SeatMapSeat> = {
           message.quota = reader.string();
           continue;
         }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.status = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -888,6 +1058,7 @@ export const SeatMapSeat: MessageFns<SeatMapSeat> = {
           ? globalThis.Boolean(object.is_booked)
           : false,
       quota: isSet(object.quota) ? globalThis.String(object.quota) : "",
+      status: isSet(object.status) ? globalThis.String(object.status) : "",
     };
   },
 
@@ -913,6 +1084,9 @@ export const SeatMapSeat: MessageFns<SeatMapSeat> = {
     }
     if (message.quota !== "") {
       obj.quota = message.quota;
+    }
+    if (message.status !== "") {
+      obj.status = message.status;
     }
     return obj;
   },
@@ -1139,6 +1313,17 @@ export const InventoryServiceDefinition = {
       responseStream: false,
       options: {},
     },
+    /** GetSeatsDetailsBatch queries seat details for multiple seats in a single batch call. */
+    getSeatsDetailsBatch: {
+      name: "GetSeatsDetailsBatch",
+      requestType:
+        GetSeatsDetailsBatchRequest as typeof GetSeatsDetailsBatchRequest,
+      requestStream: false,
+      responseType:
+        GetSeatsDetailsBatchResponse as typeof GetSeatsDetailsBatchResponse,
+      responseStream: false,
+      options: {},
+    },
     /**
      * GetSeatMap returns the full seat-map (coaches + seats) for a schedule,
      * marked with bookings that overlap the (from_station, to_station) segment.
@@ -1175,6 +1360,11 @@ export interface InventoryServiceImplementation<CallContextExt = {}> {
     request: GetSeatDetailsRequest,
     context: CallContext & CallContextExt,
   ): Promise<GetSeatDetailsResponse>;
+  /** GetSeatsDetailsBatch queries seat details for multiple seats in a single batch call. */
+  getSeatsDetailsBatch(
+    request: GetSeatsDetailsBatchRequest,
+    context: CallContext & CallContextExt,
+  ): Promise<GetSeatsDetailsBatchResponse>;
   /**
    * GetSeatMap returns the full seat-map (coaches + seats) for a schedule,
    * marked with bookings that overlap the (from_station, to_station) segment.
@@ -1202,6 +1392,11 @@ export interface InventoryServiceClient<CallOptionsExt = {}> {
     request: GetSeatDetailsRequest,
     options?: CallOptions & CallOptionsExt,
   ): Promise<GetSeatDetailsResponse>;
+  /** GetSeatsDetailsBatch queries seat details for multiple seats in a single batch call. */
+  getSeatsDetailsBatch(
+    request: GetSeatsDetailsBatchRequest,
+    options?: CallOptions & CallOptionsExt,
+  ): Promise<GetSeatsDetailsBatchResponse>;
   /**
    * GetSeatMap returns the full seat-map (coaches + seats) for a schedule,
    * marked with bookings that overlap the (from_station, to_station) segment.

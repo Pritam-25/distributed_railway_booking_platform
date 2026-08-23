@@ -174,4 +174,38 @@ export class SeatAllocationRepository {
       },
     });
   }
+
+  /**
+   * Retrieves active (CONFIRMED or unexpired HELD) allocations for a schedule and segment.
+   *
+   * @param scheduleId - Schedule UUID.
+   * @param fromSequence - Origin sequence number.
+   * @param toSequence - Destination sequence number.
+   * @param tx - Optional Prisma transaction client.
+   */
+  async findActiveAllocationsBySegment(
+    scheduleId: string,
+    fromSequence: number,
+    toSequence: number,
+    tx?: Prisma.TransactionClient,
+  ) {
+    return this.getClient(tx).seatAllocation.findMany({
+      where: {
+        scheduleId,
+        OR: [
+          { status: AllocationStatus.CONFIRMED },
+          {
+            status: AllocationStatus.HELD,
+            holdExpiresAt: { gt: new Date() },
+          },
+        ],
+        fromSequence: { lt: toSequence },
+        toSequence: { gt: fromSequence },
+      },
+      select: {
+        seatInventoryId: true,
+        status: true,
+      },
+    });
+  }
 }

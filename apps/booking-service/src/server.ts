@@ -27,7 +27,7 @@ import { logger } from "@irctc/logger";
 import { registerErrorMessages } from "@irctc/errors";
 import { withTimeout, startServer, runBootstrap } from "@irctc/http";
 import { ERROR_MESSAGES } from "@utils/errors";
-import { closeInventoryGrpcChannel } from "@grpc";
+import { closeInventoryGrpcChannel, closePaymentGrpcChannel } from "@grpc";
 
 // 1. Register user-facing error messages with the @irctc/errors registry.
 registerErrorMessages(ERROR_MESSAGES);
@@ -70,8 +70,12 @@ await runBootstrap({
       },
       afterShutdown: async () => {
         await withTimeout(
-          "gRPC client channel close",
+          "Inventory gRPC client channel close",
           closeInventoryGrpcChannel(),
+        );
+        await withTimeout(
+          "Payment gRPC client channel close",
+          closePaymentGrpcChannel(),
         );
         await withTimeout("Kafka disconnect", disconnectKafka());
         await withTimeout("Redis disconnect", disconnectRedis());
@@ -81,8 +85,12 @@ await runBootstrap({
   },
   onFailure: async () => {
     await withTimeout(
-      "gRPC client channel close",
+      "Inventory gRPC client channel close",
       closeInventoryGrpcChannel(),
+    ).catch(() => {});
+    await withTimeout(
+      "Payment gRPC client channel close",
+      closePaymentGrpcChannel(),
     ).catch(() => {});
     await withTimeout("Kafka disconnect", disconnectKafka()).catch(() => {});
     await withTimeout("Redis disconnect", disconnectRedis()).catch(() => {});

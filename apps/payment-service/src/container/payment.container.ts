@@ -1,43 +1,58 @@
-import { prisma } from "@config";
-import { PostgresOutboxRepository, type OutboxRepository } from "@irctc/kafka";
+import { prisma, getProducerSync } from "@config";
+import { PostgresOutboxRepository, OutboxPublisherWorker } from "@irctc/kafka";
 import { logger } from "@irctc/logger";
+import { PaymentRepository } from "@repository";
+import { PaymentService } from "@services";
+import { PaymentGrpcHandler } from "@grpc";
+import { PaymentController } from "@controllers";
 
 /**
- * Dependency injection container for booking-service.
- * Wires repositories, services, and consumers.
- * Singleton pattern ensures shared state across the service.
- *
- * IMPORTANT: Must be instantiated AFTER initKafka() has completed
- * (server.ts guarantees this via dynamic import of container).
+ * Dependency injection container for payment-service acting as the composition root.
+ * Constructs internal repositories and services locally and exposes public external adapters
+ * (Controllers and gRPC Handlers) alongside outbox worker lifecycle management.
  */
 export class PaymentContainer {
-  /**
-   * Singleton instance of the PaymentContainer.
-   */
   private static instance: PaymentContainer;
 
-  /**
-   * Outbox repository instance.
-   */
-  public readonly outboxRepository: OutboxRepository;
+  public readonly paymentController: PaymentController;
+  public readonly paymentGrpcHandler: PaymentGrpcHandler;
+
+  private readonly outboxWorker: OutboxPublisherWorker;
 
   private constructor() {
-    // 1. Repositories
-    this.outboxRepository = new PostgresOutboxRepository(prisma);
+    // 1. Local Repositories & Workers
+    const outboxRepository = new PostgresOutboxRepository(prisma);
+    const paymentRepository = new PaymentRepository(prisma);
 
-    // 2. Services
+    this.outboxWorker = new OutboxPublisherWorker(
+      outboxRepository,
+      getProducerSync,
+      logger,
+    );
+
+    // 2. Local Services
+    const paymentService = new PaymentService(
+      prisma,
+      paymentRepository,
+      outboxRepository,
+    );
+
+    // 3. Public External Adapters
+    this.paymentController = new PaymentController(paymentService);
+    this.paymentGrpcHandler = new PaymentGrpcHandler(paymentService);
+
+    logger.info({ module: "payment-container" }, "Payment dependencies wired.");
   }
 
   /**
-   * Starts both consumer subscription loops on their respective Kafka topics.
-   *
-   * @returns A promise that resolves when both consumers have started.
+   * Starts background outbox worker polling loop.
    */
-  async start(): Promise<void> {
-    logger.info({ module: "container" }, "Starting payment event consumers...");
+  start(): void {
+    logger.info({ module: "container" }, "Starting payment outbox worker...");
+    this.outboxWorker.start();
     logger.info(
       { module: "container" },
-      "Payment service event consumer loops started successfully.",
+      "Payment outbox worker started successfully.",
     );
   }
 
@@ -55,18 +70,17 @@ export class PaymentContainer {
   }
 
   /**
-   * Gracefully shuts down the consumer loops and releases network resources.
-   *
-   * @returns A promise that resolves when all consumers have stopped.
+   * Gracefully stops outbox worker.
    */
   async disconnect(): Promise<void> {
     logger.info(
       { module: "container" },
-      "Initiating graceful shutdown of event consumers...",
+      "Initiating graceful shutdown of payment outbox worker...",
     );
+    await this.outboxWorker.stop();
     logger.info(
       { module: "container" },
-      "All event consumers shut down successfully.",
+      "Payment outbox worker shut down successfully.",
     );
   }
 }

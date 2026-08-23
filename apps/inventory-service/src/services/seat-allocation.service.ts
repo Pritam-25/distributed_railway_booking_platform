@@ -18,6 +18,23 @@ import {
 import { type OutboxRepository } from "@irctc/kafka";
 import { logger } from "@irctc/logger";
 
+export type CoachMapItem = {
+  coachId: string;
+  coachNumber: string;
+  coachType: string;
+  totalSeats: number;
+  seats: Array<{
+    seatId: string;
+    seatNumber: number;
+    seatType: string;
+    berthType: string;
+    price: string;
+    isBooked: boolean;
+    quota: string;
+    status: string;
+  }>;
+};
+
 import {
   type IdempotencyRepository,
   type RouteStopRepository,
@@ -41,8 +58,8 @@ export type HoldSeatsOutcome =
 export interface SeatLifecycleEventArgs {
   eventId: string;
   bookingId: string;
-  scheduleId: string;
-  seatInventoryIds: string[];
+  scheduleId?: string;
+  seatInventoryIds?: string[];
 }
 
 export type ConfirmSeatsArgs = SeatLifecycleEventArgs;
@@ -612,5 +629,278 @@ export class SeatAllocationService {
     );
 
     return { kind: "failed", payload };
+  }
+
+  /**
+   * Fetches single seat details for a schedule and seat ID.
+   */
+  async getSeatDetails(scheduleId: string, seatId: string) {
+    const seat = await this.seatInventoryRepository.findByScheduleAndSeatId(
+      scheduleId,
+      seatId,
+    );
+    if (!seat) return null;
+    return {
+      scheduleId: seat.scheduleId,
+      seatId: seat.seatId,
+      seatInventoryId: seat.id,
+      trainId: seat.trainId,
+      coachId: seat.coachId,
+      coachNumber: seat.coachNumber,
+      seatNumber: seat.seatNumber,
+      seatType: seat.seatType,
+      pricePerKm: Number(seat.pricePerKm),
+      version: seat.version,
+    };
+  }
+
+  /**
+   * Fetches batch seat details for a schedule and seat IDs using single findMany query.
+   */
+  async getSeatsDetailsBatch(scheduleId: string, seatIds: string[]) {
+    const seats = await this.seatInventoryRepository.findByScheduleAndSeats(
+      scheduleId,
+      seatIds,
+    );
+    return seats.map((seat) => ({
+      scheduleId: seat.scheduleId,
+      seatId: seat.seatId,
+      seatInventoryId: seat.id,
+      trainId: seat.trainId,
+      coachId: seat.coachId,
+      coachNumber: seat.coachNumber,
+      seatNumber: seat.seatNumber,
+      seatType: seat.seatType,
+      pricePerKm: Number(seat.pricePerKm),
+      version: seat.version,
+    }));
+  }
+
+  /**
+   * Fetches the full seat-map with dynamic seat availability status (AVAILABLE, HELD, BOOKED).
+   */
+  async getSeatMapData(
+    scheduleId: string,
+    fromStationId: string,
+    toStationId: string,
+  ) {
+    const schedule =
+      await this.scheduleInventoryRepository.findByScheduleId(scheduleId);
+    if (!schedule) return { status: "SCHEDULE_NOT_FOUND", coaches: [] };
+    if (schedule.status !== ScheduleInventoryStatus.ACTIVE) {
+      return { status: "SCHEDULE_INACTIVE", coaches: [] };
+    }
+
+    const segment = await this.resolveSeatMapSegmentStops(
+      scheduleId,
+      fromStationId,
+      toStationId,
+    );
+    if (!segment) return { status: "SCHEDULE_INACTIVE", coaches: [] };
+
+    const seats =
+      await this.seatInventoryRepository.getByScheduleOrdered(scheduleId);
+    const allocations =
+      await this.seatAllocationRepository.findActiveAllocationsBySegment(
+        scheduleId,
+        segment.fromSequence,
+        segment.toSequence,
+      );
+
+    const allocationStatusMap = new Map<string, AllocationStatus>();
+    for (const alloc of allocations) {
+      allocationStatusMap.set(alloc.seatInventoryId, alloc.status);
+    }
+
+    const { coachesById, coachOrder } = this.buildCoachesMap(
+      seats,
+      allocationStatusMap,
+      segment.segmentDistance,
+    );
+
+    this.logNonAvailableSeats(scheduleId, coachesById);
+
+    return {
+      status: "OK",
+      coaches: coachOrder.map((id) => coachesById.get(id)!),
+    };
+  }
+
+  /**
+   * Helper to resolve sequence numbers and segment distance for a route segment.
+   */
+  private async resolveSeatMapSegmentStops(
+    scheduleId: string,
+    fromStationId: string,
+    toStationId: string,
+  ): Promise<{
+    fromSequence: number;
+    toSequence: number;
+    segmentDistance: number;
+  } | null> {
+    const stops: RouteStop[] =
+      await this.routeStopRepository.findStopsByScheduleAndStations(
+        scheduleId,
+        [fromStationId, toStationId],
+      );
+
+    const fromStop = stops.find(
+      (s: RouteStop) =>
+        s.stationId === fromStationId ||
+        s.stationCode === fromStationId.toUpperCase(),
+    );
+    const toStop = stops.find(
+      (s: RouteStop) =>
+        s.stationId === toStationId ||
+        s.stationCode === toStationId.toUpperCase(),
+    );
+
+    if (!fromStop || !toStop) return null;
+    if (fromStop.sequenceNumber >= toStop.sequenceNumber) return null;
+
+    return {
+      fromSequence: fromStop.sequenceNumber,
+      toSequence: toStop.sequenceNumber,
+      segmentDistance: Math.max(
+        0,
+        (toStop.distanceFromStart ?? 0) - (fromStop.distanceFromStart ?? 0),
+      ),
+    };
+  }
+
+  /**
+   * Helper to group seats into coaches and compute prices and allocation status.
+   */
+  private buildCoachesMap(
+    seats: SeatInventory[],
+    allocationStatusMap: Map<string, AllocationStatus>,
+    segmentDistance: number,
+  ) {
+    const coachesById = new Map<string, CoachMapItem>();
+    const coachOrder: string[] = [];
+
+    for (const seat of seats) {
+      let coach = coachesById.get(seat.coachId);
+      if (!coach) {
+        coach = {
+          coachId: seat.coachId,
+          coachNumber: seat.coachNumber,
+          coachType: "SL",
+          totalSeats: 0,
+          seats: [],
+        };
+        coachesById.set(seat.coachId, coach);
+        coachOrder.push(seat.coachId);
+      }
+
+      const pricePerKm = Number(seat.pricePerKm);
+      const calculatedPrice =
+        segmentDistance > 0
+          ? (segmentDistance * pricePerKm).toFixed(2)
+          : pricePerKm.toString();
+
+      const allocStatus = allocationStatusMap.get(seat.id);
+      let statusStr = "AVAILABLE";
+      if (allocStatus === AllocationStatus.CONFIRMED) {
+        statusStr = "BOOKED";
+      } else if (allocStatus === AllocationStatus.HELD) {
+        statusStr = "HELD";
+      }
+      const isBooked = statusStr !== "AVAILABLE";
+
+      coach.seats.push({
+        seatId: seat.seatId,
+        seatNumber: seat.seatNumber,
+        seatType: seat.seatType,
+        berthType: "SEATER",
+        price: calculatedPrice,
+        isBooked,
+        quota: "GENERAL",
+        status: statusStr,
+      });
+      coach.totalSeats = coach.seats.length;
+    }
+
+    return { coachesById, coachOrder };
+  }
+
+  /**
+   * Helper to log debug information for non-AVAILABLE (HELD / BOOKED) seats.
+   */
+  private logNonAvailableSeats(
+    scheduleId: string,
+    coachesById: Map<string, CoachMapItem>,
+  ): void {
+    const nonAvailableSeats: Array<{
+      coachNumber: string;
+      seatNumber: number;
+      seatId: string;
+      status: string;
+      isBooked: boolean;
+    }> = [];
+
+    for (const coach of coachesById.values()) {
+      for (const s of coach.seats) {
+        if (s.status !== "AVAILABLE") {
+          nonAvailableSeats.push({
+            coachNumber: coach.coachNumber,
+            seatNumber: s.seatNumber,
+            seatId: s.seatId,
+            status: s.status,
+            isBooked: s.isBooked,
+          });
+        }
+      }
+    }
+
+    logger.info(
+      {
+        module: "getSeatMapData",
+        scheduleId,
+        nonAvailableCount: nonAvailableSeats.length,
+        nonAvailableSeats,
+      },
+      "Filtered non-AVAILABLE (HELD / BOOKED) seats in getSeatMapData.",
+    );
+  }
+
+  /**
+   * Pre-flight validation for booking requests.
+   */
+  async validateBooking(
+    scheduleId: string,
+    fromStationId: string,
+    toStationId: string,
+    clientRequestedAt?: Date,
+  ) {
+    const schedule =
+      await this.scheduleInventoryRepository.findByScheduleId(scheduleId);
+    if (!schedule) return { status: "SCHEDULE_NOT_FOUND", departureAt: "" };
+    if (schedule.status !== ScheduleInventoryStatus.ACTIVE) {
+      return { status: "SCHEDULE_INACTIVE", departureAt: "" };
+    }
+
+    const stops: RouteStop[] =
+      await this.routeStopRepository.findStopsByScheduleAndStations(
+        scheduleId,
+        [fromStationId, toStationId],
+      );
+    if (stops.length < 2) {
+      return { status: "SCHEDULE_INACTIVE", departureAt: "" };
+    }
+
+    const requestedAt = clientRequestedAt ?? new Date();
+    const toleranceMs = 60_000;
+    if (
+      requestedAt.getTime() >
+      schedule.departureDate.getTime() + toleranceMs
+    ) {
+      return { status: "TRAIN_ALREADY_DEPARTED", departureAt: "" };
+    }
+
+    return {
+      status: "OK",
+      departureAt: schedule.departureDate.toISOString(),
+    };
   }
 }

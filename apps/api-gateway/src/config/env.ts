@@ -39,6 +39,7 @@ export const env = createEnv({
     ADMIN_UPSTREAM: z.url().default("http://localhost:4002"),
     BOOKING_UPSTREAM: z.url().default("http://localhost:4005"),
     SEARCH_UPSTREAM: z.url().default("http://localhost:4004"),
+    PAYMENT_UPSTREAM: z.url().default("http://localhost:4006"),
 
     JWT_SECRET: z.string().min(1),
 

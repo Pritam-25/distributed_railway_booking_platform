@@ -13,8 +13,9 @@ export const TIMEOUTS: Record<string, number> = {
   "user-service": 5000,
   "notification-service": 5000,
   "admin-service": 5000,
-  "booking-service": 5000,
+  "booking-service": 10000,
   "search-service": 5000,
+  "payment-service": 5000,
 };
 
 export const DEFAULT_TIMEOUT_MS = 5000;

@@ -111,4 +111,37 @@ export class SeatInventoryRepository {
       ...ids,
     );
   }
+
+  /**
+   * Retrieves single seat inventory record by schedule ID and seat ID.
+   *
+   * @param scheduleId - Schedule UUID.
+   * @param seatId - Seat UUID.
+   * @param tx - Optional Prisma transaction client.
+   */
+  async findByScheduleAndSeatId(
+    scheduleId: string,
+    seatId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<SeatInventory | null> {
+    return this.getClient(tx).seatInventory.findUnique({
+      where: { scheduleId_seatId: { scheduleId, seatId } },
+    });
+  }
+
+  /**
+   * Retrieves all seats for a schedule ordered by coachNumber and seatNumber.
+   *
+   * @param scheduleId - Schedule UUID.
+   * @param tx - Optional Prisma transaction client.
+   */
+  async getByScheduleOrdered(
+    scheduleId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<SeatInventory[]> {
+    return this.getClient(tx).seatInventory.findMany({
+      where: { scheduleId },
+      orderBy: [{ coachNumber: "asc" }, { seatNumber: "asc" }],
+    });
+  }
 }

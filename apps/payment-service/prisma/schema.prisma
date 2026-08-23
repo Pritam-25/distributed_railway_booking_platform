@@ -1,8 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -18,6 +16,59 @@ enum OutboxStatus {
   PUBLISHED
   FAILED
   DEAD
+}
+
+enum PaymentStatus {
+  CREATED
+  PENDING
+  CAPTURED
+  FAILED
+  REFUNDED
+}
+
+enum RefundStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
+
+model Payment {
+  id                String        @id @default(uuid())
+  paymentOrderId    String        @unique @map("payment_order_id")
+  razorpayOrderId   String        @map("razorpay_order_id")
+  bookingId         String        @map("booking_id")
+  userId            String        @map("user_id")
+  amount            Decimal       @db.Decimal(12, 2)
+  currency          String        @default("INR")
+  status            PaymentStatus @default(PENDING)
+  razorpayPaymentId String?       @map("razorpay_payment_id")
+  razorpaySignature String?       @map("razorpay_signature")
+  failureReason     String?       @map("failure_reason")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  refunds           PaymentRefund[]
+
+  @@index([bookingId])
+  @@index([razorpayOrderId])
+  @@index([status])
+  @@map("payments")
+}
+
+model PaymentRefund {
+  id               String       @id @default(uuid())
+  paymentId        String       @map("payment_id")
+  razorpayRefundId String       @map("razorpay_refund_id")
+  amount           Decimal      @db.Decimal(12, 2)
+  status           RefundStatus @default(PROCESSED)
+  reason           String?
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  payment          Payment      @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@map("payment_refunds")
 }
 
 model OutboxEvent {

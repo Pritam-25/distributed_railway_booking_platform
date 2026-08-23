@@ -5,7 +5,6 @@ import {
   PostgresOutboxRepository,
   OutboxPublisherWorker,
   RetryPolicies,
-  type OutboxRepository,
 } from "@irctc/kafka";
 import { logger } from "@irctc/logger";
 import {
@@ -22,14 +21,16 @@ import {
 } from "@services";
 import { CONSUMER_GROUPS } from "@irctc/contracts";
 import {
+  BookingStatusChangedConsumer,
   HoldSeatsConsumer,
   ScheduleCreatedConsumer,
   ScheduleStatusChangedConsumer,
 } from "@consumers";
+import { InventoryGrpcHandler } from "@grpc";
 
 /**
  * Dependency injection container for inventory-service.
- * Wires repositories, services, and consumers.
+ * Wires repositories, services, controllers, and consumers.
  * Singleton pattern ensures shared state across the service.
  *
  * IMPORTANT: Must be instantiated AFTER initKafka() has completed
@@ -42,9 +43,9 @@ export class InventoryContainer {
   private static instance: InventoryContainer;
 
   /**
-   * Outbox repository instance.
+   * Public gRPC handler entry point.
    */
-  public readonly outboxRepository: OutboxRepository;
+  public readonly inventoryGrpcHandler: InventoryGrpcHandler;
 
   /**
    * Outbox publisher worker instance.
@@ -52,34 +53,22 @@ export class InventoryContainer {
   private readonly outboxWorker: OutboxPublisherWorker;
 
   /**
-   * Inventory-side Redis seat-segment lock service.
-   * Used by `SeatAllocationService` to serialize concurrent
-   * `holdSeats` invocations on overlapping (seat, segment) tuples.
-   */
-  public readonly seatLockService: SeatLockService;
-
-  /**
-   * Business logic for the booking-saga `holdSeats` step. Wraps the
-   * segment-Redis lock, the Prisma transaction, and the outbox writes
-   * for `SeatsHeldV1` / `SeatsHoldFailedV1`.
-   */
-  public readonly seatAllocationService: SeatAllocationService;
-
-  /**
    * Kafka consumers
    * 1. Schedule created
    * 2. Schedule status changed
    * 3. Booking hold-seats requested
+   * 4. Booking status changed (promotes HELD -> CONFIRMED or CANCELLED)
    */
   private readonly scheduleCreatedConsumer: ScheduleCreatedConsumer;
   private readonly scheduleStatusChangedConsumer: ScheduleStatusChangedConsumer;
   private readonly holdSeatsConsumer: HoldSeatsConsumer;
+  private readonly bookingStatusChangedConsumer: BookingStatusChangedConsumer;
 
   private constructor() {
     // 1. Repositories
-    this.outboxRepository = new PostgresOutboxRepository(prisma);
+    const outboxRepository = new PostgresOutboxRepository(prisma);
     this.outboxWorker = new OutboxPublisherWorker(
-      this.outboxRepository,
+      outboxRepository,
       getProducerSync,
       logger,
     );
@@ -96,30 +85,31 @@ export class InventoryContainer {
       scheduleInventoryRepo,
       routeStopRepo,
       seatInventoryRepo,
-      this.outboxRepository,
+      outboxRepository,
     );
 
     // 2b. Inventory-side Redis seat-segment lock service.
-    // Wraps seat-lock.lua / seat-unlock.lua. No renew script on this side
-    // because the critical section it guards is short (~SEAT_LOCK_TTL_SEC).
-    this.seatLockService = new SeatLockService(redis);
+    const seatLockService = new SeatLockService(redis);
 
     // 2c. Booking-saga `holdSeats` business logic.
-    this.seatAllocationService = new SeatAllocationService(
+    const seatAllocationService = new SeatAllocationService(
       prisma,
       scheduleInventoryRepo,
       routeStopRepo,
       seatInventoryRepo,
       seatAllocationRepo,
       idempotencyRepo,
-      this.outboxRepository,
-      this.seatLockService,
+      outboxRepository,
+      seatLockService,
     );
 
-    // 3. Configure consumer retry policy
+    // 3. gRPC Handlers
+    this.inventoryGrpcHandler = new InventoryGrpcHandler(seatAllocationService);
+
+    // 4. Configure consumer retry policy
     const retryPolicy = RetryPolicies.conservative();
 
-    // 4. Initialize the Kafka consumers
+    // 5. Initialize the Kafka consumers
     const scheduleCreatedKafkaConsumer = createConsumer(
       kafka,
       CONSUMER_GROUPS.INVENTORY_SCHEDULE_CREATED,
@@ -138,7 +128,13 @@ export class InventoryContainer {
       retryPolicy,
     );
 
-    // 5. Wrap Kafka consumers in runners
+    const bookingStatusChangedKafkaConsumer = createConsumer(
+      kafka,
+      CONSUMER_GROUPS.INVENTORY_BOOKING_STATUS_CHANGED,
+      retryPolicy,
+    );
+
+    // 6. Wrap Kafka consumers in runners
     const scheduleCreatedRunner = new KafkaConsumerRunner(
       scheduleCreatedKafkaConsumer,
       logger,
@@ -154,7 +150,12 @@ export class InventoryContainer {
       logger,
     );
 
-    // 6. Instantiate the high-level event consumers to execute business logic
+    const bookingStatusChangedRunner = new KafkaConsumerRunner(
+      bookingStatusChangedKafkaConsumer,
+      logger,
+    );
+
+    // 7. Instantiate the high-level event consumers to execute business logic
     this.scheduleCreatedConsumer = new ScheduleCreatedConsumer(
       getProducerSync(),
       scheduleCreatedRunner,
@@ -172,7 +173,14 @@ export class InventoryContainer {
     this.holdSeatsConsumer = new HoldSeatsConsumer(
       getProducerSync(),
       holdSeatsRunner,
-      this.seatAllocationService,
+      seatAllocationService,
+      logger,
+    );
+
+    this.bookingStatusChangedConsumer = new BookingStatusChangedConsumer(
+      getProducerSync(),
+      bookingStatusChangedRunner,
+      seatAllocationService,
       logger,
     );
 
@@ -180,7 +188,7 @@ export class InventoryContainer {
   }
 
   /**
-   * Starts outbox publisher worker and both consumer subscription loops on their respective Kafka topics.
+   * Starts outbox publisher worker and consumer subscription loops on their respective Kafka topics.
    *
    * @returns A promise that resolves when worker and consumers have started.
    */
@@ -190,6 +198,7 @@ export class InventoryContainer {
       this.scheduleCreatedConsumer.start(),
       this.scheduleStatusChangedConsumer.start(),
       this.holdSeatsConsumer.start(),
+      this.bookingStatusChangedConsumer.start(),
     ]);
     logger.info(
       {
@@ -198,6 +207,7 @@ export class InventoryContainer {
           CONSUMER_GROUPS.INVENTORY_SCHEDULE_CREATED,
           CONSUMER_GROUPS.INVENTORY_SCHEDULE_STATUS_CHANGED,
           CONSUMER_GROUPS.INVENTORY_HOLD_SEATS_REQUESTED,
+          CONSUMER_GROUPS.INVENTORY_BOOKING_STATUS_CHANGED,
         ],
       },
       "Inventory service event consumer loops started successfully.",
@@ -228,6 +238,7 @@ export class InventoryContainer {
       this.scheduleCreatedConsumer.stop(),
       this.scheduleStatusChangedConsumer.stop(),
       this.holdSeatsConsumer.stop(),
+      this.bookingStatusChangedConsumer.stop(),
     ]);
     logger.info(
       { module: "container" },

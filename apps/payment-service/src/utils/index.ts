@@ -1,2 +1,1 @@
-// Skeleton utils export
-export {};
+export * from "./razorpay.client.js";

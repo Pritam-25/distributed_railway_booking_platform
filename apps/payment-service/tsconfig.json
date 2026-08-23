@@ -36,10 +36,11 @@
       "@services": ["./src/services/index.js"],
       "@repository": ["./src/repository/index.js"],
       "@controllers": ["./src/controllers/index.js"],
-      "@consumers": ["./src/consumers/index.js"],
       "@grpc": ["./src/grpc/index.js"],
       "@utils/errors": ["./src/utils/errors/index.js"],
-      "@utils": ["./src/utils/index.ts"],
+      "@utils": ["./src/utils/index.js"],
+      "@constants": ["./src/constants/index.js"],
+      "@dto": ["./src/dto/index.js"],
       "@generated/*": ["./src/generated/*"]
     },
 

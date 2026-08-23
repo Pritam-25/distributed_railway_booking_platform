@@ -59,6 +59,9 @@ export const env = createEnv({
 
     // Inventory configuration environment for service-to-service communication
     INVENTORY_GRPC_URL: z.string().default("127.0.0.1:50051"),
+    GRPC_INTERNAL_AUTH_TOKEN: z
+      .string()
+      .min(32, "GRPC_INTERNAL_AUTH_TOKEN must be at least 32 characters"),
     INVENTORY_UPSTREAM: z.url().default("localhost:4003"),
 
     // Two-phase Redis idempotency for station projection consumers. The

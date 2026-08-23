@@ -17,24 +17,24 @@ import {
 } from "@services";
 import { SearchController } from "@controllers";
 import { StationConsumer, ScheduleConsumer } from "@consumers";
-import { getInventoryGrpcClient, closeInventoryGrpcChannel } from "@grpc";
+import {
+  getInventoryGrpcClient,
+  closeInventoryGrpcChannel,
+  InventoryAdapter,
+} from "@grpc";
 
 /**
  * ## SearchContainer
  *
- * Singleton dependency injection container wiring collaborators for search-service.
+ * Singleton dependency injection container wiring collaborators for search-service acting as the composition root.
  *
  * @remarks
  * ### Responsibilities
  * - Instantiates Elasticsearch and Redis-backed repositories.
  * - Instantiates services (projection services + read services).
  * - Instantiates thin HTTP controllers and Kafka consumer runners.
+ * - Exposes only external entry point adapters (`searchController`).
  * - Manages lifecycle startup (`start()`) and shutdown (`disconnect()`).
- *
- * ### Storage & Infrastructure Wired
- * - **Elasticsearch**: Station and train-schedule search repositories and indices.
- * - **Redis**: Cache-aside store and two-phase idempotency repositories.
- * - **Kafka**: Consumer runners for station and schedule lifecycle events.
  */
 export class SearchContainer {
   /**
@@ -42,16 +42,22 @@ export class SearchContainer {
    */
   private static instance: SearchContainer;
 
-  public readonly stationSearchRepository: StationSearchRepository;
-  public readonly trainSearchRepository: TrainSearchRepository;
-  public readonly stationSearchService: StationSearchService;
-  public readonly trainSearchService: TrainSearchService;
-  public readonly stationProjectionService: StationProjectionService;
-  public readonly scheduleProjectionService: ScheduleProjectionService;
-  public readonly seatMapService: SeatMapService;
+  /**
+   * Public HTTP Controller entry point.
+   */
   public readonly searchController: SearchController;
-  public readonly stationConsumer: StationConsumer;
-  public readonly scheduleConsumer: ScheduleConsumer;
+
+  /**
+   * Private Kafka Consumer orchestrators for lifecycle management.
+   */
+  private readonly stationConsumer: StationConsumer;
+  private readonly scheduleConsumer: ScheduleConsumer;
+
+  /**
+   * Private Elasticsearch repository reference for index initialization in `start()`.
+   */
+  private readonly stationSearchRepository: StationSearchRepository;
+  private readonly trainSearchRepository: TrainSearchRepository;
 
   /**
    * Constructs container instance and wires collaborators in dependency order.
@@ -75,35 +81,37 @@ export class SearchContainer {
       env.IDEMPOTENCY_KEYSPACE_SCHEDULE,
     );
 
-    this.stationProjectionService = new StationProjectionService(
+    const stationProjectionService = new StationProjectionService(
       this.stationSearchRepository,
       stationIdempotency,
     );
-    this.scheduleProjectionService = new ScheduleProjectionService(
+    const scheduleProjectionService = new ScheduleProjectionService(
       this.trainSearchRepository,
       scheduleIdempotency,
     );
 
-    this.stationSearchService = new StationSearchService(
+    const stationSearchService = new StationSearchService(
       this.stationSearchRepository,
       redis,
     );
-    this.trainSearchService = new TrainSearchService(
+    const trainSearchService = new TrainSearchService(
       this.trainSearchRepository,
       this.stationSearchRepository,
       redis,
     );
-    this.seatMapService = new SeatMapService(
-      getInventoryGrpcClient(),
+    const inventoryAdapter = new InventoryAdapter(getInventoryGrpcClient());
+
+    const seatMapService = new SeatMapService(
+      inventoryAdapter,
       this.trainSearchRepository,
       redis,
     );
 
     // 3. Create Controllers (Search HTTP controller)
     this.searchController = new SearchController(
-      this.stationSearchService,
-      this.trainSearchService,
-      this.seatMapService,
+      stationSearchService,
+      trainSearchService,
+      seatMapService,
     );
 
     // 4. Create Kafka Consumers and Consumer Runners
@@ -158,7 +166,7 @@ export class SearchContainer {
       createdRunner,
       updatedRunner,
       deactivatedRunner,
-      this.stationProjectionService,
+      stationProjectionService,
       logger,
     );
 
@@ -166,7 +174,7 @@ export class SearchContainer {
       getProducerSync(),
       scheduleCreatedRunner,
       scheduleStatusRunner,
-      this.scheduleProjectionService,
+      scheduleProjectionService,
       logger,
     );
 
@@ -175,18 +183,9 @@ export class SearchContainer {
 
   /**
    * Ensures Elasticsearch indices are ready and starts Kafka consumer loops.
-   *
-   * @remarks
-   * ### Side Effects
-   * - **Elasticsearch**: Checks or creates `stations` and `train_schedules` indices.
-   * - **Kafka**: Subscribes all consumer groups to their topics.
-   * @throws {Error} If index creation or consumer subscription fails.
    */
   async start(): Promise<void> {
-    // ensure stationIndex present.
     await this.stationSearchRepository.ensureIndex();
-
-    // ensure trainIndex present.
     await this.trainSearchRepository.ensureIndex();
 
     logger.info(
@@ -218,10 +217,6 @@ export class SearchContainer {
 
   /**
    * Gracefully stops Kafka consumer loops and releases network resources.
-   *
-   * @remarks
-   * ### Side Effects
-   * - **Kafka**: Unsubscribes consumers and releases broker connections.
    */
   async disconnect(): Promise<void> {
     logger.info(
