@@ -32,4 +32,16 @@ export const EVENT_TYPES = {
   // inventory domain
   INVENTORY_SCHEDULE_PROJECTED: "InventoryScheduleProjectedV1",
   INVENTORY_SCHEDULE_STATUS_CHANGED: "InventoryScheduleStatusChangedV1",
+  // booking ↔ inventory saga
+  HOLD_SEATS_REQUESTED: "HoldSeatsRequestedV1",
+  INVENTORY_SEATS_HELD: "SeatsHeldV1",
+  INVENTORY_SEATS_HOLD_FAILED: "SeatsHoldFailedV1",
+  INVENTORY_SEAT_HOLD_EXPIRED: "SeatHoldExpiredV1",
+  // booking domain
+  BOOKING_STATUS_CHANGED: "BookingStatusChangedV1",
+  // payment domain
+  PAYMENT_ORDER_CREATED: "PaymentOrderCreatedV1",
+  PAYMENT_SUCCESS: "PaymentSuccessV1",
+  PAYMENT_FAILED: "PaymentFailedV1",
+  PAYMENT_REFUNDED: "PaymentRefundedV1",
 } as const;

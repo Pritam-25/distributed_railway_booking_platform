@@ -10,4 +10,13 @@ export const CONSUMER_GROUPS = {
   SEARCH_SCHEDULE_CREATED: "search-service-schedule-created-consumer",
   SEARCH_SCHEDULE_STATUS_CHANGED:
     "search-service-schedule-status-change-consumer",
+  BOOKING_STATUS_BROADCAST: "booking-service-status-broadcast-consumer",
+  BOOKING_SEATS_RESULT: "booking-service-seats-result-consumer",
+  INVENTORY_HOLD_SEATS_REQUESTED:
+    "inventory-service-hold-seats-requested-consumer",
+  BOOKING_AUTO_CONFIRM: "booking-service-auto-confirm-consumer",
+  BOOKING_PAYMENT_SUCCESS: "booking-service-payment-success-consumer",
+  PAYMENT_BOOKING_CANCELLED: "payment-service-booking-cancelled-consumer",
+  INVENTORY_BOOKING_STATUS_CHANGED:
+    "inventory-service-booking-status-changed-consumer",
 } as const;
