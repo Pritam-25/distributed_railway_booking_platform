@@ -1,14 +1,3 @@
-/**
- * ## module/seat-allocation-repository
- *
- * Prisma repository for the `SeatAllocation` aggregate. Centralizes every
- * read/write against the seat-allocation table for the inventory service
- * so the saga business logic in `SeatAllocationService` stays free of
- * direct `prisma.*` access (per `.claude/rules/architecture.md`).
- *
- * @packageDocumentation
- */
-
 import {
   AllocationStatus,
   type Prisma,
@@ -182,6 +171,40 @@ export class SeatAllocationRepository {
       },
       data: {
         status,
+      },
+    });
+  }
+
+  /**
+   * Retrieves active (CONFIRMED or unexpired HELD) allocations for a schedule and segment.
+   *
+   * @param scheduleId - Schedule UUID.
+   * @param fromSequence - Origin sequence number.
+   * @param toSequence - Destination sequence number.
+   * @param tx - Optional Prisma transaction client.
+   */
+  async findActiveAllocationsBySegment(
+    scheduleId: string,
+    fromSequence: number,
+    toSequence: number,
+    tx?: Prisma.TransactionClient,
+  ) {
+    return this.getClient(tx).seatAllocation.findMany({
+      where: {
+        scheduleId,
+        OR: [
+          { status: AllocationStatus.CONFIRMED },
+          {
+            status: AllocationStatus.HELD,
+            holdExpiresAt: { gt: new Date() },
+          },
+        ],
+        fromSequence: { lt: toSequence },
+        toSequence: { gt: fromSequence },
+      },
+      select: {
+        seatInventoryId: true,
+        status: true,
       },
     });
   }

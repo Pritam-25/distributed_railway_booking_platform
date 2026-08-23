@@ -62,7 +62,6 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1]
  * **Notes:**
  * - The endpoint is public — no authentication is required.
  * - Results are served from Redis when warm; cache TTL is bounded by `SUGGEST_CACHE_TTL_SECONDS`.
- *
  * @summary Suggest stations for autocomplete
  */
 export const suggestStations = (
@@ -169,7 +168,6 @@ export const useSuggestStations = <TError = ErrorResponse, TContext = unknown>(
  * - Cache TTL is bounded by `TRAIN_SEARCH_CACHE_TTL_SECONDS`.
  * - `availableSeats` is **capacity**, not live availability. Per-seat live counts are fetched by booking-service from inventory-service at hold time.
  * - Snapshot data is frozen at `SCHEDULE_CREATED` time; edits to the underlying train or route do not trigger a re-projection.
- *
  * @summary Search trains by from/to station and date
  */
 export const searchTrains = (
@@ -273,7 +271,6 @@ export const useSearchTrains = <TError = ErrorResponse, TContext = unknown>(
  * - Cache TTL is bounded by `SEAT_MAP_CACHE_TTL_SECONDS`; the booking-service pre-flight `CheckAvailability` closes the race window for stale reads.
  * - Only `CONFIRMED` allocations mark a seat `isBooked`. `HELD` allocations are intentionally hidden for a stable UI.
  * - `coachType`, `berthType`, `quota` are best-effort defaults until those columns land on the seat inventory model.
- *
  * @summary Retrieve the seat-map for a schedule segment
  */
 export const getSeatMap = (

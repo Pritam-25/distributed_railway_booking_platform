@@ -1,15 +1,3 @@
-/**
- * ## module/booking-events-routes
- *
- * Server-Sent Events sub-router for booking status streaming. Mounted
- * alongside the REST booking routes under `/bookings` — the same
- * gateway auth level (`"required"`) covers it. The path uses
- * `:bookingId/events` so it doesn't collide with `/bookings/:bookingId`
- * or `/bookings/:bookingId/cancel`.
- *
- * @packageDocumentation
- */
-
 import { Router } from "express";
 
 import {

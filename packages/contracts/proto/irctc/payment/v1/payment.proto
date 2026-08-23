@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package irctc.payment.v1;
+
+// PaymentService manages Razorpay payment order creation and status checks.
+service PaymentService {
+  // CreateOrder initializes a new Razorpay order for a booking.
+  rpc CreateOrder (CreateOrderRequest) returns (CreateOrderResponse);
+  // GetOrderStatus retrieves current payment details for a payment order ID.
+  rpc GetOrderStatus (GetOrderStatusRequest) returns (GetOrderStatusResponse);
+}
+
+// Request payload for creating a payment order.
+message CreateOrderRequest {
+  // Booking UUID associated with the order.
+  string booking_id = 1;
+  // User UUID initiating the payment.
+  string user_id = 2;
+  // Amount in smallest currency unit (e.g. 125050 paise for 1250.50 INR).
+  int64 amount = 3;
+  // Currency code (e.g. "INR").
+  string currency = 4;
+}
+
+// Response payload for order creation.
+message CreateOrderResponse {
+  // Internal payment order UUID.
+  string payment_order_id = 1;
+  // Razorpay order ID.
+  string razorpay_order_id = 2;
+  // Razorpay public Key ID for client SDK checkout.
+  string key_id = 3;
+  // Current order status (e.g. "CREATED", "PENDING").
+  string status = 4;
+}
+
+// Request payload for checking payment order status.
+message GetOrderStatusRequest {
+  // Internal payment order UUID.
+  string payment_order_id = 1;
+}
+
+// Response payload containing payment order status details.
+message GetOrderStatusResponse {
+  // Internal payment order UUID.
+  string payment_order_id = 1;
+  // Razorpay order ID.
+  string razorpay_order_id = 2;
+  // Razorpay payment ID (populated once captured).
+  string razorpay_payment_id = 3;
+  // Current payment status (e.g. "CAPTURED", "FAILED", "PENDING").
+  string status = 4;
+  // Amount in smallest currency unit (e.g. 125050 paise for 1250.50 INR).
+  int64 amount = 5;
+  // Currency code.
+  string currency = 6;
+}

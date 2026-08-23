@@ -11,6 +11,7 @@ import type {
   SeatsHeldV1Type,
   SeatsHoldFailedV1Type,
   SeatHoldExpiredV1Type,
+  PaymentSuccessV1,
 } from "@irctc/contracts";
 import type { BookingService } from "./booking.service.js";
 
@@ -296,6 +297,91 @@ export class BookingSagaOrchestrator {
             "Booking already past SEATS_HELD; skipping EXPIRED transition",
           );
         }
+      });
+
+      await this.idempotencyRepository.markProcessed(eventKey);
+    } catch (err) {
+      await this.idempotencyRepository.release(eventKey);
+      throw err;
+    }
+  }
+
+  /**
+   * Handles a successful payment event emitted by payment-service via Kafka.
+   * Drives booking status from SEATS_HELD / PAYMENT_PENDING → CONFIRMED.
+   *
+   * @param event - Validated PaymentSuccessV1 payload.
+   */
+  async handlePaymentSuccess(event: PaymentSuccessV1): Promise<void> {
+    const { eventId, bookingId, paymentOrderId } = event;
+    const eventKey = `booking:payment_success:${eventId}`;
+
+    logger.info(
+      {
+        module: "booking-saga-orchestrator",
+        eventId,
+        bookingId,
+        paymentOrderId,
+      },
+      "Handling PaymentSuccessV1 (payment-service event)",
+    );
+
+    const reserved = await this.idempotencyRepository.reserveIfNew(eventKey);
+    if (!reserved) {
+      logger.info(
+        { module: "booking-saga-orchestrator", eventKey },
+        "PaymentSuccessV1 already in flight or processed, skipping",
+      );
+      return;
+    }
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const booking = await this.bookingRepository.findById(bookingId, tx);
+        if (!booking) {
+          logger.error(
+            { module: "booking-saga-orchestrator", bookingId },
+            "Booking missing for PaymentSuccessV1 event",
+          );
+          return;
+        }
+
+        if (
+          booking.status !== BookingStatus.SEATS_HELD &&
+          booking.status !== BookingStatus.PAYMENT_PENDING &&
+          booking.status !== BookingStatus.CONFIRMING
+        ) {
+          logger.info(
+            {
+              module: "booking-saga-orchestrator",
+              bookingId,
+              status: booking.status,
+            },
+            "Booking not in payment-pending state — skipping PaymentSuccessV1 transition",
+          );
+          return;
+        }
+
+        // 1. Advance CREATE_PAYMENT step in saga log to COMPLETED
+        await this.sagaRepository.update(
+          bookingId,
+          SagaStep.CREATE_PAYMENT,
+          SagaStatus.COMPLETED,
+          null,
+          tx,
+        );
+
+        // 2. Drive booking transition: SEATS_HELD/PAYMENT_PENDING -> CONFIRMING -> CONFIRMED
+        await this.bookingService.confirmPayment(bookingId, booking.userId);
+
+        // 3. Advance CONFIRM_SEATS step in saga log to COMPLETED
+        await this.sagaRepository.update(
+          bookingId,
+          SagaStep.CONFIRM_SEATS,
+          SagaStatus.COMPLETED,
+          null,
+          tx,
+        );
       });
 
       await this.idempotencyRepository.markProcessed(eventKey);

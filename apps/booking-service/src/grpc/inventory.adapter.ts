@@ -80,8 +80,8 @@ export class InventoryAdapter {
 
   /**
    * Resolves booking-side `seatId` values (the public UUIDs the user
-   * sees) to inventory-side `seatInventoryId` row IDs via per-seat
-   * `GetSeatDetails` gRPC calls in parallel.
+   * sees) to inventory-side `seatInventoryId` row IDs via a single batch
+   * `GetSeatsDetailsBatch` gRPC call.
    *
    * @param scheduleId - The schedule UUID the seats belong to.
    * @param seatIds - Booking-side seat UUIDs from the request DTO.
@@ -93,21 +93,42 @@ export class InventoryAdapter {
     scheduleId: string,
     seatIds: string[],
   ): Promise<string[]> {
-    const results = await Promise.allSettled(
-      seatIds.map((seatId) =>
-        this.client.getSeatDetails({ scheduleId, seatId }),
-      ),
-    );
+    try {
+      const response = await this.client.getSeatsDetailsBatch({
+        scheduleId,
+        seatIds,
+      });
 
-    return results.map((r, i) => {
-      if (r.status === "fulfilled") {
-        return r.value.seatInventoryId;
+      if (response.seats.length !== seatIds.length) {
+        throw new ApiError(
+          statusCode.notFound,
+          COMMON_ERROR_CODES.NOT_FOUND,
+          "One or more selected seats could not be found or validated.",
+        );
       }
-      // Inventory threw — translate to ApiError for the caller.
-      throw mapGrpcClientErrorToApiError(
-        r.reason,
-        `One of the selected seats could not be found or validated (${seatIds[i]}).`,
+
+      // Preserve input array order matching seatIds
+      const seatMap = new Map(
+        response.seats.map((s) => [s.seatId, s.seatInventoryId]),
       );
-    });
+
+      return seatIds.map((id) => {
+        const inventoryId = seatMap.get(id);
+        if (!inventoryId) {
+          throw new ApiError(
+            statusCode.notFound,
+            COMMON_ERROR_CODES.NOT_FOUND,
+            `Seat could not be found or validated.`,
+          );
+        }
+        return inventoryId;
+      });
+    } catch (err) {
+      if (err instanceof ApiError) throw err;
+      throw mapGrpcClientErrorToApiError(
+        err,
+        "One of the selected seats could not be found or validated.",
+      );
+    }
   }
 }

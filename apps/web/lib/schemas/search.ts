@@ -1,19 +1,5 @@
 import { z } from "zod"
 import { SearchTrainsCategory } from "@/generated"
-
-/**
- * ## Search Form Schema
- *
- * Zod schema + inferred TS type for the train-search form. Validates
- * client-side before pushing the values into URL search params.
- *
- * The form accepts either a station code (e.g. "NDLS") or a UUID — the
- * backend resolves it against the existing stations index. We don't
- * enforce UUID format here so users can paste either.
- *
- * @packageDocumentation
- */
-
 /**
  * Train category enum, mirrored from the orval-generated
  * `SearchTrainsCategory` const object.

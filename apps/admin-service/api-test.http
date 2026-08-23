@@ -11,9 +11,9 @@
 
 # Fallback Variables (used if running request in isolation instead of full sequential flow)
 @fallbackAdminId = afd836b9-ca43-45f8-9c75-cf775b663bbd
-@fallbackStationId1 = stationId1-goes-here
-@fallbackStationId2 = stationId2-goes-here
-@fallbackTrainId = e3d1a6c2-0b87-4a58-962f-923b9c0a9df0
+@fallbackStationId1 = 85e5a4b9-d365-4096-8349-3675d914c911
+@fallbackStationId2 = b4445f32-d61d-45aa-a90c-a1d736e530c0
+@fallbackTrainId = c6f27e75-84f4-4eb5-be55-6da52677c26b
 @fallbackCoachId = coachId-goes-here
 @fallbackSeatId = seatId-goes-here
 @fallbackRouteId = routeId-goes-here
@@ -347,8 +347,8 @@ Content-Type: application/json
 x-admin-id: {{adminId}}
 
 {
-  "trainId": "{{trainId}}",
-  "departureDate": "2026-08-21T08:00:00.000Z"
+  "trainId": "c6f27e75-84f4-4eb5-be55-6da52677c26b",
+  "departureDate": "2026-08-24T08:00:00.000Z"
 }
 
 ### Create Train Schedule - FAIL case (Non-operating day Saturday)

@@ -315,7 +315,8 @@ components:
       properties:
         coachId:
           type: string
-          example: 550e8400-e29b-41d4-a716-446655440001
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
         coachNumber:
           type: string
           example: A1
@@ -841,23 +842,27 @@ paths:
         - schema:
             type: string
             format: uuid
-            example: 550e8400-e29b-41d4-a716-446655440010
+            example: 550e8400-e29b-41d4-a716-446655440000
           required: true
           name: scheduleId
           in: path
         - schema:
             type: string
-            format: uuid
-            example: 550e8400-e29b-41d4-a716-446655440013
+            minLength: 1
+            example: NDLS
+            description: Station UUID or Station Code (e.g. NDLS, HWH)
           required: true
-          name: fromStationId
+          description: Station UUID or Station Code (e.g. NDLS, HWH)
+          name: fromStation
           in: query
         - schema:
             type: string
-            format: uuid
-            example: 550e8400-e29b-41d4-a716-446655440014
+            minLength: 1
+            example: NDLS
+            description: Station UUID or Station Code (e.g. NDLS, HWH)
           required: true
-          name: toStationId
+          description: Station UUID or Station Code (e.g. NDLS, HWH)
+          name: toStation
           in: query
       responses:
         "200":

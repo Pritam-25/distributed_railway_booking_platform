@@ -13,13 +13,14 @@ import {
 } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import type { TrainSearchResult } from "@/generated"
+import { saveBookingTripContext } from "@/lib/booking-session"
 
 /**
  * ## TrainResultCard
  *
  * Presentational card that renders a single `TrainSearchResult` from
- * the search-service response. Pure props-in, JSX-out — no I/O, no
- * hooks. Lives inside `TrainResultsList`.
+ * the search-service response. Persists trip context (UUIDs, codes, train info)
+ * to sessionStorage when user clicks "View seats".
  *
  * @param train - The single train payload from the API response.
  */
@@ -28,12 +29,7 @@ export function TrainResultCard({
 }: {
   readonly train: TrainSearchResult
 }) {
-  const statusClass =
-    train.status === "ACTIVE"
-      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-      : train.status === "CANCELLED"
-        ? "border-destructive/40 bg-destructive/10 text-destructive"
-        : "border-muted-foreground/40 bg-muted text-muted-foreground"
+  const statusClass = getStatusClass(train.status)
 
   const departure = train.from.departureTime
     ? new Date(train.from.departureTime).toLocaleTimeString([], {
@@ -50,6 +46,20 @@ export function TrainResultCard({
 
   const duration = formatDuration(train.durationMinutes)
   const fareRange = `${train.fareRange.currency} ${train.fareRange.min}–${train.fareRange.max}`
+
+  const handleSaveTripContext = () => {
+    saveBookingTripContext({
+      scheduleId: train.scheduleId,
+      trainName: train.trainName,
+      trainNumber: train.trainNumber,
+      fromStationId: train.from.stationId,
+      fromStationCode: train.from.code,
+      fromStationName: train.from.name,
+      toStationId: train.to.stationId,
+      toStationCode: train.to.code,
+      toStationName: train.to.name,
+    })
+  }
 
   return (
     <Card>
@@ -125,8 +135,9 @@ export function TrainResultCard({
         {/* Footer */}
         <div className="flex items-center justify-end">
           <Link
-            href={`/trains/${train.scheduleId}/seat-map?fromStationId=${train.from.code}&toStationId=${train.to.code}`}
+            href={`/trains/${train.scheduleId}/seat-map?from=${train.from.code}&to=${train.to.code}`}
             className={buttonVariants({ variant: "outline", size: "sm" })}
+            onClick={handleSaveTripContext}
           >
             View seats
             <ChevronRight className="h-4 w-4" />
@@ -141,10 +152,24 @@ export function TrainResultCard({
  * Formats a duration in minutes as `Xh Ym` (e.g. `17h 30m`).
  */
 function formatDuration(minutes: number | null): string {
-  if (minutes === null) return "—"
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  if (h === 0) return `${m}m`
-  if (m === 0) return `${h}h`
-  return `${h}h ${m}m`
+  if (minutes == null || minutes <= 0) return "—"
+  const hours = Math.floor(minutes / 60)
+  const remainingMinutes = minutes % 60
+  if (hours === 0) return `${remainingMinutes}m`
+  if (remainingMinutes === 0) return `${hours}h`
+  return `${hours}h ${remainingMinutes}m`
+}
+
+/**
+ * Returns CSS badge styling classes based on train status.
+ */
+function getStatusClass(status: string): string {
+  switch (status) {
+    case "ACTIVE":
+      return "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+    case "CANCELLED":
+      return "border-destructive/40 bg-destructive/10 text-destructive"
+    default:
+      return "border-muted-foreground/40 bg-muted text-muted-foreground"
+  }
 }

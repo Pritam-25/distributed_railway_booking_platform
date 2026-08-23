@@ -103,4 +103,27 @@ export class RouteStopRepository {
       },
     });
   }
+
+  /**
+   * Retrieves route stops matching either station IDs or station codes for a schedule.
+   *
+   * @param scheduleId - The unique ID of the schedule.
+   * @param stationIds - Array of station IDs or station codes.
+   * @param tx - Optional Prisma transaction client.
+   */
+  async findStopsByScheduleAndStations(
+    scheduleId: string,
+    stationIds: string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<RouteStop[]> {
+    return this.getClient(tx).routeStop.findMany({
+      where: {
+        scheduleId,
+        OR: [
+          { stationId: { in: stationIds } },
+          { stationCode: { in: stationIds.map((s) => s.toUpperCase()) } },
+        ],
+      },
+    });
+  }
 }

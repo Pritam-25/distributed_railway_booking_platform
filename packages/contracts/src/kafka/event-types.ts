@@ -39,4 +39,9 @@ export const EVENT_TYPES = {
   INVENTORY_SEAT_HOLD_EXPIRED: "SeatHoldExpiredV1",
   // booking domain
   BOOKING_STATUS_CHANGED: "BookingStatusChangedV1",
+  // payment domain
+  PAYMENT_ORDER_CREATED: "PaymentOrderCreatedV1",
+  PAYMENT_SUCCESS: "PaymentSuccessV1",
+  PAYMENT_FAILED: "PaymentFailedV1",
+  PAYMENT_REFUNDED: "PaymentRefundedV1",
 } as const;

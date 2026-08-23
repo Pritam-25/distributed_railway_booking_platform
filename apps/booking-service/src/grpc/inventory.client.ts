@@ -16,14 +16,20 @@ let client: InventoryServiceClient | undefined;
 export const getInventoryGrpcClient = (): InventoryServiceClient => {
   if (!client) {
     logger.info(
-      { module: "grpc-client", url: env.INVENTORY_GRPC_URL },
-      `Connecting gRPC channel to ${env.INVENTORY_GRPC_URL}`,
+      { module: "grpc-client" },
+      `Connecting Inventory gRPC channel to http://${env.INVENTORY_GRPC_URL}`,
     );
 
     const res = createGrpcClient(
       InventoryServiceDefinition,
       env.INVENTORY_GRPC_URL,
-      { defaultTimeoutMs: 3000 },
+      {
+        defaultTimeoutMs: 3000,
+        auth: {
+          mode: "bearer",
+          token: env.GRPC_INTERNAL_AUTH_TOKEN,
+        },
+      },
     );
 
     channel = res.channel;

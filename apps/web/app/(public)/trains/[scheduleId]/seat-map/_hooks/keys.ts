@@ -16,13 +16,13 @@ export const seatMapKeys = {
    */
   seatMap: (params: {
     readonly scheduleId: string
-    readonly fromStationId: string
-    readonly toStationId: string
+    readonly fromStation: string
+    readonly toStation: string
   }) =>
     [
       ...seatMapKeys.all,
       params.scheduleId,
-      params.fromStationId,
-      params.toStationId,
+      params.fromStation,
+      params.toStation,
     ] as const,
 }

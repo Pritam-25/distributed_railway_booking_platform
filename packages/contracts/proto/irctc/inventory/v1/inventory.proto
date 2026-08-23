@@ -8,6 +8,8 @@ import "google/protobuf/timestamp.proto";
 service InventoryService {
   // GetSeatDetails queries the seat details for a given schedule and seat ID.
   rpc GetSeatDetails (GetSeatDetailsRequest) returns (GetSeatDetailsResponse);
+  // GetSeatsDetailsBatch queries seat details for multiple seats in a single batch call.
+  rpc GetSeatsDetailsBatch (GetSeatsDetailsBatchRequest) returns (GetSeatsDetailsBatchResponse);
   // GetSeatMap returns the full seat-map (coaches + seats) for a schedule,
   // marked with bookings that overlap the (from_station, to_station) segment.
   rpc GetSeatMap (GetSeatMapRequest) returns (GetSeatMapResponse);
@@ -23,6 +25,17 @@ service InventoryService {
 message GetSeatDetailsRequest {
   string schedule_id = 1;
   string seat_id = 2;
+}
+
+// GetSeatsDetailsBatchRequest contains the parameters for fetching batch seat details.
+message GetSeatsDetailsBatchRequest {
+  string schedule_id = 1;
+  repeated string seat_ids = 2;
+}
+
+// GetSeatsDetailsBatchResponse contains batch detailed seat information.
+message GetSeatsDetailsBatchResponse {
+  repeated GetSeatDetailsResponse seats = 1;
 }
 
 // GetSeatDetailsResponse contains detailed seat information.
@@ -70,7 +83,7 @@ message Coach {
   repeated SeatMapSeat seats = 5;
 }
 
-// SeatMapSeat is a single seat within a coach, with a live booking flag.
+// SeatMapSeat is a single seat within a coach, with a live booking flag and status.
 message SeatMapSeat {
   string seat_id = 1;
   int32 seat_number = 2;
@@ -79,6 +92,7 @@ message SeatMapSeat {
   string price = 5;        // decimal string, e.g. "2.5000"
   bool is_booked = 6;
   string quota = 7;
+  string status = 8;       // "AVAILABLE", "HELD", "BOOKED"
 }
 
 // ValidateBookingRequest is the synchronous pre-flight payload sent by

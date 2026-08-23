@@ -23,6 +23,14 @@
  */
 
 export type GetSeatMapParams = {
-  fromStationId: string
-  toStationId: string
+  /**
+   * Station UUID or Station Code (e.g. NDLS, HWH)
+   * @minLength 1
+   */
+  fromStation: string
+  /**
+   * Station UUID or Station Code (e.g. NDLS, HWH)
+   * @minLength 1
+   */
+  toStation: string
 }

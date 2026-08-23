@@ -68,6 +68,10 @@ export const seatMapSeatSchema = z
     price: z.string().openapi({ example: "2.5000" }),
     isBooked: z.boolean().openapi({ example: false }),
     quota: z.string().openapi({ example: "GENERAL" }),
+    status: z.string().default("AVAILABLE").openapi({
+      example: "AVAILABLE",
+      description: "AVAILABLE | HELD | BOOKED",
+    }),
   })
   .openapi("SeatMapSeat");
 

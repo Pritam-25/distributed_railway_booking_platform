@@ -36,8 +36,8 @@ export function useSeatMap(
     queryKey: isEnabled
       ? seatMapKeys.seatMap({
           scheduleId,
-          fromStationId: params.fromStationId,
-          toStationId: params.toStationId,
+          fromStation: params.fromStation,
+          toStation: params.toStation,
         })
       : [...seatMapKeys.all, "idle"],
     queryFn: ({ signal }) => {
@@ -46,10 +46,10 @@ export function useSeatMap(
         // guard keeps the return type clean.
         throw new Error("useSeatMap called without params")
       }
-      return getSeatMap(scheduleId, params, { signal })
+      return getSeatMap(scheduleId, params, undefined, signal)
     },
     enabled: isEnabled,
-    staleTime: 60 * 1000,
+    staleTime: 0,
     gcTime: 5 * 60 * 1000,
   })
 }

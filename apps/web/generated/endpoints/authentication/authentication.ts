@@ -98,7 +98,6 @@ const withQueryKey = <T extends object, K>(
  * - 400 Bad Request - Request validation failed or the payload is incomplete.
  * - 429 Too Many Requests - OTP delivery was rate-limited.
  * - 500 Internal Server Error - The service could not complete OTP dispatch.
- *
  * @summary Send OTP for User Registration
  */
 export const sendOtp = (
@@ -219,9 +218,6 @@ export function useSendOtp<
  * @summary Send OTP for User Registration
  */
 
-/**
- *
- */
 export function useSendOtp<
   TData = Awaited<ReturnType<typeof sendOtp>>,
   TError = ErrorResponse,
@@ -264,7 +260,6 @@ export function useSendOtp<
  *
  * **Notes:**
  * - The response body contains the user profile; authentication tokens are delivered through cookies.
- *
  * @summary Verify OTP & Complete Registration
  */
 export const verifyOtp = (
@@ -386,9 +381,6 @@ export function useVerifyOtp<
  * @summary Verify OTP & Complete Registration
  */
 
-/**
- *
- */
 export function useVerifyOtp<
   TData = Awaited<ReturnType<typeof verifyOtp>>,
   TError = ErrorResponse,
@@ -430,7 +422,6 @@ export function useVerifyOtp<
  * - 401 Unauthorized - The credentials were invalid.
  * - 429 Too Many Requests - Login attempts were rate-limited.
  * - 500 Internal Server Error - The service could not complete authentication.
- *
  * @summary Login User
  */
 export const login = (
@@ -549,9 +540,6 @@ export function useLogin<
  * @summary Login User
  */
 
-/**
- *
- */
 export function useLogin<
   TData = Awaited<ReturnType<typeof login>>,
   TError = ErrorResponse,
@@ -595,7 +583,6 @@ export function useLogin<
  *
  * **Notes:**
  * - The endpoint does not accept a request body.
- *
  * @summary Refresh Access Token
  */
 export const refreshToken = (
@@ -703,9 +690,6 @@ export function useRefreshToken<
  * @summary Refresh Access Token
  */
 
-/**
- *
- */
 export function useRefreshToken<
   TData = Awaited<ReturnType<typeof refreshToken>>,
   TError = ErrorResponse,
@@ -745,7 +729,6 @@ export function useRefreshToken<
  * - 401 Unauthorized - Authentication credentials were missing or invalid.
  * - 429 Too Many Requests - Session lookup was rate-limited.
  * - 500 Internal Server Error - The service could not load session data.
- *
  * @summary Get Active User Sessions
  */
 export const getSessions = (
@@ -838,7 +821,6 @@ export const useGetSessions = <TError = ErrorResponse, TContext = unknown>(
  * - 404 Not Found - No active session matched the provided session ID.
  * - 429 Too Many Requests - Session revocation was rate-limited.
  * - 500 Internal Server Error - The service could not revoke the session.
- *
  * @summary Revoke Active Session
  */
 export const revokeSession = (
@@ -958,9 +940,6 @@ export function useRevokeSession<
  * @summary Revoke Active Session
  */
 
-/**
- *
- */
 export function useRevokeSession<
   TData = Awaited<ReturnType<typeof revokeSession>>,
   TError = ErrorResponse,
@@ -1001,7 +980,6 @@ export function useRevokeSession<
  * - 401 Unauthorized - The session could not be authenticated.
  * - 429 Too Many Requests - Logout was rate-limited.
  * - 500 Internal Server Error - The service could not complete logout.
- *
  * @summary Logout Current Session
  */
 export const logout = (
@@ -1107,9 +1085,6 @@ export function useLogout<
  * @summary Logout Current Session
  */
 
-/**
- *
- */
 export function useLogout<
   TData = Awaited<ReturnType<typeof logout>>,
   TError = ErrorResponse,
@@ -1149,7 +1124,6 @@ export function useLogout<
  * - 401 Unauthorized - The user was not authenticated.
  * - 429 Too Many Requests - Logout-all was rate-limited.
  * - 500 Internal Server Error - The service could not revoke every session.
- *
  * @summary Logout All Sessions
  */
 export const logoutAll = (
@@ -1257,9 +1231,6 @@ export function useLogoutAll<
  * @summary Logout All Sessions
  */
 
-/**
- *
- */
 export function useLogoutAll<
   TData = Awaited<ReturnType<typeof logoutAll>>,
   TError = ErrorResponse,
@@ -1299,7 +1270,6 @@ export function useLogoutAll<
  * - 404 Not Found - No user exists for the provided email address.
  * - 429 Too Many Requests - Password reset requests were rate-limited.
  * - 500 Internal Server Error - The service could not start the reset flow.
- *
  * @summary Request Password Reset OTP
  */
 export const forgotPassword = (
@@ -1427,9 +1397,6 @@ export function useForgotPassword<
  * @summary Request Password Reset OTP
  */
 
-/**
- *
- */
 export function useForgotPassword<
   TData = Awaited<ReturnType<typeof forgotPassword>>,
   TError = ErrorResponse,
@@ -1473,7 +1440,6 @@ export function useForgotPassword<
  * - 400 Bad Request - The OTP was invalid or expired.
  * - 429 Too Many Requests - OTP verification was rate-limited.
  * - 500 Internal Server Error - The service could not complete OTP verification.
- *
  * @summary Verify Password Reset OTP
  */
 export const verifyPasswordResetOtp = (
@@ -1623,9 +1589,6 @@ export function useVerifyPasswordResetOtp<
  * @summary Verify Password Reset OTP
  */
 
-/**
- *
- */
 export function useVerifyPasswordResetOtp<
   TData = Awaited<ReturnType<typeof verifyPasswordResetOtp>>,
   TError = ErrorResponse,
@@ -1674,7 +1637,6 @@ export function useVerifyPasswordResetOtp<
  * - 400 Bad Request - The token was invalid, expired, or the passwords did not match.
  * - 429 Too Many Requests - Password reset was rate-limited.
  * - 500 Internal Server Error - The service could not complete the password reset.
- *
  * @summary Reset Password
  */
 export const resetPassword = (
@@ -1798,9 +1760,6 @@ export function useResetPassword<
  * @summary Reset Password
  */
 
-/**
- *
- */
 export function useResetPassword<
   TData = Awaited<ReturnType<typeof resetPassword>>,
   TError = ErrorResponse,

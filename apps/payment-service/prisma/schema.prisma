@@ -1,0 +1,93 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  PUBLISHED
+  FAILED
+  DEAD
+}
+
+enum PaymentStatus {
+  CREATED
+  PENDING
+  CAPTURED
+  FAILED
+  REFUNDED
+}
+
+enum RefundStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
+
+model Payment {
+  id                String        @id @default(uuid())
+  paymentOrderId    String        @unique @map("payment_order_id")
+  razorpayOrderId   String        @map("razorpay_order_id")
+  bookingId         String        @map("booking_id")
+  userId            String        @map("user_id")
+  amount            Decimal       @db.Decimal(12, 2)
+  currency          String        @default("INR")
+  status            PaymentStatus @default(PENDING)
+  razorpayPaymentId String?       @map("razorpay_payment_id")
+  razorpaySignature String?       @map("razorpay_signature")
+  failureReason     String?       @map("failure_reason")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  refunds           PaymentRefund[]
+
+  @@index([bookingId])
+  @@index([razorpayOrderId])
+  @@index([status])
+  @@map("payments")
+}
+
+model PaymentRefund {
+  id               String       @id @default(uuid())
+  paymentId        String       @map("payment_id")
+  razorpayRefundId String       @map("razorpay_refund_id")
+  amount           Decimal      @db.Decimal(12, 2)
+  status           RefundStatus @default(PROCESSED)
+  reason           String?
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  payment          Payment      @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@map("payment_refunds")
+}
+
+model OutboxEvent {
+  id            String       @id @default(uuid())
+  aggregateType String       @map("aggregate_type")
+  aggregateId   String       @map("aggregate_id")
+  eventType     String       @map("event_type")
+  topic         String
+  payload       Json
+  headers       Json?
+  status        OutboxStatus @default(PENDING)
+  retryCount    Int          @default(0) @map("retry_count")
+  nextRetryAt   DateTime?    @map("next_retry_at")
+  errorMessage  String?      @map("error_message")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+  processedAt   DateTime?    @map("processed_at")
+
+  @@index([status, createdAt])
+  @@index([status, nextRetryAt])
+  @@map("outbox_events")
+}

@@ -1,7 +1,10 @@
 import { createGrpcServer, type Server } from "@irctc/grpc";
-import { InventoryServiceDefinition } from "@irctc/contracts";
+import {
+  InventoryServiceDefinition,
+  type InventoryServiceImplementation,
+} from "@irctc/contracts";
 import { logger } from "@irctc/logger";
-import { inventoryHandler } from "./inventory.handler.js";
+import { env } from "@config";
 
 let grpcServer: Server | undefined;
 
@@ -10,12 +13,21 @@ let grpcServer: Server | undefined;
  * Uses centralized @irctc/grpc server factory with logging and domain error translation.
  *
  * @param port - TCP port to bind the gRPC server.
+ * @param handler - InventoryServiceImplementation instance injected by container.
  * @returns A promise that resolves when the gRPC server is active.
  */
-export const startGrpcServer = async (port: number): Promise<Server> => {
-  grpcServer = createGrpcServer();
+export const startGrpcServer = async (
+  port: number,
+  handler: InventoryServiceImplementation,
+): Promise<Server> => {
+  grpcServer = createGrpcServer({
+    auth: {
+      mode: "bearer",
+      expectedToken: env.GRPC_INTERNAL_AUTH_TOKEN,
+    },
+  });
 
-  grpcServer.add(InventoryServiceDefinition, inventoryHandler);
+  grpcServer.add(InventoryServiceDefinition, handler);
 
   const address = `0.0.0.0:${port}`;
   await grpcServer.listen(address);

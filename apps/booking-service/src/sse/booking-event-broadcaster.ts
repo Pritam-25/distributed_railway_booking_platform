@@ -23,8 +23,6 @@
  * ### Idempotency
  * Re-delivery of the same Kafka message just re-publishes to Redis.
  * Browsers already deduplicate by `eventId` on the consumer side.
- *
- * @packageDocumentation
  */
 
 import {

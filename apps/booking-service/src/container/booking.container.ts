@@ -10,18 +10,25 @@ import {
   KafkaConsumerRunner,
   PostgresOutboxRepository,
   OutboxPublisherWorker,
-  type OutboxRepository,
 } from "@irctc/kafka";
 import { IdempotencyRepository } from "@irctc/redis";
 import { logger } from "@irctc/logger";
 import { CONSUMER_GROUPS } from "@irctc/contracts";
 import { BookingEventBroadcaster } from "../sse/booking-event-broadcaster.js";
-import { SeatsResultConsumer } from "../consumers/seats-result.consumer.js";
-import { getInventoryGrpcClient, InventoryAdapter } from "@grpc";
+import {
+  SeatsResultConsumer,
+  PaymentResultConsumer,
+} from "../consumers/index.js";
+import {
+  getInventoryGrpcClient,
+  InventoryAdapter,
+  getPaymentGrpcClient,
+  PaymentAdapter,
+} from "@grpc";
 
 /**
  * Dependency injection container for booking-service.
- * Wires repositories, services, and consumers.
+ * Wires repositories, services, controllers, and consumers.
  * Singleton pattern ensures shared state across the service.
  *
  * IMPORTANT: Must be instantiated AFTER initKafka() has completed
@@ -34,45 +41,12 @@ export class BookingContainer {
   private static instance: BookingContainer;
 
   /**
-   * Outbox repository instance.
-   */
-  public readonly outboxRepository: OutboxRepository;
-
-  /**
-   * Booking aggregate repository.
-   */
-  public readonly bookingRepository: BookingRepository;
-
-  /**
-   * Seat lock service instance.
-   */
-  public readonly seatLockService: SeatLockService;
-
-  /**
-   * Booking service that owns the saga business logic.
-   */
-  public readonly bookingService: BookingService;
-
-  /**
-   * Saga orchestrator routing inventory-service seat-hold replies to
-   * booking status transitions.
-   */
-  public readonly bookingSagaOrchestrator: BookingSagaOrchestrator;
-
-  /**
    * HTTP controller for the `/bookings` sub-router.
-   *
-   * Public field because `routes/booking.routes.ts` looks it up via
-   * `import { bookingController } from "@container"` during route
-   * module evaluation.
    */
   public readonly bookingController: BookingController;
 
   /**
    * SSE controller for `GET /bookings/:bookingId/events`.
-   *
-   * Public field so the SSE sub-router can resolve it at route
-   * registration time.
    */
   public readonly bookingEventsController: BookingEventsController;
 
@@ -91,21 +65,28 @@ export class BookingContainer {
    */
   private readonly seatsResultConsumer: SeatsResultConsumer;
 
+  /**
+   * Kafka consumer for payment-service success events.
+   */
+  private readonly paymentResultConsumer: PaymentResultConsumer;
+
   private constructor() {
     // 1. Repositories
-    this.outboxRepository = new PostgresOutboxRepository(prisma);
-    this.bookingRepository = new BookingRepository(prisma);
+    const outboxRepository = new PostgresOutboxRepository(prisma);
+    const bookingRepository = new BookingRepository(prisma);
     const sagaRepository = new SagaRepository(prisma);
 
     // 2. Services
     const inventoryAdapter = new InventoryAdapter(getInventoryGrpcClient());
-    this.seatLockService = new SeatLockService(redis);
-    this.bookingService = new BookingService(
+    const paymentAdapter = new PaymentAdapter(getPaymentGrpcClient());
+    const seatLockService = new SeatLockService(redis);
+    const bookingService = new BookingService(
       prisma,
-      this.bookingRepository,
-      this.outboxRepository,
-      this.seatLockService,
+      bookingRepository,
+      outboxRepository,
+      seatLockService,
       inventoryAdapter,
+      paymentAdapter,
       sagaRepository,
     );
 
@@ -117,18 +98,18 @@ export class BookingContainer {
       env.SAGA_IDEMPOTENCY_PROCESSED_TTL_SEC,
       env.SAGA_IDEMPOTENCY_KEYSPACE,
     );
-    this.bookingSagaOrchestrator = new BookingSagaOrchestrator(
+    const bookingSagaOrchestrator = new BookingSagaOrchestrator(
       prisma,
-      this.bookingRepository,
+      bookingRepository,
       sagaRepository,
       sagaIdempotencyRepository,
-      this.bookingService,
+      bookingService,
     );
 
     // 3. Controllers
-    this.bookingController = new BookingController(this.bookingService);
+    this.bookingController = new BookingController(bookingService);
     this.bookingEventsController = new BookingEventsController(
-      this.bookingRepository,
+      bookingRepository,
       () => redis.duplicate(),
     );
 
@@ -168,13 +149,28 @@ export class BookingContainer {
       seatsHeldRunner,
       seatsHoldFailedRunner,
       seatHoldExpiredRunner,
-      this.bookingSagaOrchestrator,
+      bookingSagaOrchestrator,
       logger,
     );
 
-    // 6. Outbox publisher worker
+    // 6. Payment success Kafka consumer → orchestrator
+    const paymentSuccessConsumer = getConsumer(
+      CONSUMER_GROUPS.BOOKING_PAYMENT_SUCCESS,
+    );
+    const paymentSuccessRunner = new KafkaConsumerRunner(
+      paymentSuccessConsumer,
+      logger,
+    );
+    this.paymentResultConsumer = new PaymentResultConsumer(
+      getProducerSync(),
+      paymentSuccessRunner,
+      bookingSagaOrchestrator,
+      logger,
+    );
+
+    // 7. Outbox publisher worker
     this.outboxWorker = new OutboxPublisherWorker(
-      this.outboxRepository,
+      outboxRepository,
       getProducerSync,
       logger,
     );
@@ -183,14 +179,15 @@ export class BookingContainer {
   }
 
   /**
-   * Starts outbox publisher worker and the SSE broadcaster consumer loop.
+   * Starts outbox publisher worker and consumer loops.
    *
-   * @returns A promise that resolves when worker and consumer have started.
+   * @returns A promise that resolves when worker and consumers have started.
    */
   async start(): Promise<void> {
     this.outboxWorker.start();
     await this.bookingEventBroadcaster.start();
     await this.seatsResultConsumer.start();
+    await this.paymentResultConsumer.start();
   }
 
   /**
@@ -207,16 +204,17 @@ export class BookingContainer {
   }
 
   /**
-   * Gracefully stops the SSE broadcaster, the saga-result consumer, and
-   * the outbox worker. Called during graceful shutdown BEFORE the Kafka
+   * Gracefully stops the SSE broadcaster, saga-result consumers, payment consumer, and
+   * outbox worker. Called during graceful shutdown BEFORE the Kafka
    * cluster disconnects, so offsets can be committed cleanly.
    *
    * @returns A promise that resolves when worker, broadcaster, and
-   *   consumer have stopped.
+   *   consumers have stopped.
    */
   async disconnect(): Promise<void> {
     await this.bookingEventBroadcaster.stop();
     await this.seatsResultConsumer.stop();
+    await this.paymentResultConsumer.stop();
     await this.outboxWorker.stop();
   }
 }

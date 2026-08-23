@@ -1,10 +1,18 @@
 "use client"
 
-import { Armchair, Lock } from "lucide-react"
+import { useMemo } from "react"
+import { Armchair, Lock, Check } from "lucide-react"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import type { SeatMapCoach, SeatMapSeat } from "@/generated"
+
+interface SeatMapGridProps {
+  readonly coach: SeatMapCoach
+  readonly selectedSeatIds?: string[]
+  readonly onToggleSeat?: (seat: SeatMapSeat) => void
+  readonly heldSeatIds?: string[]
+}
 
 /**
  * ## SeatMapGrid
@@ -13,16 +21,32 @@ import type { SeatMapCoach, SeatMapSeat } from "@/generated"
  * 5-column grid with a 1-column aisle between columns 3 and 4 — the
  * conventional Indian railway layout (3+2 for SL, 2+2 for 3AC, etc.).
  *
- * Booked seats are visually disabled (`isBooked=true`); available
- * seats are hoverable. The seat number is rendered as the visible
- * label so the user can correlate with the booking flow.
- *
- * @param coach - The coach payload from the seat-map response.
+ * Booked / held seats are visually disabled with a lock icon; available seats
+ * are selectable up to 6 seats per booking.
  */
-export function SeatMapGrid({ coach }: { readonly coach: SeatMapCoach }) {
-  const booked = coach.seats.filter((s) => s.isBooked).length
-  const available = coach.totalSeats - booked
-  const layout = computeLayout(coach.seats)
+export function SeatMapGrid({
+  coach,
+  selectedSeatIds = [],
+  onToggleSeat,
+  heldSeatIds = [],
+}: SeatMapGridProps) {
+  const selectedSet = useMemo(() => new Set(selectedSeatIds), [selectedSeatIds])
+  const heldSet = useMemo(() => new Set(heldSeatIds), [heldSeatIds])
+
+  const bookedCount = useMemo(
+    () =>
+      coach.seats.filter((s) => s.isBooked && !heldSet.has(s.seatId)).length,
+    [coach.seats, heldSet]
+  )
+  const lockedCount = useMemo(
+    () =>
+      coach.seats.filter(
+        (s) => heldSet.has(s.seatId) || (!s.isBooked && heldSet.has(s.seatId))
+      ).length,
+    [coach.seats, heldSet]
+  )
+  const availableCount = coach.totalSeats - (bookedCount + lockedCount)
+  const layout = useMemo(() => computeLayout(coach.seats), [coach.seats])
 
   return (
     <Card>
@@ -33,13 +57,18 @@ export function SeatMapGrid({ coach }: { readonly coach: SeatMapCoach }) {
             Type {coach.coachType} · {coach.totalSeats} seats
           </p>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-            {available} available
+            {availableCount} available
           </span>
-          {booked > 0 && (
+          {lockedCount > 0 && (
             <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-              {booked} booked
+              {lockedCount} locked
+            </span>
+          )}
+          {bookedCount > 0 && (
+            <span className="rounded-full border border-red-500/40 bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-400">
+              {bookedCount} booked
             </span>
           )}
         </div>
@@ -52,8 +81,7 @@ export function SeatMapGrid({ coach }: { readonly coach: SeatMapCoach }) {
             <span>Front of train</span>
           </div>
 
-          {/* Seat matrix. Rows come from the coach's seats; columns
-              are inferred from the layout (3+2 by default). */}
+          {/* Seat matrix */}
           <div className="flex flex-col gap-1.5">
             {layout.map((row) => (
               <div
@@ -61,11 +89,23 @@ export function SeatMapGrid({ coach }: { readonly coach: SeatMapCoach }) {
                 className="grid grid-cols-[repeat(3,minmax(0,1fr))_18px_repeat(2,minmax(0,1fr))] items-center gap-1.5"
               >
                 {row.left.map((seat) => (
-                  <SeatTile key={seat.seatId} seat={seat} />
+                  <SeatTile
+                    key={seat.seatId}
+                    seat={seat}
+                    isSelected={selectedSet.has(seat.seatId)}
+                    isHeld={heldSet.has(seat.seatId)}
+                    onToggleSeat={onToggleSeat}
+                  />
                 ))}
-                <div aria-hidden className="h-9" />
+                <div aria-hidden="true" className="h-9" />
                 {row.right.map((seat) => (
-                  <SeatTile key={seat.seatId} seat={seat} />
+                  <SeatTile
+                    key={seat.seatId}
+                    seat={seat}
+                    isSelected={selectedSet.has(seat.seatId)}
+                    isHeld={heldSet.has(seat.seatId)}
+                    onToggleSeat={onToggleSeat}
+                  />
                 ))}
               </div>
             ))}
@@ -79,46 +119,114 @@ export function SeatMapGrid({ coach }: { readonly coach: SeatMapCoach }) {
 /**
  * ## SeatTile
  *
- * One seat cell. Booked seats are rendered with a `disabled`-style
- * surface and a lock icon; available seats are filled with a
- * subdued primary tint and show the seat number.
- *
- * The seat's metadata (type, berth, price, quota) is rendered to
- * the accessibility tree so screen readers can describe the
- * seat without polluting the visual layout.
+ * One seat cell. Held seats are rendered disabled in Gray with 'Locked';
+ * Confirmed booked seats are rendered disabled in Red with 'Booked';
+ * Selected seats show a primary highlight with a check mark.
  */
-function SeatTile({ seat }: { readonly seat: SeatMapSeat }) {
-  const isBooked = seat.isBooked
+function SeatTile({
+  seat,
+  isSelected,
+  isHeld,
+  onToggleSeat,
+}: {
+  readonly seat: SeatMapSeat
+  readonly isSelected: boolean
+  readonly isHeld: boolean
+  readonly onToggleSeat?: (seat: SeatMapSeat) => void
+}) {
+  const isLocked = isHeld
+  const isBooked = seat.isBooked && !isHeld
 
   const label = `Seat ${seat.seatNumber}, ${seat.seatType} berth, ${seat.berthType}, ${seat.quota} quota, ₹${seat.price}`
+  const title = getSeatTitle(seat, isBooked, isLocked, isSelected)
+  const tileClass = getSeatTileClass(isBooked, isLocked, isSelected)
+
+  const isDisabled = isBooked || isLocked
+
+  const handleClick = () => {
+    onToggleSeat?.(seat)
+  }
 
   return (
     <button
       type="button"
-      disabled={isBooked}
+      disabled={isDisabled}
       aria-label={label}
-      aria-pressed={false}
-      title={
-        isBooked
-          ? `Seat ${seat.seatNumber} — booked`
-          : `Seat ${seat.seatNumber} — ₹${seat.price} (${seat.seatType})`
-      }
+      aria-pressed={isSelected}
+      onClick={handleClick}
+      title={title}
       className={cn(
         "inline-flex h-9 items-center justify-center gap-1 rounded-md border font-mono text-xs transition-all",
         "focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
-        isBooked
-          ? "cursor-not-allowed border-border/60 bg-muted text-muted-foreground/70 line-through"
-          : "cursor-pointer border-primary/30 bg-primary/10 text-primary hover:border-primary/60 hover:bg-primary/20 active:translate-y-px"
+        tileClass
       )}
     >
-      {isBooked ? (
-        <Lock className="h-3 w-3" aria-hidden />
-      ) : (
-        <Armchair className="h-3 w-3" aria-hidden />
-      )}
+      {renderSeatIcon(isBooked, isLocked, isSelected)}
       <span>{seat.seatNumber}</span>
     </button>
   )
+}
+
+function getSeatTitle(
+  seat: SeatMapSeat,
+  isBooked: boolean,
+  isLocked: boolean,
+  isSelected: boolean
+): string {
+  if (isBooked) {
+    return `Seat ${seat.seatNumber} — Booked`
+  }
+  if (isLocked) {
+    return `Seat ${seat.seatNumber} — Locked`
+  }
+  if (isSelected) {
+    return `Seat ${seat.seatNumber} — Selected`
+  }
+  return `Seat ${seat.seatNumber} — ₹${seat.price} (${seat.seatType})`
+}
+
+function getSeatTileClass(
+  isBooked: boolean,
+  isLocked: boolean,
+  isSelected: boolean
+): string {
+  if (isBooked) {
+    return "cursor-not-allowed border-red-500/40 bg-red-500/15 text-red-600 dark:bg-red-950/40 dark:text-red-400 dark:border-red-800 font-medium"
+  }
+  if (isLocked) {
+    return "cursor-not-allowed border-border/60 bg-muted text-muted-foreground/80 line-through"
+  }
+  if (isSelected) {
+    return "scale-105 cursor-pointer border-primary bg-primary font-bold text-primary-foreground shadow-md ring-2 ring-primary/40"
+  }
+  return "cursor-pointer border-primary/30 bg-primary/10 text-primary hover:border-primary/60 hover:bg-primary/20 active:translate-y-px"
+}
+
+function renderSeatIcon(
+  isBooked: boolean,
+  isLocked: boolean,
+  isSelected: boolean
+) {
+  if (isBooked) {
+    return (
+      <Lock
+        className="h-3 w-3 text-red-500 dark:text-red-400"
+        aria-hidden="true"
+      />
+    )
+  }
+  if (isLocked) {
+    return <Lock className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
+  }
+  if (isSelected) {
+    return (
+      <Check
+        className="h-3.5 w-3.5 stroke-[3] text-primary-foreground"
+        aria-hidden="true"
+      />
+    )
+  }
+  return <Armchair className="h-3 w-3" aria-hidden="true" />
 }
 
 interface SeatLayoutRow {
@@ -127,12 +235,6 @@ interface SeatLayoutRow {
   readonly right: SeatMapSeat[]
 }
 
-/**
- * Splits the seats into left-half (3 seats) / right-half (2 seats) rows
- * for a 3+2 visual layout. Falls back to a single-column packing when
- * the seat count is not divisible by 5 — anything that doesn't fit the
- * 3+2 cadence still renders, just on a denser row.
- */
 function computeLayout(seats: SeatMapSeat[]): readonly SeatLayoutRow[] {
   const rows: SeatLayoutRow[] = []
   let pending: SeatMapSeat[] = []

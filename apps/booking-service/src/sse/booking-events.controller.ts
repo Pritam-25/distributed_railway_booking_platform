@@ -1,27 +1,3 @@
-/**
- * ## module/booking-events-controller
- *
- * SSE adapter for booking-status streaming. Authenticates the
- * requesting user, verifies booking ownership, then opens a
- * long-lived HTTP response that forwards every `BookingStatusChangedV1`
- * event from the Redis pub/sub channel `booking:status:<bookingId>` to
- * the connected browser.
- *
- * ### Wire format
- * ```
- * event: connected
- * data: {"bookingId":"<uuid>"}
- *
- * event: booking.status_changed
- * data: {"eventId":"...","bookingId":"...","pnr":"...","userId":"...","previousStatus":null,"currentStatus":"PENDING","version":1,"updatedAt":"2026-08-14T..."}
- *
- * : keepalive
- *
- * ```
- *
- * @packageDocumentation
- */
-
 import type { Request, Response } from "express";
 import { ApiError, COMMON_ERROR_CODES } from "@irctc/errors";
 import { statusCode } from "@irctc/http";

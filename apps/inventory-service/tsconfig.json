@@ -14,6 +14,7 @@
       "@utils": ["./src/utils/index.js"],
       "@utils/errors": ["./src/utils/errors/index.js"],
       "@health": ["./src/health/index.js"],
+      "@grpc": ["./src/grpc/index.js"],
       "@generated/*": ["./src/generated/*"]
     }
   },

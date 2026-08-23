@@ -140,7 +140,7 @@ Accept: application/json
 
 ### Seat Map - Standard Request via Gateway
 # @name getSeatMap
-GET {{search}}/schedules/{{fallbackScheduleId}}/seat-map?fromStationId={{fallbackFromStationId}}&toStationId={{fallbackToStationId}}
+GET {{search}}/schedules/{{fallbackScheduleId}}/seat-map?fromStation={{fallbackFromStationId}}&toStation={{fallbackToStationId}}
 Accept: application/json
 
 ### Direct search-service test (bypasses Gateway 5s timeout)

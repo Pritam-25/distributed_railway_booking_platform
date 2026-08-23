@@ -1,5 +1,6 @@
 import { ApiError, COMMON_ERROR_CODES } from "@irctc/errors";
 import { ClientError, ServerError, Status } from "nice-grpc";
+import { ZodError } from "zod";
 
 /**
  * Maps a domain ApiError (or generic Error) to a canonical gRPC ServerError.
@@ -12,14 +13,22 @@ export function mapToGrpcError(error: unknown): ServerError {
     return error;
   }
 
+  if (error instanceof ZodError) {
+    const formatted = error.issues
+      .map((issue) => `${issue.path.join(".") || "field"}: ${issue.message}`)
+      .join("; ");
+    return new ServerError(
+      Status.INVALID_ARGUMENT,
+      `Request validation error: ${formatted}`,
+    );
+  }
+
   if (error instanceof ApiError) {
     const status = mapApiCodeToGrpcStatus(error.code, error.statusCode);
     return new ServerError(status, error.message);
   }
 
-  const message =
-    error instanceof Error ? error.message : "Internal server error";
-  return new ServerError(Status.INTERNAL, message);
+  return new ServerError(Status.INTERNAL, "Internal server error");
 }
 
 /**

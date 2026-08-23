@@ -47,6 +47,12 @@ export const KAFKA_TOPICS = {
 
   // ------------ booking domain ------------
   BOOKING_STATUS_CHANGED: "booking.status-changed.v1",
+
+  // ------------ payment domain ------------
+  PAYMENT_ORDER_CREATED: "payment.order-created.v1",
+  PAYMENT_SUCCESS: "payment.success.v1",
+  PAYMENT_FAILED: "payment.failed.v1",
+  PAYMENT_REFUNDED: "payment.refunded.v1",
 } as const;
 
 /**

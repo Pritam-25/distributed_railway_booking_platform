@@ -82,7 +82,6 @@ const withQueryKey = <T extends object, K>(
  * - 404 Not Found - No profile exists for the authenticated user.
  * - 429 Too Many Requests - Profile lookup was rate-limited.
  * - 500 Internal Server Error - The service could not load the profile.
- *
  * @summary Get Current User Profile
  */
 export const getProfile = (
@@ -178,7 +177,6 @@ export const useGetProfile = <TError = ErrorResponse, TContext = unknown>(
  *
  * **Notes:**
  * - The current request schema requires both firstName and lastName.
- *
  * @summary Update Current User Profile
  */
 export const updateProfile = (
@@ -302,9 +300,6 @@ export function useUpdateProfile<
  * @summary Update Current User Profile
  */
 
-/**
- *
- */
 export function useUpdateProfile<
   TData = Awaited<ReturnType<typeof updateProfile>>,
   TError = ErrorResponse,

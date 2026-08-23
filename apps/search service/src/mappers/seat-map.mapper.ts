@@ -32,6 +32,7 @@ export class SeatMapMapper {
           price: seat.price,
           isBooked: seat.isBooked,
           quota: seat.quota,
+          status: seat.status || (seat.isBooked ? "BOOKED" : "AVAILABLE"),
         })),
       })),
     };

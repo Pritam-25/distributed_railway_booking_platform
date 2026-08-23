@@ -48,8 +48,7 @@ await runBootstrap({
     // 3. Import container, app.js, and gRPC server.
     const { InventoryContainer } = await import("@container");
     const { default: app } = await import("./app.js");
-    const { startGrpcServer, stopGrpcServer } =
-      await import("./grpc/server.js");
+    const { startGrpcServer, stopGrpcServer } = await import("@grpc");
 
     await startServer({
       app,
@@ -61,19 +60,17 @@ await runBootstrap({
           { module: "server" },
           "Starting inventory event consumers and outbox publisher worker...",
         );
-        await InventoryContainer.getInstance().start();
-        logger.info(
-          { module: "server", port: env.GRPC_PORT },
-          "Starting inventory gRPC server...",
-        );
-        await startGrpcServer(env.GRPC_PORT);
+        const container = InventoryContainer.getInstance();
+        await container.start();
+
+        await startGrpcServer(env.GRPC_PORT, container.inventoryGrpcHandler);
       },
       beforeShutdown: async () => {
         logger.info(
           { module: "server" },
           "Stopping gRPC server and inventory event consumers...",
         );
-        await stopGrpcServer();
+        await withTimeout("gRPC server stop", stopGrpcServer());
         await InventoryContainer.getInstance().disconnect();
       },
       afterShutdown: async () => {
@@ -84,10 +81,10 @@ await runBootstrap({
     });
   },
   onFailure: async () => {
-    const { stopGrpcServer } = await import("./grpc/server.js").catch(() => ({
+    const { stopGrpcServer } = await import("@grpc").catch(() => ({
       stopGrpcServer: async () => {},
     }));
-    await stopGrpcServer().catch(() => {});
+    await withTimeout("gRPC server stop", stopGrpcServer()).catch(() => {});
     await withTimeout("Kafka disconnect", disconnectKafka()).catch(() => {});
     await withTimeout("Redis disconnect", disconnectRedis()).catch(() => {});
     await withTimeout("Prisma disconnect", disconnectPrisma()).catch(() => {});
