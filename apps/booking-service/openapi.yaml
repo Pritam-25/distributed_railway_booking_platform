@@ -1,0 +1,899 @@
+openapi: 3.1.0
+info:
+  title: Booking Service API
+  version: 1.0.0
+  description: |2
+
+      # Booking Service API
+
+      The **Booking Service API** owns the booking lifecycle for the IRCTC
+      Railway Booking Platform. It is the command side of the saga: it
+      drives a booking through nine states (PENDING → SEATS_HELD →
+      PAYMENT_PENDING → CONFIRMING → CONFIRMED, plus the terminal
+      branches FAILED, EXPIRED, CANCELLING → CANCELLED) and emits a
+      BookingStatusChangedV1 event to the transactional outbox on every
+      successful CAS transition.
+
+      ## Core Capabilities
+
+      ### Booking Lifecycle
+
+      - **Create Booking** — Start a new booking in the PENDING state
+        with idempotency-key dedupe.
+      - **Get Booking** — Read the current state of a booking owned by
+        the authenticated user.
+      - **Cancel Booking** — Drive a booking through CANCELLING →
+        CANCELLED (refund follows asynchronously via payment-service).
+
+      ### Real-Time Updates (Phase 2 — upcoming)
+
+      - **SSE Booking Events** — A text/event-stream endpoint pushes
+        booking.status_changed events to the originating browser tab.
+servers:
+  - url: http://localhost:4000
+    description: API Gateway Proxy URL
+  - url: http://localhost:4005
+    description: Local Direct Booking Service URL
+components:
+  schemas:
+    CreateBookingResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+        pnr:
+          type: string
+          example: K3M7NP2R4X
+          description: 10-character alphanumeric PNR.
+        status:
+          type: string
+          enum:
+            - PENDING
+            - SEATS_HELD
+            - PAYMENT_PENDING
+            - CONFIRMING
+            - CONFIRMED
+            - CANCELLING
+            - CANCELLED
+            - EXPIRED
+            - FAILED
+          example: PENDING
+      required:
+        - id
+        - pnr
+        - status
+    ResponseMeta:
+      type: object
+      properties:
+        requestId:
+          type: string
+          example: 3e3c1f1a-6f7d-4a2b-9b5c-1f0e3a4b5c6d
+        traceId:
+          type: string
+          example: a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4
+        timestamp:
+          type: string
+          example: "2026-07-24T11:21:35.000Z"
+      required:
+        - requestId
+        - traceId
+        - timestamp
+    BadRequestErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          enum:
+            - false
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: INVALID_INPUT
+            message:
+              type: string
+              example: Invalid request input.
+            details: {}
+          required:
+            - code
+            - message
+          description: Error Detail Payload
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+      required:
+        - success
+        - error
+        - meta
+      description: Error Response Envelope (INVALID_INPUT)
+      x-sdk-ref: ErrorResponse
+      refId: BadRequestErrorResponse
+    RateLimitErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          enum:
+            - false
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: RATE_LIMIT_EXCEEDED
+            message:
+              type: string
+              example: Rate limit exceeded.
+            details: {}
+          required:
+            - code
+            - message
+          description: Error Detail Payload
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+      required:
+        - success
+        - error
+        - meta
+      description: Error Response Envelope (RATE_LIMIT_EXCEEDED)
+      x-sdk-ref: ErrorResponse
+      refId: RateLimitErrorResponse
+    InternalServerErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          enum:
+            - false
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: INTERNAL_ERROR
+            message:
+              type: string
+              example: Internal server error.
+            details: {}
+          required:
+            - code
+            - message
+          description: Error Detail Payload
+        meta:
+          $ref: "#/components/schemas/ResponseMeta"
+      required:
+        - success
+        - error
+        - meta
+      description: Error Response Envelope (INTERNAL_ERROR)
+      x-sdk-ref: ErrorResponse
+      refId: InternalServerErrorResponse
+    CreateBookingRequest:
+      type: object
+      properties:
+        idempotencyKey:
+          type: string
+          format: uuid
+          example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+        scheduleId:
+          type: string
+          format: uuid
+          example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+        fromStationId:
+          type: string
+          format: uuid
+          example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+        toStationId:
+          type: string
+          format: uuid
+          example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+        fromSequence:
+          type: integer
+          minimum: 1
+        toSequence:
+          type: integer
+          minimum: 2
+        legIndices:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+        seatIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+            example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+          minItems: 1
+          maxItems: 6
+        passengers:
+          type: array
+          items:
+            $ref: "#/components/schemas/Passenger"
+          minItems: 1
+          maxItems: 6
+      required:
+        - idempotencyKey
+        - scheduleId
+        - fromStationId
+        - toStationId
+        - seatIds
+        - passengers
+    Passenger:
+      type: object
+      properties:
+        fullName:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Pritam Maity
+        age:
+          type: integer
+          minimum: 1
+          maximum: 120
+          example: 30
+        gender:
+          type: string
+          enum:
+            - MALE
+            - FEMALE
+            - OTHER
+          example: MALE
+        berthPreference:
+          type: string
+          enum:
+            - LOWER
+            - MIDDLE
+            - UPPER
+            - SIDE_LOWER
+            - SIDE_UPPER
+            - NO_PREFERENCE
+          example: LOWER
+      required:
+        - fullName
+        - age
+        - gender
+  parameters: {}
+paths:
+  /api/v1/bookings:
+    post:
+      operationId: bookingsCreateBooking
+      tags:
+        - Bookings
+      summary: Create Booking
+      description: >-
+        Initiates a new booking in the `PENDING` state for the authenticated user. Idempotent on the `idempotencyKey`
+        request field — a retry with the same key returns the original response without re-running the saga.
+
+
+        **Request Body Fields:**
+
+        - `idempotencyKey` - Client-generated UUID that deduplicates retries.
+
+        - `scheduleId` - UUID of the `ScheduleInventory` row to book against.
+
+        - `fromStationId` / `toStationId` - Station UUIDs or station codes (e.g. BCK, HWR) of the segment endpoints
+        (must differ).
+
+        - `seatIds` - 1 to 6 seat UUIDs from the seat-map.
+
+        - `passengers` - 1 to 6 passenger records, one per seat.
+
+
+        **Response:**
+
+        Returns the new booking's id, PNR, and current status in the success envelope's `data` field.
+
+
+        **Outcomes:**
+
+        - 201 Created - Booking was created in the `PENDING` state.
+
+        - 400 Bad Request - The request body failed schema validation.
+
+        - 401 Unauthorized - The JWT is missing or invalid.
+
+        - 404 Not Found - The schedule or one of the seats does not exist.
+
+        - 409 Conflict - The seats are already held by another booking or the saga cannot proceed.
+
+        - 429 Too Many Requests - Booking attempts were rate-limited.
+
+        - 500 Internal Server Error - The service could not complete the booking.
+
+
+        **Notes:**
+
+        - The PNR is generated server-side (10-character alphanumeric) and returned only once in the 201 response.
+        Subsequent GETs on the booking id return the same PNR.
+
+        - Idempotency keys are stored for the lifetime of the booking; reuse them only for genuine retries, not for
+        distinct bookings.
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBookingRequest"
+      responses:
+        "201":
+          description: Booking created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                    example: true
+                  message:
+                    type: string
+                    example: Booking created successfully
+                  data:
+                    $ref: "#/components/schemas/CreateBookingResponse"
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - message
+                  - data
+                  - meta
+                description: Success Response Envelope
+        "400":
+          description: Bad Request - Validation or invalid input error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "401":
+          description: Unauthorized - JWT is missing or invalid
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: UNAUTHORIZED
+                      message:
+                        type: string
+                        example: Authentication required.
+                      details: {}
+                    required:
+                      - code
+                      - message
+                    description: Error Detail Payload
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - error
+                  - meta
+                description: Error Response Envelope (UNAUTHORIZED)
+                x-sdk-ref: ErrorResponse
+        "404":
+          description: Not Found - The schedule or one of the seats does not exist
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: BOOKING_NOT_FOUND
+                      message:
+                        type: string
+                        example: Booking not found.
+                      details: {}
+                    required:
+                      - code
+                      - message
+                    description: Error Detail Payload
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - error
+                  - meta
+                description: Error Response Envelope (BOOKING_NOT_FOUND)
+                x-sdk-ref: ErrorResponse
+        "409":
+          description: Conflict - Seats are already held, or the saga cannot proceed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: BOOKING_INVALID_TRANSITION
+                      message:
+                        type: string
+                        example: Booking cannot transition to the requested status from its current state.
+                      details: {}
+                    required:
+                      - code
+                      - message
+                    description: Error Detail Payload
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - error
+                  - meta
+                description: Error Response Envelope (BOOKING_INVALID_TRANSITION)
+                x-sdk-ref: ErrorResponse
+        "429":
+          description: Too Many Requests - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitErrorResponse"
+        "500":
+          description: Internal Server Error - Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponse"
+  /api/v1/bookings/{bookingId}:
+    get:
+      operationId: bookingsGetBooking
+      tags:
+        - Bookings
+      summary: Get Booking
+      description: >-
+        Returns the booking with the given id, scoped to the authenticated user. Returns 404 if the booking does not
+        exist or belongs to another user (ownership is enforced before the booking is loaded for non-admins).
+
+
+        **Request Body Fields:**
+
+        - `bookingId` (path) - UUID of the booking to fetch.
+
+
+        **Response:**
+
+        Returns the full booking record (status, version, segments, seat/passenger rows) in the success envelope's
+        `data` field.
+
+
+        **Outcomes:**
+
+        - 200 OK - Booking was found and is owned by the authenticated user.
+
+        - 401 Unauthorized - The JWT is missing or invalid.
+
+        - 404 Not Found - The booking does not exist or belongs to another user.
+
+        - 429 Too Many Requests - Polling exceeded the default rate limit.
+
+        - 500 Internal Server Error - The service could not read the booking.
+
+
+        **Notes:**
+
+        - The status field reflects the most recent CAS transition. Subscribe to the booking-events SSE stream (Phase 2)
+        for live updates instead of polling.
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+          required: true
+          name: bookingId
+          in: path
+      responses:
+        "200":
+          description: Booking retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                    example: true
+                  message:
+                    type: string
+                    example: Booking retrieved successfully
+                  data:
+                    $ref: "#/components/schemas/CreateBookingResponse"
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - message
+                  - data
+                  - meta
+                description: Success Response Envelope
+        "400":
+          description: Bad Request - Validation or invalid input error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "401":
+          description: Unauthorized - JWT is missing or invalid
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: UNAUTHORIZED
+                      message:
+                        type: string
+                        example: Authentication required.
+                      details: {}
+                    required:
+                      - code
+                      - message
+                    description: Error Detail Payload
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - error
+                  - meta
+                description: Error Response Envelope (UNAUTHORIZED)
+                x-sdk-ref: ErrorResponse
+        "403":
+          description: Forbidden - Booking is owned by another user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: BOOKING_FORBIDDEN
+                      message:
+                        type: string
+                        example: You do not have access to this booking.
+                      details: {}
+                    required:
+                      - code
+                      - message
+                    description: Error Detail Payload
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - error
+                  - meta
+                description: Error Response Envelope (BOOKING_FORBIDDEN)
+                x-sdk-ref: ErrorResponse
+        "404":
+          description: Not Found - Booking does not exist
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: BOOKING_NOT_FOUND
+                      message:
+                        type: string
+                        example: Booking not found.
+                      details: {}
+                    required:
+                      - code
+                      - message
+                    description: Error Detail Payload
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - error
+                  - meta
+                description: Error Response Envelope (BOOKING_NOT_FOUND)
+                x-sdk-ref: ErrorResponse
+        "429":
+          description: Too Many Requests - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitErrorResponse"
+        "500":
+          description: Internal Server Error - Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponse"
+  /api/v1/bookings/{bookingId}/cancel:
+    post:
+      operationId: bookingsCancelBooking
+      tags:
+        - Bookings
+      summary: Cancel Booking
+      description: >-
+        Cancels a booking owned by the authenticated user. Drives the row through `CANCELLING` → `CANCELLED` and emits
+        one `BookingStatusChangedV1` event per transition.
+
+
+        **Request Body Fields:**
+
+        - `bookingId` (path) - UUID of the booking to cancel.
+
+
+        **Response:**
+
+        Returns the cancelled booking record (status `CANCELLED`) in the success envelope's `data` field.
+
+
+        **Outcomes:**
+
+        - 200 OK - The booking was successfully cancelled.
+
+        - 401 Unauthorized - The JWT is missing or invalid.
+
+        - 404 Not Found - The booking does not exist or belongs to another user.
+
+        - 409 Conflict - The booking is already in a terminal state and cannot be cancelled.
+
+        - 429 Too Many Requests - Cancellation attempts were rate-limited.
+
+        - 500 Internal Server Error - The service could not complete cancellation.
+
+
+        **Notes:**
+
+        - Cancellations on already-confirmed bookings will eventually trigger a refund via payment-service. The booking
+        row flips to `CANCELLED` synchronously, but the refund is asynchronous.
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+          required: true
+          name: bookingId
+          in: path
+      responses:
+        "200":
+          description: Booking cancelled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - true
+                    example: true
+                  message:
+                    type: string
+                    example: Booking cancelled successfully
+                  data:
+                    $ref: "#/components/schemas/CreateBookingResponse"
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - message
+                  - data
+                  - meta
+                description: Success Response Envelope
+        "400":
+          description: Bad Request - Validation or invalid input error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorResponse"
+        "401":
+          description: Unauthorized - JWT is missing or invalid
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: UNAUTHORIZED
+                      message:
+                        type: string
+                        example: Authentication required.
+                      details: {}
+                    required:
+                      - code
+                      - message
+                    description: Error Detail Payload
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - error
+                  - meta
+                description: Error Response Envelope (UNAUTHORIZED)
+                x-sdk-ref: ErrorResponse
+        "403":
+          description: Forbidden - Booking is owned by another user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: BOOKING_FORBIDDEN
+                      message:
+                        type: string
+                        example: You do not have access to this booking.
+                      details: {}
+                    required:
+                      - code
+                      - message
+                    description: Error Detail Payload
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - error
+                  - meta
+                description: Error Response Envelope (BOOKING_FORBIDDEN)
+                x-sdk-ref: ErrorResponse
+        "404":
+          description: Not Found - Booking does not exist
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: BOOKING_NOT_FOUND
+                      message:
+                        type: string
+                        example: Booking not found.
+                      details: {}
+                    required:
+                      - code
+                      - message
+                    description: Error Detail Payload
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - error
+                  - meta
+                description: Error Response Envelope (BOOKING_NOT_FOUND)
+                x-sdk-ref: ErrorResponse
+        "409":
+          description: Conflict - Booking is in a terminal state and cannot be cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                    example: false
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        example: BOOKING_INVALID_TRANSITION
+                      message:
+                        type: string
+                        example: Booking cannot transition to the requested status from its current state.
+                      details: {}
+                    required:
+                      - code
+                      - message
+                    description: Error Detail Payload
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+                required:
+                  - success
+                  - error
+                  - meta
+                description: Error Response Envelope (BOOKING_INVALID_TRANSITION)
+                x-sdk-ref: ErrorResponse
+        "429":
+          description: Too Many Requests - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RateLimitErrorResponse"
+        "500":
+          description: Internal Server Error - Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerErrorResponse"
+webhooks: {}

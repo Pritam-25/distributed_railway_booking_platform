@@ -1,0 +1,389 @@
+# ==============================================================================
+# Booking Service REST API Test Collection (.http / REST Client)
+# ==============================================================================
+# All client requests route through the API Gateway on :4000 by default.
+# Direct requests to booking-service on :4005 can be used for direct service testing.
+#
+# - {{gateway}}         — API Gateway root + health probes (port 4000)
+# - {{baseUrl}}         — Gateway API base path (/api/v1)
+# - {{auth}}            — Proxied auth endpoints via Gateway (/api/v1/auth)
+# - {{bookings}}        — Proxied booking endpoints via Gateway (/api/v1/bookings)
+# - {{bookingService}}  — Direct booking-service URL (port 4005)
+
+@gateway = http://localhost:4000
+@baseUrl = http://localhost:4000/api/v1
+@auth = {{baseUrl}}/auth
+@bookings = {{baseUrl}}/bookings
+@bookingService = http://localhost:4005
+
+# Fallback Variables for manual/isolated testing
+@fallbackEmail = maityp2024@gmail.com
+@fallbackPassword = maityP2024gmail.com
+@fallbackUserId = afd836b9-ca43-45f8-9c75-cf775b663bbd
+@fallbackScheduleId = 9e3495a2-d148-4302-beb4-b5c0da21646d
+@fallbackFromStationId = 85e5a4b9-d365-4096-8349-3675d914c911
+@fallbackToStationId = b4445f32-d61d-45aa-a90c-a1d736e530c0
+@fallbackSeatId1 = 17790292-7307-47c9-b332-e61734629285
+@fallbackSeatId2 = 22222222-2222-4222-8222-222222222222
+@fallbackIdempotencyKey = 7c9e6679-7425-40de-944b-e07fc1f90ae7
+
+# Auto-captured response data from login & booking creation (if run sequentially)
+@userId = {{login.response.body.data.id}}
+@userEmail = {{login.response.body.data.email}}
+@bookingId = {{createBooking.response.body.data.id}}
+@pnr = {{createBooking.response.body.data.pnr}}
+
+
+# ==============================================================================
+# 1. Diagnostics & Health Checks
+# ==============================================================================
+
+### Root API Gateway Endpoint
+GET {{gateway}}/
+
+### Gateway Health Liveness Probe
+GET {{gateway}}/health/live
+
+### Gateway Health Readiness Probe
+GET {{gateway}}/health/ready
+
+### Booking Service Direct Root Banner
+GET {{bookingService}}/
+
+### Booking Service Direct Liveness Probe
+GET {{bookingService}}/health/live
+
+### Booking Service Direct Readiness Probe
+GET {{bookingService}}/health/ready
+
+
+# ==============================================================================
+# 2. User Authentication (`POST /api/v1/auth/login`)
+# ==============================================================================
+
+### Login User
+# @name login
+POST {{auth}}/login
+Content-Type: application/json
+
+{
+  "email": "{{fallbackEmail}}",
+  "password": "{{fallbackPassword}}"
+}
+
+
+# ==============================================================================
+# 3. Booking Creation API (`POST /api/v1/bookings`)
+# ==============================================================================
+
+### Create Booking - Standard Success Case
+# Initiates a new booking in the PENDING state.
+# @name createBooking
+POST {{bookings}}
+Content-Type: application/json
+
+{
+  "idempotencyKey": "{{$guid}}",
+  "scheduleId": "{{fallbackScheduleId}}",
+  "fromStationId": "{{fallbackFromStationId}}",
+  "toStationId": "{{fallbackToStationId}}",
+  "seatIds": [
+    "{{fallbackSeatId1}}"
+  ],
+  "passengers": [
+    {
+      "fullName": "Pritam Maity",
+      "age": 30,
+      "gender": "MALE"
+    }
+  ]
+}
+
+### Create Booking - Multi-Passenger (2 Seats, 2 Passengers)
+POST {{bookings}}
+Content-Type: application/json
+x-user-id: {{userId}}
+
+{
+  "idempotencyKey": "{{$guid}}",
+  "scheduleId": "{{fallbackScheduleId}}",
+  "fromStationId": "{{fallbackFromStationId}}",
+  "toStationId": "{{fallbackToStationId}}",
+  "seatIds": [
+    "{{fallbackSeatId1}}",
+    "{{fallbackSeatId2}}"
+  ],
+  "passengers": [
+    {
+      "fullName": "John Doe",
+      "age": 32,
+      "gender": "MALE"
+    },
+    {
+      "fullName": "Jane Doe",
+      "age": 28,
+      "gender": "FEMALE"
+    }
+  ]
+}
+
+### Create Booking - Idempotent Retry Test (Fixed Idempotency Key)
+# Re-sending with the exact same idempotencyKey returns cached response without duplicating booking
+POST {{bookings}}
+Content-Type: application/json
+x-user-id: {{userId}}
+
+
+
+{
+  "idempotencyKey": "{{fallbackIdempotencyKey}}",
+  "scheduleId": "{{fallbackScheduleId}}",
+  "fromStationId": "{{fallbackFromStationId}}",
+  "toStationId": "{{fallbackToStationId}}",
+  "seatIds": [
+    "{{fallbackSeatId1}}"
+  ],
+  "passengers": [
+    {
+      "fullName": "Pritam Maity",
+      "age": 30,
+      "gender": "MALE"
+    }
+  ]
+}
+
+### Direct booking-service Test (Bypasses API Gateway)
+POST {{bookingService}}/bookings
+Content-Type: application/json
+x-user-id: {{userId}}
+
+
+
+{
+  "idempotencyKey": "{{$guid}}",
+  "scheduleId": "{{fallbackScheduleId}}",
+  "fromStationId": "{{fallbackFromStationId}}",
+  "toStationId": "{{fallbackToStationId}}",
+  "seatIds": [
+    "{{fallbackSeatId1}}"
+  ],
+  "passengers": [
+    {
+      "fullName": "Direct Tester",
+      "age": 40,
+      "gender": "MALE"
+    }
+  ]
+}
+
+
+# ==============================================================================
+# 4. Booking Creation Validation & Error Cases
+# ==============================================================================
+
+### Create Booking - FAIL Case: Missing Auth Headers -> 401 Unauthorized
+POST {{bookings}}
+Content-Type: application/json
+
+{
+  "idempotencyKey": "{{$guid}}",
+  "scheduleId": "{{fallbackScheduleId}}",
+  "fromStationId": "{{fallbackFromStationId}}",
+  "toStationId": "{{fallbackToStationId}}",
+  "seatIds": ["{{fallbackSeatId1}}"],
+  "passengers": [
+    {
+      "fullName": "Unauthorized User",
+      "age": 30,
+      "gender": "MALE"
+    }
+  ]
+}
+
+### Create Booking - FAIL Case: Invalid UUID for scheduleId -> 400 Bad Request
+POST {{bookings}}
+Content-Type: application/json
+x-user-id: {{userId}}
+
+
+{
+  "idempotencyKey": "{{$guid}}",
+  "scheduleId": "invalid-schedule-uuid",
+  "fromStationId": "{{fallbackFromStationId}}",
+  "toStationId": "{{fallbackToStationId}}",
+  "seatIds": ["{{fallbackSeatId1}}"],
+  "passengers": [
+    {
+      "fullName": "Invalid Schedule",
+      "age": 30,
+      "gender": "MALE"
+    }
+  ]
+}
+
+### Create Booking - FAIL Case: Seat count doesn't match Passenger count -> 400 Bad Request
+POST {{bookings}}
+Content-Type: application/json
+x-user-id: {{userId}}
+
+
+{
+  "idempotencyKey": "{{$guid}}",
+  "scheduleId": "{{fallbackScheduleId}}",
+  "fromStationId": "{{fallbackFromStationId}}",
+  "toStationId": "{{fallbackToStationId}}",
+  "seatIds": [
+    "{{fallbackSeatId1}}",
+    "{{fallbackSeatId2}}"
+  ],
+  "passengers": [
+    {
+      "fullName": "Single Passenger Two Seats",
+      "age": 30,
+      "gender": "MALE"
+    }
+  ]
+}
+
+### Create Booking - FAIL Case: Duplicate Seat IDs -> 400 Bad Request
+POST {{bookings}}
+Content-Type: application/json
+x-user-id: {{userId}}
+
+
+{
+  "idempotencyKey": "{{$guid}}",
+  "scheduleId": "{{fallbackScheduleId}}",
+  "fromStationId": "{{fallbackFromStationId}}",
+  "toStationId": "{{fallbackToStationId}}",
+  "seatIds": [
+    "{{fallbackSeatId1}}",
+    "{{fallbackSeatId1}}"
+  ],
+  "passengers": [
+    {
+      "fullName": "Passenger One",
+      "age": 30,
+      "gender": "MALE"
+    },
+    {
+      "fullName": "Passenger Two",
+      "age": 28,
+      "gender": "FEMALE"
+    }
+  ]
+}
+
+### Create Booking - FAIL Case: Identical Source and Destination Stations -> 400 Bad Request
+POST {{bookings}}
+Content-Type: application/json
+x-user-id: {{userId}}
+
+
+{
+  "idempotencyKey": "{{$guid}}",
+  "scheduleId": "{{fallbackScheduleId}}",
+  "fromStationId": "{{fallbackFromStationId}}",
+  "toStationId": "{{fallbackFromStationId}}",
+  "seatIds": ["{{fallbackSeatId1}}"],
+  "passengers": [
+    {
+      "fullName": "Same Station",
+      "age": 30,
+      "gender": "MALE"
+    }
+  ]
+}
+
+### Create Booking - FAIL Case: Empty Passengers Array -> 400 Bad Request
+POST {{bookings}}
+Content-Type: application/json
+x-user-id: {{userId}}
+
+
+{
+  "idempotencyKey": "{{$guid}}",
+  "scheduleId": "{{fallbackScheduleId}}",
+  "fromStationId": "{{fallbackFromStationId}}",
+  "toStationId": "{{fallbackToStationId}}",
+  "seatIds": [],
+  "passengers": []
+}
+
+### Create Booking - FAIL Case: Invalid Passenger Gender -> 400 Bad Request
+POST {{bookings}}
+Content-Type: application/json
+x-user-id: {{userId}}
+
+
+{
+  "idempotencyKey": "{{$guid}}",
+  "scheduleId": "{{fallbackScheduleId}}",
+  "fromStationId": "{{fallbackFromStationId}}",
+  "toStationId": "{{fallbackToStationId}}",
+  "seatIds": ["{{fallbackSeatId1}}"],
+  "passengers": [
+    {
+      "fullName": "Invalid Gender",
+      "age": 30,
+      "gender": "UNKNOWN_GENDER"
+    }
+  ]
+}
+
+
+# ==============================================================================
+# 5. Booking Retrieval API (`GET /api/v1/bookings/:bookingId`)
+# ==============================================================================
+
+### Get Booking Details by ID (Auto-captured from Step 3 createBooking)
+GET {{bookings}}/{{bookingId}}
+Accept: application/json
+x-user-id: {{userId}}
+
+
+### Get Booking Details via Direct booking-service Endpoint
+GET {{bookingService}}/bookings/{{bookingId}}
+Accept: application/json
+x-user-id: {{userId}}
+
+
+### Get Booking Details - FAIL Case: Invalid bookingId UUID -> 400 Bad Request
+GET {{bookings}}/invalid-booking-uuid
+Accept: application/json
+x-user-id: {{userId}}
+
+
+### Get Booking Details - FAIL Case: Non-existent Booking ID -> 404 Not Found
+GET {{bookings}}/00000000-0000-0000-0000-000000000000
+Accept: application/json
+x-user-id: {{userId}}
+
+
+
+# ==============================================================================
+# 6. Booking Cancellation API (`POST /api/v1/bookings/:bookingId/cancel`)
+# ==============================================================================
+
+### Cancel Booking (Auto-captured {{bookingId}})
+POST {{bookings}}/{{bookingId}}/cancel
+Content-Type: application/json
+x-user-id: {{userId}}
+
+
+### Cancel Booking - FAIL Case: Non-existent Booking ID -> 404 Not Found
+POST {{bookings}}/00000000-0000-0000-0000-000000000000/cancel
+Content-Type: application/json
+x-user-id: {{userId}}
+
+
+
+# ==============================================================================
+# 7. Real-Time Booking Events Stream (`GET /api/v1/bookings/:bookingId/events`)
+# ==============================================================================
+
+### Stream Real-Time Booking Status Events (SSE)
+GET {{bookings}}/{{bookingId}}/events
+Accept: text/event-stream
+x-user-id: {{userId}}
+
