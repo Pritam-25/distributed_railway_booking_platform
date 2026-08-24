@@ -51,7 +51,10 @@ export class PaymentController {
     const signature = req.headers["x-razorpay-signature"] as string;
 
     const customReq = req as RequestWithRawBody;
-    const rawBody = customReq.rawBody || JSON.stringify(req.body);
+    const rawBody =
+      customReq.rawBody ||
+      (Buffer.isBuffer(req.body) ? req.body : String(req.body));
+
     const result = await this.paymentService.handleWebhook(rawBody, signature);
 
     res.status(statusCode.success).json(result);

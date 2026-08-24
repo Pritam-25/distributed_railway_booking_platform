@@ -16,6 +16,7 @@ import express, {
   type RequestHandler,
   type Router,
 } from "express";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
@@ -152,7 +153,18 @@ export const createApp = (options: CreateAppOptions): Application => {
     );
   }
 
-  app.use(express.json({ limit: bodyLimit }));
+  app.use(
+    express.json({
+      limit: bodyLimit,
+      verify: (
+        req: IncomingMessage & { rawBody?: Buffer },
+        _res: ServerResponse,
+        buf: Buffer,
+      ) => {
+        req.rawBody = buf;
+      },
+    }),
+  );
   app.use(express.urlencoded({ extended: true }));
   app.use(cookieParser());
 

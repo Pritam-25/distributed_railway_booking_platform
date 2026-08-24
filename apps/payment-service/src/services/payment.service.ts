@@ -176,18 +176,20 @@ export class PaymentService {
   async verifyAndCapture(
     input: VerifyPaymentInput,
   ): Promise<VerifyPaymentOutput> {
-    const isValidSignature = verifyPaymentSignature({
-      razorpayOrderId: input.razorpayOrderId,
-      razorpayPaymentId: input.razorpayPaymentId,
-      razorpaySignature: input.razorpaySignature,
-    });
+    if (input.source !== "WEBHOOK") {
+      const isValidSignature = verifyPaymentSignature({
+        razorpayOrderId: input.razorpayOrderId,
+        razorpayPaymentId: input.razorpayPaymentId,
+        razorpaySignature: input.razorpaySignature,
+      });
 
-    if (!isValidSignature) {
-      throw new ApiError(
-        statusCode.badRequest,
-        COMMON_ERROR_CODES.INVALID_INPUT,
-        "Invalid Razorpay payment signature.",
-      );
+      if (!isValidSignature) {
+        throw new ApiError(
+          statusCode.badRequest,
+          COMMON_ERROR_CODES.INVALID_INPUT,
+          "Invalid Razorpay payment signature.",
+        );
+      }
     }
 
     const payment = await this.paymentRepo.findByRazorpayOrderId(

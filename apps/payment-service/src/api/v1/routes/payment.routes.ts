@@ -1,10 +1,9 @@
-import express, { Router } from "express";
+import { Router } from "express";
 import { asyncHandler, validateSchema } from "@irctc/middleware";
 import { PaymentContainer } from "@container";
 import { verifyPaymentSchema } from "@dto";
 
 const router: Router = Router();
-const rawBodyMiddleware = express.raw({ type: "application/json" });
 
 /**
  * Verify Razorpay payment signature from client checkout modal.
@@ -24,7 +23,6 @@ router.post(
  */
 router.post(
   "/webhook",
-  rawBodyMiddleware,
   asyncHandler((req, res) =>
     PaymentContainer.getInstance().paymentController.handleWebhook(req, res),
   ),
