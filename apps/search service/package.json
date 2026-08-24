@@ -12,7 +12,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "docker:build": "docker build -t search-service:latest --build-arg SERVICE=search-service -f Dockerfile ../..",
-    "docker:run": "docker run --rm --name search-service -p 4004:4004 --env-file .env search-service:latest"
+    "docker:run": "docker run --rm --name search-service -p 4003:4003 --env-file .env search-service:latest"
   },
   "keywords": [],
   "author": "",

@@ -1,15 +1,17 @@
 import { createGrpcServer, type Server } from "@irctc/grpc";
 import {
   InventoryServiceDefinition,
+  HealthDefinition,
   type InventoryServiceImplementation,
 } from "@irctc/contracts";
+import { healthHandler } from "./health.handler.js";
 import { logger } from "@irctc/logger";
 import { env } from "@config";
 
 let grpcServer: Server | undefined;
 
 /**
- * Boots the gRPC server using nice-grpc and binds the inventory handler.
+ * Boots the gRPC server using nice-grpc and binds the inventory and health handlers.
  * Uses centralized @irctc/grpc server factory with logging and domain error translation.
  *
  * @param port - TCP port to bind the gRPC server.
@@ -28,14 +30,12 @@ export const startGrpcServer = async (
   });
 
   grpcServer.add(InventoryServiceDefinition, handler);
+  grpcServer.add(HealthDefinition, healthHandler);
 
   const address = `0.0.0.0:${port}`;
   await grpcServer.listen(address);
 
-  logger.info(
-    { module: "grpc-server", port },
-    `gRPC server listening at ${address}`,
-  );
+  logger.info({ module: "grpc-server" }, `gRPC server listening at ${address}`);
 
   return grpcServer;
 };

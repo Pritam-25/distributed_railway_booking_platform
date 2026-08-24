@@ -4,7 +4,8 @@ import { z } from "zod";
 
 export const env = createEnv({
   server: {
-    PORT: z.coerce.number().int().min(1).max(65535).default(4005),
+    PORT: z.coerce.number().int().min(1).max(65535).default(4004),
+
     INVENTORY_GRPC_URL: z.string().default("localhost:50051"),
     PAYMENT_GRPC_URL: z.string().default("localhost:50052"),
     GRPC_INTERNAL_AUTH_TOKEN: z

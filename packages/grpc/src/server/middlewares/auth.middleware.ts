@@ -17,6 +17,12 @@ export function createInternalAuthServerMiddleware(expectedToken: string) {
     call: ServerMiddlewareCall<Request, Response>,
     context: CallContext,
   ) {
+    // Kubernetes native gRPC probes and standard gRPC health clients invoke
+    // grpc.health.v1.Health methods without authorization headers.
+    if (call.method.path.startsWith("/grpc.health.v1.Health/")) {
+      return yield* call.next(call.request, context);
+    }
+
     const authorization = context.metadata.get("authorization");
 
     if (!authorization?.startsWith("Bearer ")) {

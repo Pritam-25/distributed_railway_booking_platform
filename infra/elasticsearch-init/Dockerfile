@@ -11,16 +11,11 @@
 
 FROM alpine:3.20
 
-# Create a dedicated non-root user for the init script. SonarQube S6471
-# requires every container to drop to a non-root user, even one-shot
-# init containers: a future image-layer change could otherwise run
-# arbitrary commands with unrestricted host access.
-RUN addgroup -S init && adduser -S init -G init
+RUN addgroup -S init \
+ && adduser -S init -G init \
+ && apk add --no-cache bash curl jq
 
-RUN apk add --no-cache curl bash jq
-
-COPY --chown=init:init bootstrap-builtin-users.sh /usr/local/bin/bootstrap-builtin-users.sh
-RUN chmod +x /usr/local/bin/bootstrap-builtin-users.sh
+COPY --chown=root:root --chmod=0555 bootstrap-builtin-users.sh /usr/local/bin/bootstrap-builtin-users.sh
 
 # Drop privileges before the entrypoint runs.
 USER init

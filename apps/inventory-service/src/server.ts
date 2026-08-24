@@ -1,19 +1,12 @@
 /**
- * ## module/server
+ * `inventory-service` bootstrap for pure gRPC + Kafka architecture.
  *
- * `inventory-service` bootstrap. Registers the user-facing error messages,
- * wires dependencies, then delegates the full lifecycle to
- * `startServer` from `@irctc/http`.
+ * Registers user-facing error messages, connects network dependencies,
+ * starts inventory event consumers/publishers, and binds the gRPC server
+ * (InventoryService + canonical grpc.health.v1.Health).
  *
- * Service-specific glue (Kafka consumer start/stop) is owned by
- * `InventoryContainer.start()` / `InventoryContainer.disconnect()` and is
- * driven from the `afterListen` / `beforeShutdown` hooks. The framework
- * does not know about it.
- *
- * `startServer` owns:
- * - HTTP bind + signal handlers
- * - Graceful shutdown with `isShuttingDown` idempotency
- * - Telemetry shutdown (always the last step)
+ * Standard gRPC health checking (`grpc.health.v1.Health`) handles
+ * Kubernetes liveness (`service: "liveness"`) and readiness (`service: "readiness"`) probes.
  */
 
 import {
@@ -27,7 +20,7 @@ import {
 } from "@config";
 import { logger } from "@irctc/logger";
 import { registerErrorMessages } from "@irctc/errors";
-import { withTimeout, startServer, runBootstrap } from "@irctc/http";
+import { withTimeout, runBootstrap } from "@irctc/http";
 import { ERROR_MESSAGES } from "@utils/errors";
 
 // 1. Register user-facing error messages with the @irctc/errors registry.
@@ -35,7 +28,7 @@ registerErrorMessages(ERROR_MESSAGES);
 
 await runBootstrap({
   bootstrap: async () => {
-    // 2. Connect network dependencies BEFORE importing container and app.js.
+    // 2. Connect network dependencies BEFORE importing container and gRPC server.
     await withTimeout("Prisma connect", initPrisma());
     await withTimeout("Redis connect", initRedis());
     await withTimeout("Kafka connect", initKafka());
@@ -45,45 +38,78 @@ await runBootstrap({
       "All dependencies connected successfully.",
     );
 
-    // 3. Import container, app.js, and gRPC server.
+    // 3. Import container, gRPC server, and HealthChecker.
     const { InventoryContainer } = await import("@container");
-    const { default: app } = await import("./app.js");
-    const { startGrpcServer, stopGrpcServer } = await import("@grpc");
+    const { startGrpcServer, stopGrpcServer, HealthChecker } =
+      await import("@grpc");
 
-    await startServer({
-      app,
-      port: env.PORT,
-      environment: env.NODE_ENV,
-      serviceName: env.SERVICE_NAME,
-      afterListen: async () => {
-        logger.info(
-          { module: "server" },
-          "Starting inventory event consumers and outbox publisher worker...",
-        );
-        const container = InventoryContainer.getInstance();
-        await container.start();
+    // 4. Start inventory event consumers & outbox publisher worker.
+    logger.info(
+      { module: "server" },
+      "Starting inventory event consumers and outbox publisher worker...",
+    );
+    const container = InventoryContainer.getInstance();
+    await container.start();
 
-        await startGrpcServer(env.GRPC_PORT, container.inventoryGrpcHandler);
-      },
-      beforeShutdown: async () => {
-        logger.info(
-          { module: "server" },
-          "Stopping gRPC server and inventory event consumers...",
-        );
+    // 5. Start gRPC server on GRPC_PORT (e.g. 50051).
+    await startGrpcServer(env.GRPC_PORT, container.inventoryGrpcHandler);
+
+    logger.info(
+      { module: "server" },
+      "Inventory gRPC service is active and serving traffic.",
+    );
+
+    // 6. Graceful shutdown handler.
+    let isShuttingDown = false;
+    const handleShutdown = async (signal: string) => {
+      if (isShuttingDown) return;
+      isShuttingDown = true;
+
+      logger.info(
+        { module: "server", signal },
+        `Received ${signal}. Marking health as NOT_SERVING and initiating graceful shutdown...`,
+      );
+
+      // Step A: Immediately mark HealthState as NOT_SERVING for k8s probes and callers.
+      HealthChecker.getInstance().setShuttingDown(true);
+
+      try {
+        // Step B: Stop gRPC server (stop receiving new RPCs).
         await withTimeout("gRPC server stop", stopGrpcServer());
-        await InventoryContainer.getInstance().disconnect();
-      },
-      afterShutdown: async () => {
+
+        // Step C: Stop event consumers and outbox workers.
+        await container.disconnect();
+
+        // Step D: Disconnect network resources cleanly.
         await withTimeout("Kafka disconnect", disconnectKafka());
         await withTimeout("Redis disconnect", disconnectRedis());
         await withTimeout("Prisma disconnect", disconnectPrisma());
-      },
-    });
+
+        logger.info(
+          { module: "server" },
+          "Graceful shutdown completed successfully.",
+        );
+        process.exit(0);
+      } catch (err) {
+        logger.error(
+          { module: "server", err },
+          "Error during graceful shutdown",
+        );
+        process.exit(1);
+      }
+    };
+
+    process.once("SIGINT", () => handleShutdown("SIGINT"));
+    process.once("SIGTERM", () => handleShutdown("SIGTERM"));
   },
   onFailure: async () => {
-    const { stopGrpcServer } = await import("@grpc").catch(() => ({
-      stopGrpcServer: async () => {},
-    }));
+    const { stopGrpcServer, HealthChecker } = await import("@grpc").catch(
+      () => ({
+        stopGrpcServer: async () => {},
+        HealthChecker: { getInstance: () => ({ setShuttingDown: () => {} }) },
+      }),
+    );
+    HealthChecker.getInstance().setShuttingDown(true);
     await withTimeout("gRPC server stop", stopGrpcServer()).catch(() => {});
     await withTimeout("Kafka disconnect", disconnectKafka()).catch(() => {});
     await withTimeout("Redis disconnect", disconnectRedis()).catch(() => {});

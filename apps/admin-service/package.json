@@ -29,7 +29,6 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.19.21",
     "js-yaml": "^4.1.0",
-    "prisma": "^7.8.0",
     "tsc-alias": "^1.9.0",
     "tsx": "^4.23.0"
   },
@@ -42,8 +41,8 @@
     "@irctc/middleware": "workspace:*",
     "@irctc/openapi": "workspace:*",
     "@irctc/telemetry": "workspace:*",
-    "@prisma/adapter-pg": "^7.8.0",
-    "@prisma/client": "^7.8.0",
+    "@prisma/adapter-pg": "7.8.0",
+    "@prisma/client": "7.8.0",
     "@t3-oss/env-core": "^0.13.11",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
@@ -52,6 +51,7 @@
     "express": "^5.2.1",
     "helmet": "^8.2.0",
     "jsonwebtoken": "^9.0.2",
+    "prisma": "7.8.0",
     "zod": "^4.4.3"
   }
 }

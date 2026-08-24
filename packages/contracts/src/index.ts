@@ -15,3 +15,15 @@ export type {
 export { PaymentServiceDefinition } from "./generated/irctc/payment/v1/payment.js";
 
 export * from "./generated/irctc/inventory/v1/inventory.js";
+export type {
+  HealthClient,
+  HealthServiceImplementation,
+  HealthCheckRequest,
+  HealthCheckResponse,
+  HealthListRequest,
+  HealthListResponse,
+} from "./generated/grpc/health/v1/health.js";
+export {
+  HealthDefinition,
+  HealthCheckResponse_ServingStatus,
+} from "./generated/grpc/health/v1/health.js";
