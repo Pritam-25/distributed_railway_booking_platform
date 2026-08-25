@@ -3,13 +3,18 @@ import { Router } from "express";
 import {
   trustGatewayHeaders,
   asyncHandler,
+  validateHeaders,
   validateParams,
   validateSchema,
 } from "@irctc/middleware";
 
 import { bookingController } from "@container";
 
-import { bookingIdParamSchema, createBookingSchema } from "@dto";
+import {
+  bookingIdParamSchema,
+  createBookingHeadersSchema,
+  createBookingSchema,
+} from "@dto";
 
 /**
  * ## Booking Routes
@@ -29,6 +34,7 @@ router.use(trustGatewayHeaders);
 
 router.post(
   "/",
+  validateHeaders(createBookingHeadersSchema),
   validateSchema(createBookingSchema),
   asyncHandler((req, res) => bookingController.createBooking(req, res)),
 );

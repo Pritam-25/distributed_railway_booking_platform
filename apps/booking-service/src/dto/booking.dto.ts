@@ -91,7 +91,7 @@ export const createBookingSchema = z
   .openapi("CreateBookingRequest");
 
 export const createBookingHeadersSchema = z.object({
-  idempotencyKey: uuidSchema("Idempotency-Key"),
+  "idempotency-key": uuidSchema("idempotency-key"),
 });
 
 export type PassengerDto = z.infer<typeof passengerSchema>;

@@ -76,8 +76,17 @@ export class KafkaConsumerRunner {
             `${payload.topic} process`,
             { kind: SpanKind.CONSUMER },
             async (span) => {
+              const startTime = Date.now();
               try {
                 await handler(payload);
+                this.logger.info(
+                  {
+                    module: "kafka-consumer-runner",
+                    topic: payload.topic,
+                    durationMs: Date.now() - startTime,
+                  },
+                  `Kafka message successfully processed from topic "${payload.topic}"`,
+                );
               } catch (err) {
                 span.recordException(err as Error);
                 span.setStatus({
