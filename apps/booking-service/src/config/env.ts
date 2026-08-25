@@ -46,7 +46,7 @@ export const env = createEnv({
       .refine((brokers) => brokers.length > 0, {
         message: "KAFKA_BROKERS must include at least one broker",
       }),
-    KAFKA_CLIENT_ID: z.string().default("inventory-service"),
+    KAFKA_CLIENT_ID: z.string().default("booking-service"),
 
     /**
      * TTL for the Redis idempotency `PROCESSING` lease held while a

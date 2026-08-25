@@ -105,52 +105,43 @@ export class BookingService {
   async createBooking(
     userId: string,
     dto: CreateBookingDto,
+    idempotencyKey: string,
   ): Promise<CreateBookingResponse> {
     // 1. HTTP Idempotency Check (Fast path)
-
-    const existingCheck = await this.bookingRepository.findIdempotencyKey(
-      dto.idempotencyKey,
-    );
+    const existingCheck =
+      await this.bookingRepository.findIdempotencyKey(idempotencyKey);
 
     if (existingCheck) {
+      logger.info(
+        {
+          module: "createBooking",
+          idempotencyKey,
+          existingBookingId: existingCheck.id,
+        },
+        "Idempotency check passed for idempotency key, returning existing booking response.",
+      );
       const responseBody = existingCheck.responseBody as CreateBookingResponse;
       return responseBody;
     }
 
-    // 2. Synchronous gRPC pre-flight — schedule-level invariants only.
-    //    Surfaces SCHEDULE_NOT_FOUND / SCHEDULE_INACTIVE / TRAIN_ALREADY_DEPARTED
+    // 2. Synchronous gRPC pre-flight — schedule invariants, best-effort seat availability, seat inventory ID resolution, AND station sequence derivation in a single RPC call.
+    //    Surfaces SCHEDULE_NOT_FOUND / SCHEDULE_INACTIVE / TRAIN_ALREADY_DEPARTED / INVALID_SEAT_IDS / SEAT_UNAVAILABLE
     //    before any booking row is written, no Redis lock, no outbox row.
-    await this.inventoryAdapter.validateBooking(dto);
+    const { seatInventoryIds, fromSequence, toSequence } =
+      await this.inventoryAdapter.validateBooking(dto);
 
-    // 2b. Resolve booking-side seatIds → inventory-side seatInventoryIds.
-    //     Done OUTSIDE the prisma.s$transaction per the architecture rule
-    //     ("never hold a transaction while doing I/O outside the DB").
-    //     Uses the existing inventory gRPC channel; one round-trip per seat
-    //     in parallel. A future migration can replace this with a local
-    //     seat_inventory view in booking-service's Prisma schema.
-    const seatInventoryIds =
-      await this.inventoryAdapter.resolveSeatInventoryIds(
-        dto.scheduleId,
-        dto.seatIds,
-      );
-
-    // 3. Concurrency Lock: Acquire Redis distributed lock on seats (and optional journey legs) before DB transaction
+    // 3. Concurrency Lock: Acquire Redis distributed lock on seats & exact journey leg segments before DB transaction
     const bookingId = crypto.randomUUID();
     const lockTtlSeconds = Math.ceil(env.SEAT_HOLD_TTL_MS / 1000);
 
-    // Derive journey leg sequence indices for segment-based Redis seat locking
-    let legIndices: number[] | undefined = dto.legIndices;
-    if (
-      !legIndices &&
-      dto.fromSequence !== undefined &&
-      dto.toSequence !== undefined &&
-      dto.toSequence > dto.fromSequence
-    ) {
-      legIndices = Array.from(
-        { length: dto.toSequence - dto.fromSequence },
-        (_, i) => dto.fromSequence! + i,
-      );
-    }
+    // Authoritatively derive journey leg sequence indices from inventory gRPC validation
+    const legIndices =
+      toSequence > fromSequence
+        ? Array.from(
+            { length: toSequence - fromSequence },
+            (_, i) => fromSequence + i,
+          )
+        : undefined;
 
     const locksAcquired = await this.seatLockService.acquireSeatLocks({
       scheduleId: dto.scheduleId,
@@ -168,17 +159,18 @@ export class BookingService {
       );
     }
 
+    let isReplay = false;
     let result: CreateBookingResponse;
     try {
       result = await this.prisma.$transaction(
         async (tx) => {
           // 4. Re-verify idempotency inside transaction
-
           const existing = await this.bookingRepository.findIdempotencyKey(
-            dto.idempotencyKey,
+            idempotencyKey,
             tx,
           );
           if (existing) {
+            isReplay = true;
             return existing.responseBody as CreateBookingResponse;
           }
 
@@ -200,7 +192,6 @@ export class BookingService {
           );
 
           // 6. Persist seat rows + passenger rows.
-
           await this.bookingRepository.createSeats(
             dto.seatIds.map((seatId) => ({
               bookingId: booking.id,
@@ -208,6 +199,7 @@ export class BookingService {
             })),
             tx,
           );
+
           await this.bookingRepository.createPassengers(
             dto.passengers.map((passenger) => ({
               bookingId: booking.id,
@@ -220,7 +212,6 @@ export class BookingService {
           );
 
           // 7. Emit first BookingStatusChangedV1 row (PENDING with no previous status) to transactional outbox.
-
           const statusChangedPayload: BookingStatusChangedV1Type = {
             eventId: crypto.randomUUID(),
             bookingId: booking.id,
@@ -243,7 +234,6 @@ export class BookingService {
 
           // 7b. Saga log row (HOLD_SEATS, PENDING) so the orchestrator can
           //     advance the step to COMPLETED once the inventory reply lands.
-
           await this.sagaRepository.create(
             {
               bookingId: booking.id,
@@ -252,6 +242,7 @@ export class BookingService {
             },
             tx,
           );
+
           await this.sagaRepository.create(
             {
               bookingId: booking.id,
@@ -260,6 +251,7 @@ export class BookingService {
             },
             tx,
           );
+
           await this.sagaRepository.create(
             {
               bookingId: booking.id,
@@ -272,7 +264,6 @@ export class BookingService {
           // 7d. Emit BOOKING_HOLD_SEATS_REQUESTED outbox event. Inventory's
           //     hold-seats consumer will pick this up, allocate seats, and
           //     emit INVENTORY_SEATS_HELD (or _FAILED) back to us.
-
           const holdSeatsPayload: HoldSeatsRequestedV1Type = {
             eventId: crypto.randomUUID(),
             bookingId: booking.id,
@@ -281,8 +272,8 @@ export class BookingService {
             seatInventoryIds,
             fromStaionId: dto.fromStationId,
             toStationId: dto.toStationId,
-            fromSequence: dto.fromSequence ?? 0,
-            toSequence: dto.toSequence ?? 2147483647,
+            fromSequence,
+            toSequence,
             holdTtlMs: env.SEAT_HOLD_TTL_MS,
             createdAt: new Date(),
           };
@@ -296,15 +287,15 @@ export class BookingService {
           });
 
           // 8. Record the idempotency mapping so a retry returns the same booking.
-
           const responseBody: CreateBookingResponse = {
             id: booking.id,
             pnr: booking.pnr,
             status: booking.status,
           };
+
           await this.bookingRepository.createIdempotencyKey(
             {
-              idempotencyKey: dto.idempotencyKey,
+              idempotencyKey: idempotencyKey,
               bookingId: booking.id,
               responseBody: responseBody as unknown as Prisma.InputJsonValue,
             },
@@ -336,6 +327,7 @@ export class BookingService {
         },
         "Releasing Redis seat locks due to booking transaction failure",
       );
+
       await this.seatLockService.releaseSeatLocks({
         scheduleId: dto.scheduleId,
         seatIds: dto.seatIds,
@@ -343,6 +335,23 @@ export class BookingService {
         legIndices,
       });
       throw err;
+    }
+
+    if (isReplay) {
+      logger.info(
+        {
+          module: "booking-service",
+          idempotencyKey,
+          lockToken: bookingId,
+        },
+        "Releasing transient Redis seat locks acquired during in-transaction idempotency replay",
+      );
+      await this.seatLockService.releaseSeatLocks({
+        scheduleId: dto.scheduleId,
+        seatIds: dto.seatIds,
+        lockToken: bookingId,
+        legIndices,
+      });
     }
 
     return result;
@@ -359,18 +368,10 @@ export class BookingService {
   async findByIdForUser(userId: string, bookingId: string) {
     const booking = await this.bookingRepository.findById(bookingId);
     if (!booking) {
-      throw new ApiError(
-        statusCode.notFound,
-        ERROR_CODES.BOOKING_NOT_FOUND,
-        "The requested booking could not be found.",
-      );
+      throw new ApiError(statusCode.notFound, ERROR_CODES.BOOKING_NOT_FOUND);
     }
     if (booking.userId !== userId) {
-      throw new ApiError(
-        statusCode.forbidden,
-        ERROR_CODES.BOOKING_FORBIDDEN,
-        "You do not have permission to view or manage this booking.",
-      );
+      throw new ApiError(statusCode.forbidden, ERROR_CODES.BOOKING_FORBIDDEN);
     }
     return {
       id: booking.id,
@@ -568,7 +569,7 @@ export class BookingService {
         "gRPC call to payment-service failed for order creation.",
       );
       await this.sagaRepository
-        .update(
+        .upsert(
           bookingId,
           SagaStep.CREATE_PAYMENT,
           SagaStatus.FAILED,
@@ -584,7 +585,7 @@ export class BookingService {
     }
 
     await this.sagaRepository
-      .update(bookingId, SagaStep.CREATE_PAYMENT, SagaStatus.COMPLETED, null)
+      .upsert(bookingId, SagaStep.CREATE_PAYMENT, SagaStatus.COMPLETED, null)
       .catch(() => {});
 
     if (booking.status === BookingStatus.SEATS_HELD) {
@@ -622,7 +623,7 @@ export class BookingService {
 
     await this.markConfirming(bookingId);
     await this.markConfirmed(bookingId);
-    await this.sagaRepository.update(
+    await this.sagaRepository.upsert(
       bookingId,
       SagaStep.CONFIRM_SEATS,
       SagaStatus.COMPLETED,

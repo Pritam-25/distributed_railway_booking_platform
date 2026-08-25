@@ -9,6 +9,7 @@ import {
 import {
   EVENT_TYPES,
   KAFKA_TOPICS,
+  ValidateBookingResponse_Status,
   type HoldSeatsRequestedV1Type,
   type SeatAllocationV1Type,
   type SeatsHeldV1Type,
@@ -339,12 +340,14 @@ export class SeatAllocationService {
           tx,
         );
 
+        const now = new Date();
         const hasOverlap =
           await this.seatAllocationRepository.hasOverlappingAllocation(
             scheduleId,
             sortedSeatInventoryIds,
             effectiveFromSeq,
             effectiveToSeq,
+            now,
             tx,
           );
 
@@ -632,51 +635,6 @@ export class SeatAllocationService {
   }
 
   /**
-   * Fetches single seat details for a schedule and seat ID.
-   */
-  async getSeatDetails(scheduleId: string, seatId: string) {
-    const seat = await this.seatInventoryRepository.findByScheduleAndSeatId(
-      scheduleId,
-      seatId,
-    );
-    if (!seat) return null;
-    return {
-      scheduleId: seat.scheduleId,
-      seatId: seat.seatId,
-      seatInventoryId: seat.id,
-      trainId: seat.trainId,
-      coachId: seat.coachId,
-      coachNumber: seat.coachNumber,
-      seatNumber: seat.seatNumber,
-      seatType: seat.seatType,
-      pricePerKm: Number(seat.pricePerKm),
-      version: seat.version,
-    };
-  }
-
-  /**
-   * Fetches batch seat details for a schedule and seat IDs using single findMany query.
-   */
-  async getSeatsDetailsBatch(scheduleId: string, seatIds: string[]) {
-    const seats = await this.seatInventoryRepository.findByScheduleAndSeats(
-      scheduleId,
-      seatIds,
-    );
-    return seats.map((seat) => ({
-      scheduleId: seat.scheduleId,
-      seatId: seat.seatId,
-      seatInventoryId: seat.id,
-      trainId: seat.trainId,
-      coachId: seat.coachId,
-      coachNumber: seat.coachNumber,
-      seatNumber: seat.seatNumber,
-      seatType: seat.seatType,
-      pricePerKm: Number(seat.pricePerKm),
-      version: seat.version,
-    }));
-  }
-
-  /**
    * Fetches the full seat-map with dynamic seat availability status (AVAILABLE, HELD, BOOKED).
    */
   async getSeatMapData(
@@ -866,27 +824,45 @@ export class SeatAllocationService {
 
   /**
    * Pre-flight validation for booking requests.
+   * Validates schedule existence, status, train departure date, and best-effort seat availability when seatIds are provided.
    */
   async validateBooking(
     scheduleId: string,
     fromStationId: string,
     toStationId: string,
+    seatIds: string[],
     clientRequestedAt?: Date,
   ) {
     const schedule =
       await this.scheduleInventoryRepository.findByScheduleId(scheduleId);
-    if (!schedule) return { status: "SCHEDULE_NOT_FOUND", departureAt: "" };
+    if (!schedule)
+      return {
+        status: ValidateBookingResponse_Status.SCHEDULE_NOT_FOUND,
+        seatInventoryIds: [],
+        fromSequence: 0,
+        toSequence: 0,
+      };
     if (schedule.status !== ScheduleInventoryStatus.ACTIVE) {
-      return { status: "SCHEDULE_INACTIVE", departureAt: "" };
+      return {
+        status: ValidateBookingResponse_Status.SCHEDULE_INACTIVE,
+        seatInventoryIds: [],
+        fromSequence: 0,
+        toSequence: 0,
+      };
     }
 
-    const stops: RouteStop[] =
-      await this.routeStopRepository.findStopsByScheduleAndStations(
-        scheduleId,
-        [fromStationId, toStationId],
-      );
-    if (stops.length < 2) {
-      return { status: "SCHEDULE_INACTIVE", departureAt: "" };
+    const segment = await this.resolveSeatMapSegmentStops(
+      scheduleId,
+      fromStationId,
+      toStationId,
+    );
+    if (!segment) {
+      return {
+        status: ValidateBookingResponse_Status.INVALID_ROUTE,
+        seatInventoryIds: [],
+        fromSequence: 0,
+        toSequence: 0,
+      };
     }
 
     const requestedAt = clientRequestedAt ?? new Date();
@@ -895,12 +871,67 @@ export class SeatAllocationService {
       requestedAt.getTime() >
       schedule.departureDate.getTime() + toleranceMs
     ) {
-      return { status: "TRAIN_ALREADY_DEPARTED", departureAt: "" };
+      return {
+        status: ValidateBookingResponse_Status.TRAIN_ALREADY_DEPARTED,
+        seatInventoryIds: [],
+        fromSequence: segment.fromSequence,
+        toSequence: segment.toSequence,
+      };
+    }
+
+    // 1. Check duplicate seat IDs
+    if (new Set(seatIds).size !== seatIds.length) {
+      return {
+        status: ValidateBookingResponse_Status.INVALID_SEAT_IDS,
+        seatInventoryIds: [],
+        fromSequence: segment.fromSequence,
+        toSequence: segment.toSequence,
+      };
+    }
+
+    // 2. Fetch seat inventory rows to verify existence & schedule belonging
+    const seats = await this.seatInventoryRepository.findByScheduleAndSeats(
+      scheduleId,
+      seatIds,
+    );
+    if (seats.length !== seatIds.length) {
+      return {
+        status: ValidateBookingResponse_Status.INVALID_SEAT_IDS,
+        seatInventoryIds: [],
+        fromSequence: segment.fromSequence,
+        toSequence: segment.toSequence,
+      };
+    }
+
+    // Preserve input seatIds ordering
+    const seatMap = new Map(seats.map((s) => [s.seatId, s.id]));
+    const seatInventoryIds = seatIds.map((id) => seatMap.get(id)!);
+
+    // 3. Check for active (CONFIRMED or unexpired HELD) overlapping allocations
+    const now = new Date();
+    const hasOverlap =
+      await this.seatAllocationRepository.hasOverlappingAllocation(
+        scheduleId,
+        seatInventoryIds,
+        segment.fromSequence,
+        segment.toSequence,
+        now,
+      );
+
+    if (hasOverlap) {
+      return {
+        status: ValidateBookingResponse_Status.SEAT_UNAVAILABLE,
+        seatInventoryIds: [],
+        fromSequence: segment.fromSequence,
+        toSequence: segment.toSequence,
+      };
     }
 
     return {
-      status: "OK",
-      departureAt: schedule.departureDate.toISOString(),
+      status: ValidateBookingResponse_Status.OK,
+      seatInventoryIds,
+      fromSequence: segment.fromSequence,
+      toSequence: segment.toSequence,
     };
   }
 }

@@ -13,4 +13,9 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
     "One or more requested seats could not be held for this booking.",
   SEAT_HOLD_EXPIRED:
     "The seat hold for this booking has expired before confirmation.",
+  INVALID_SEAT_IDS: "One or more selected seats are invalid for this schedule.",
+  SEAT_UNAVAILABLE:
+    "One or more selected seats are no longer available for this journey.",
+  INVALID_ROUTE:
+    "The requested origin and destination stations are invalid for this train route.",
 };

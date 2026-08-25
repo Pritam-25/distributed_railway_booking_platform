@@ -83,13 +83,14 @@ export class SeatAllocationRepository {
   }
 
   /**
-   * Checks if any active (HELD or CONFIRMED) allocation overlaps with the specified segment range.
+   * Checks if any active (CONFIRMED or unexpired HELD) allocation overlaps with the specified segment range.
    * Segment overlap occurs when allocation.fromSequence < toSequence AND allocation.toSequence > fromSequence.
    *
    * @param scheduleId - The unique ID of the schedule.
    * @param seatInventoryIds - Array of seat inventory IDs.
    * @param fromSequence - Origin stop sequence number.
    * @param toSequence - Destination stop sequence number.
+   * @param now - Reference timestamp to evaluate hold expirations against.
    * @param tx - Optional Prisma transaction client.
    * @returns True if overlapping allocation exists, false otherwise.
    */
@@ -98,6 +99,7 @@ export class SeatAllocationRepository {
     seatInventoryIds: string[],
     fromSequence: number,
     toSequence: number,
+    now: Date = new Date(),
     tx?: Prisma.TransactionClient,
   ): Promise<boolean> {
     const count = await this.getClient(tx).seatAllocation.count({
@@ -106,7 +108,13 @@ export class SeatAllocationRepository {
         seatInventoryId: { in: seatInventoryIds },
         fromSequence: { lt: toSequence },
         toSequence: { gt: fromSequence },
-        status: { in: [AllocationStatus.HELD, AllocationStatus.CONFIRMED] },
+        OR: [
+          { status: AllocationStatus.CONFIRMED },
+          {
+            status: AllocationStatus.HELD,
+            holdExpiresAt: { gt: now },
+          },
+        ],
       },
     });
     return count > 0;

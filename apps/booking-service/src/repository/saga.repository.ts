@@ -54,26 +54,27 @@ export class SagaRepository {
   }
 
   /**
-   * Updates an existing `SagaLog` row's `status` and optional `error`
-   * fields, scoped by `(bookingId, step)`.
+   * Idempotently updates or creates a `SagaLog` row's `status` and optional
+   * `error` fields, scoped by `(bookingId, step)`.
    *
    * @param bookingId - The booking UUID.
-   * @param step - Saga step to update.
+   * @param step - Saga step to update or create.
    * @param status - New saga status.
    * @param error - Optional error message.
    * @param tx - Optional transaction client.
-   * @returns The updated `SagaLog` row, or `null` when no row matched.
+   * @returns The upserted `SagaLog` row.
    */
-  async update(
+  async upsert(
     bookingId: string,
     step: SagaStep,
     status: SagaStatus,
-    error: string | null,
+    error: string | null = null,
     tx?: Prisma.TransactionClient,
   ) {
-    return this.getClient(tx).sagaLog.update({
+    return this.getClient(tx).sagaLog.upsert({
       where: { bookingId_step: { bookingId, step } },
-      data: { status, error },
+      update: { status, error },
+      create: { bookingId, step, status, error },
     });
   }
 

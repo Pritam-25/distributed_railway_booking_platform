@@ -136,7 +136,7 @@ export class BookingSagaOrchestrator {
         });
 
         // 4. Advance the saga log.
-        await this.sagaRepository.update(
+        await this.sagaRepository.upsert(
           bookingId,
           SagaStep.HOLD_SEATS,
           SagaStatus.COMPLETED,
@@ -219,7 +219,7 @@ export class BookingSagaOrchestrator {
             where: { id: bookingId },
             data: { failureReason: message },
           });
-          await this.sagaRepository.update(
+          await this.sagaRepository.upsert(
             bookingId,
             SagaStep.HOLD_SEATS,
             SagaStatus.FAILED,
@@ -280,7 +280,7 @@ export class BookingSagaOrchestrator {
             booking.version + 1,
             tx,
           );
-          await this.sagaRepository.update(
+          await this.sagaRepository.upsert(
             bookingId,
             SagaStep.HOLD_SEATS,
             SagaStatus.COMPENSATED,
@@ -363,7 +363,7 @@ export class BookingSagaOrchestrator {
         }
 
         // 1. Advance CREATE_PAYMENT step in saga log to COMPLETED
-        await this.sagaRepository.update(
+        await this.sagaRepository.upsert(
           bookingId,
           SagaStep.CREATE_PAYMENT,
           SagaStatus.COMPLETED,
@@ -375,7 +375,7 @@ export class BookingSagaOrchestrator {
         await this.bookingService.confirmPayment(bookingId, booking.userId);
 
         // 3. Advance CONFIRM_SEATS step in saga log to COMPLETED
-        await this.sagaRepository.update(
+        await this.sagaRepository.upsert(
           bookingId,
           SagaStep.CONFIRM_SEATS,
           SagaStatus.COMPLETED,

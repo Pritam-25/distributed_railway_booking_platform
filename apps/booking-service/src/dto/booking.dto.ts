@@ -3,14 +3,24 @@ import { PassengerGender, BookingStatus } from "@generated/prisma/client.js";
 import { z } from "zod";
 
 /**
- * Reusable UUID schema factory with a configurable error message.
+ * Reusable UUID schema factory that produces type-safe UUID validation with:
+ * - Configurable label for precise error messages
+ * - Distinguishes between missing (`undefined`) and invalid UUID formats
+ * - Returns `z.ZodError` with appropriate issue messages
  *
- * @param message - Error message used when the value is not a valid UUID.
+ * @param label - Human-readable field label (e.g. "Schedule ID").
  */
-export const uuidSchema = (message = "Invalid UUID format") =>
-  z.uuid(message).openapi({
-    example: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
-  });
+export const uuidSchema = (label = "UUID") =>
+  z
+    .uuid({
+      error: (issue) =>
+        issue.input === undefined
+          ? `${label} is required`
+          : `${label} must be a valid UUID`,
+    })
+    .openapi({
+      example: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+    });
 
 export const passengerSchema = z
   .object({
@@ -50,15 +60,11 @@ export const passengerSchema = z
 
 export const createBookingSchema = z
   .object({
-    idempotencyKey: uuidSchema("Idempotency key must be a valid UUID"),
-    scheduleId: uuidSchema("Schedule ID must be a valid UUID"),
-    fromStationId: uuidSchema("From station ID must be a valid UUID"),
-    toStationId: uuidSchema("To station ID must be a valid UUID"),
-    fromSequence: z.number().int().min(1).optional(),
-    toSequence: z.number().int().min(2).optional(),
-    legIndices: z.array(z.number().int().min(1)).optional(),
+    scheduleId: uuidSchema("Schedule ID"),
+    fromStationId: uuidSchema("From station ID"),
+    toStationId: uuidSchema("To station ID"),
     seatIds: z
-      .array(uuidSchema("Each seat ID must be a valid UUID"), {
+      .array(uuidSchema("Each seat ID"), {
         message: "seatIds must be an array",
       })
       .min(1, "At least 1 seat must be selected")
@@ -84,12 +90,17 @@ export const createBookingSchema = z
   })
   .openapi("CreateBookingRequest");
 
+export const createBookingHeadersSchema = z.object({
+  idempotencyKey: uuidSchema("Idempotency-Key"),
+});
+
 export type PassengerDto = z.infer<typeof passengerSchema>;
 export type CreateBookingDto = z.infer<typeof createBookingSchema>;
+export type CreateBookingHeaders = z.infer<typeof createBookingHeadersSchema>;
 
 export const createBookingResponseSchema = z
   .object({
-    id: uuidSchema("Booking ID must be a valid UUID"),
+    id: uuidSchema("Booking ID"),
     pnr: z.string().openapi({
       example: "K3M7NP2R4X",
       description: "10-character alphanumeric PNR.",
@@ -101,7 +112,18 @@ export const createBookingResponseSchema = z
 export type CreateBookingResponse = z.infer<typeof createBookingResponseSchema>;
 
 export const bookingIdParamSchema = z.object({
-  bookingId: uuidSchema("Booking ID must be a valid UUID"),
+  bookingId: uuidSchema("Booking ID"),
 });
 
 export type BookingIdParamDto = z.infer<typeof bookingIdParamSchema>;
+
+export const payBookingResponseSchema = z
+  .object({
+    paymentOrderId: uuidSchema("Payment Order ID"),
+    razorpayOrderId: z.string().openapi({ example: "order_123456789" }),
+    keyId: z.string().openapi({ example: "rzp_test_12345" }),
+    status: z.string().openapi({ example: "CREATED" }),
+  })
+  .openapi("PayBookingResponse");
+
+export type PayBookingResponse = z.infer<typeof payBookingResponseSchema>;

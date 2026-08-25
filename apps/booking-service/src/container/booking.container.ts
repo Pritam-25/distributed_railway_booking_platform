@@ -14,11 +14,8 @@ import {
 import { IdempotencyRepository } from "@irctc/redis";
 import { logger } from "@irctc/logger";
 import { CONSUMER_GROUPS } from "@irctc/contracts";
-import { BookingEventBroadcaster } from "../sse/booking-event-broadcaster.js";
-import {
-  SeatsResultConsumer,
-  PaymentResultConsumer,
-} from "../consumers/index.js";
+import { BookingEventBroadcaster } from "@sse";
+import { SeatsResultConsumer, PaymentResultConsumer } from "@consumers";
 import {
   getInventoryGrpcClient,
   InventoryAdapter,

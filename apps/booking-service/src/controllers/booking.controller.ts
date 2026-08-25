@@ -3,7 +3,11 @@ import { statusCode, successResponse } from "@irctc/http";
 
 import { ApiError, COMMON_ERROR_CODES } from "@irctc/errors";
 import { type BookingService } from "@services";
-import { type BookingIdParamDto, type CreateBookingDto } from "@dto";
+import {
+  createBookingHeadersSchema,
+  type BookingIdParamDto,
+  type CreateBookingDto,
+} from "@dto";
 
 /**
  * ## BookingController
@@ -39,7 +43,15 @@ export class BookingController {
     const userId = this.requireUserId(req);
     const body = req.body as CreateBookingDto;
 
-    const result = await this.bookingService.createBooking(userId, body);
+    const { idempotencyKey } = createBookingHeadersSchema.parse({
+      idempotencyKey: req.headers["idempotency-key"],
+    });
+
+    const result = await this.bookingService.createBooking(
+      userId,
+      body,
+      idempotencyKey,
+    );
 
     res
       .status(statusCode.created)
