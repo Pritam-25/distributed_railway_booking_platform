@@ -1,6 +1,4 @@
 /**
- * ## module/server
- *
  * `api-gateway` bootstrap. Registers the user-facing error messages,
  * wires dependencies, then delegates the full lifecycle to
  * `startServer` from `@irctc/http`.
@@ -14,19 +12,27 @@
 import { env, initRedis, disconnectRedis } from "@config";
 import { logger } from "@irctc/logger";
 import { registerErrorMessages } from "@irctc/errors";
-import { withTimeout, startServer, runBootstrap } from "@irctc/http";
+import {
+  startServer,
+  runBootstrap,
+  runSteps,
+  runShutdownSteps,
+  type BoundedStep,
+} from "@irctc/http";
 import { ERROR_MESSAGES } from "@utils/error";
 
 // 1. Register user-facing error messages with the @irctc/errors registry.
 registerErrorMessages(ERROR_MESSAGES);
 
+const shutdownSteps: BoundedStep[] = [["Redis disconnect", disconnectRedis]];
+
 await runBootstrap({
   bootstrap: async () => {
     // 2. Connect Redis BEFORE importing app.js.
-    await withTimeout("Redis connect", initRedis());
+    await runSteps([["Redis connect", initRedis]]);
     logger.info(
       { module: "server" },
-      "All dependencies connected successfully.",
+      "External infrastructure connected successfully.",
     );
 
     // 3. Dynamically import app.js.
@@ -37,12 +43,8 @@ await runBootstrap({
       port: env.PORT,
       environment: env.NODE_ENV,
       serviceName: env.SERVICE_NAME,
-      afterShutdown: async () => {
-        await withTimeout("Redis disconnect", disconnectRedis());
-      },
+      afterShutdown: () => runShutdownSteps(shutdownSteps),
     });
   },
-  onFailure: async () => {
-    await withTimeout("Redis disconnect", disconnectRedis()).catch(() => {});
-  },
+  onFailure: () => runShutdownSteps(shutdownSteps, true),
 });

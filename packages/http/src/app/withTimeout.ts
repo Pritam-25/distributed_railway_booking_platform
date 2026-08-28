@@ -1,13 +1,4 @@
 /**
- * ## module/withTimeout
- *
- * Bounded `Promise.race` wrapper that rejects a step after `ms` if it does
- * not complete in time. Used by every service's startup and shutdown
- * sequence so a hung dependency cannot keep the pod alive past the k8s
- * grace window.
- */
-
-/**
  * Executes a promise-based operation with a maximum timeout threshold.
  *
  * @param label - Diagnostic label used in the timeout error message.

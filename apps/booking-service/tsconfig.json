@@ -38,7 +38,6 @@
       "@consumers": ["./src/consumers/index.js"],
       "@grpc": ["./src/grpc/index.js"],
       "@sse": ["./src/sse/index.js"],
-      "@health": ["./src/health/index.js"],
       "@utils/errors": ["./src/utils/errors/index.js"],
       "@dto": ["./src/dto/index.js"],
       "@mappers": ["./src/mappers/index.js"],

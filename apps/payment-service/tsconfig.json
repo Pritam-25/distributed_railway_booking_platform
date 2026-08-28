@@ -31,7 +31,6 @@
     "paths": {
       "@config": ["./src/config/index.js"],
       "@container": ["./src/container/index.js"],
-      "@health": ["./src/health/index.js"],
       "@routes": ["./src/api/v1/routes/index.js"],
       "@services": ["./src/services/index.js"],
       "@repository": ["./src/repository/index.js"],

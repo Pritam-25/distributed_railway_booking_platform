@@ -107,6 +107,11 @@ export class OutboxPublisherWorker {
    * @returns A promise resolving when the worker cycle has safely terminated.
    */
   async stop(): Promise<void> {
+    this.logger?.info(
+      { module: "outbox-worker" },
+      "Stopping outbox publisher worker...",
+    );
+
     this.running = false;
 
     if (this.pollTimer) clearTimeout(this.pollTimer);

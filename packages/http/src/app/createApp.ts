@@ -1,6 +1,4 @@
 /**
- * ## module/createApp
- *
  * Express app factory that wires the canonical middleware stack:
  * helmet, body parsers, cookie parser, request id, request logger, health
  * router, versioned routes, not-found handler, error handler.
@@ -70,6 +68,7 @@ const DEFAULT_CORS_ALLOWED_HEADERS = [
   "Content-Type",
   "Authorization",
   "X-Request-ID",
+  "idempotency-key",
   "traceparent",
   "baggage",
   "Cache-Control",

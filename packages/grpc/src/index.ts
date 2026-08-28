@@ -1,3 +1,4 @@
+export * from "./types.js";
 export * from "./errors/mapper.js";
 export * from "./server/factory.js";
 export * from "./server/middlewares/logging.middleware.js";
@@ -8,20 +9,4 @@ export * from "./client/middlewares/deadline.middleware.js";
 export * from "./client/middlewares/logging.middleware.js";
 export * from "./client/middlewares/auth.middleware.js";
 export * from "./metadata/index.js";
-
-// Re-export core nice-grpc transport primitives
-export {
-  ServerError,
-  ClientError,
-  Status,
-  Metadata,
-  createChannel,
-} from "nice-grpc";
-
-export type {
-  Server,
-  Channel,
-  CallContext,
-  ServerMiddlewareCall,
-  ClientMiddlewareCall,
-} from "nice-grpc";
+export * from "./health/index.js";

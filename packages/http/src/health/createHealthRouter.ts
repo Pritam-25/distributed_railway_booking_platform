@@ -1,47 +1,16 @@
-/**
- * ## module/health/createHealthRouter
- *
- * Builds the Express router that serves Kubernetes `/health/live` and
- * `/health/ready` endpoints from a list of `HealthDependency` adapters.
- *
- * The framework owns the response envelope, dedup timing, and per-probe
- * timeout. Service code lives in `apps/<service>/src/health/dependencies.ts`
- * and registers the actual probes.
- */
-
 import { Router } from "express";
 import type { Request, Response } from "express";
 import { logger } from "@irctc/logger";
 import { statusCode } from "../constants/statusCodes.js";
 import { successResponse, errorResponse } from "../response/apiResponse.js";
 import { ApiError, COMMON_ERROR_CODES } from "@irctc/errors";
-import { withTimeout } from "../withTimeout.js";
-import type { HealthChecks, HealthDependency } from "./types.js";
-
-/**
- * Options for `createHealthRouter`.
- */
-export interface CreateHealthRouterOptions {
-  /**
-   * Probes to run for the `/health/ready` endpoint. Each probe is bounded
-   * by `probeTimeoutMs` and deduplicated internally by the adapter.
-   */
-  dependencies: HealthDependency[];
-  /**
-   * Per-probe timeout in milliseconds. Default `5000`.
-   *
-   * Each probe is wrapped in `withTimeout(label, dep.check(), probeTimeoutMs)`.
-   * If the adapter has its own deduplication (the recommended pattern), the
-   * timeout applies to the *newest* in-flight probe.
-   */
-  probeTimeoutMs?: number;
-}
+import { withTimeout } from "../app/withTimeout.js";
+import type { CreateHealthRouterOptions, HealthChecks } from "./types.js";
 
 /**
  * Builds the Kubernetes-friendly health router.
  *
  * ### Routes
- *
  * - `GET /live` — liveness. Returns `200 { status: "alive", uptime }` if the
  *   process is up. Performs no dependency calls. Used by k8s liveness probe
  *   to decide whether to restart the pod.
@@ -59,7 +28,6 @@ export interface CreateHealthRouterOptions {
  *   window.
  *
  * ### Side Effects
- *
  * - **Logger**: emits `WARN` for individual probe failures, `ERROR` for
  *   aggregate failures.
  *
@@ -74,8 +42,6 @@ export const createHealthRouter = (
 
   /**
    * Liveness probe — returns 200 as long as the process is up.
-   *
-   * Performs no dependency calls.
    */
   router.get("/live", (_req: Request, res: Response): void => {
     res.status(statusCode.success).json(
@@ -99,7 +65,7 @@ export const createHealthRouter = (
       );
 
       const checks: HealthChecks = Object.fromEntries(
-        probeResults.map((r) => [r.name, r]),
+        dependencies.map((dep, index) => [dep.name, probeResults[index]!]),
       );
 
       const allHealthy = probeResults.every((r) => r.ok);

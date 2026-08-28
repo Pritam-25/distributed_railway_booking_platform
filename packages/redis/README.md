@@ -1,50 +1,74 @@
 # @irctc/redis
 
-Centralized Redis client initialization and idempotency tracking repository for the IRCTC-style distributed railway booking platform.
+Centralized Redis client initialization, dedicated Pub/Sub subscriber client creation, readiness health checking, and idempotency tracking repository for the IRCTC-style distributed railway booking platform.
 
 ## Features
 
-- **Centralized Client Creation:** Scopes connection logic, retry backoff algorithms, and observability hooks in a single constructor.
-- **OpenTelemetry ESM Workaround:** Bypasses ESM static load hooks by resolving `ioredis` dynamically at runtime using `createRequire`, enabling auto-instrumentation compatibility with `@opentelemetry/instrumentation-ioredis`.
+- **Centralized Client Creation:** Scopes connection logic, exponential retry backoff, and direct `@irctc/logger` event hooks in simple constructor helpers.
+- **Dedicated Pub/Sub Subscriber Client:** Provides `createSubscriberClient` pre-configured with `maxRetriesPerRequest: null`, `enableReadyCheck: false`, and `autoResubscribe: true` required by `ioredis` for subscriber connections.
+- **Readiness Health Checking:** `checkRedisHealth` executes readiness PING probes with bounded timeouts.
 - **Atomic Lua-backed Idempotency Lock:** Implements a Lua-scripted `IdempotencyRepository` to ensure exactly-once processing of Kafka event payloads under concurrent consumer workers.
+- **Centralized Types:** Re-exports Redis client interfaces, options, and health results from `src/types.ts`.
 
 ## Directory Structure
 
 ```text
 packages/redis/
 ├── src/
-│   ├── client.ts                  # Centralized Redis connection creator
-│   ├── idempotency.repository.ts  # Redis-backed idempotency helper
+│   ├── client.ts                  # Command and Subscriber connection creators
+│   ├── health.ts                  # Redis readiness PING probe check
+│   ├── idempotency.repository.ts  # Lua-backed idempotency repository
+│   ├── types.ts                   # Centralized Redis types & health result signatures
 │   └── index.ts                   # Main entry point exports
 ```
 
 ## Usage
 
-### 1. Initializing the Redis Client
+### 1. Initializing Redis Command & Subscriber Clients
 
 ```typescript
-import { createRedisClient } from "@irctc/redis";
-import { env } from "./config.js";
+import {
+  createRedisClient,
+  createSubscriberClient,
+  initRedis,
+  disconnectRedis,
+} from "@irctc/redis";
+import { env } from "@config";
 
-const redis = createRedisClient(env.REDIS_URL, {
-  maxRetriesPerRequest: 3,
-});
+// Command client (GET, SET, PING, PUBLISH)
+const redis = createRedisClient(env.REDIS_URL);
+
+// Subscriber client (SUBSCRIBE)
+const redisSubscriber = createSubscriberClient(env.REDIS_URL);
+
+// Bootstrap connection check
+await initRedis(redis);
+
+// Graceful cleanup
+await disconnectRedis(redis);
 ```
 
-### 2. Safeguarding Message Processing (Exactly-Once Semantics)
+### 2. Readiness Health Checking
 
-Utilize the `IdempotencyRepository` in consumers to guarantee that duplicate redeliveries do not trigger side effects twice:
+```typescript
+import { checkRedisHealth } from "@irctc/redis";
+
+const health = await checkRedisHealth(redis);
+// { name: "redis", ok: true, latencyMs: 3 }
+```
+
+### 3. Safeguarding Message Processing (Exactly-Once Semantics)
 
 ```typescript
 import { IdempotencyRepository } from "@irctc/redis";
-import { redisClient } from "@config";
+import { redis } from "@config";
 
 // Setup repository with lease (in-flight lock) and processed retention
 const idempotencyRepo = new IdempotencyRepository(
-  redisClient,
+  redis,
   30, // Lock lease time: 30 seconds
   86400, // Final PROCESSED retention log: 24 hours
-  "booking-service-otp-idempotency", // isolated keyspace namespace
+  "notification-service-otp-idempotency", // isolated keyspace namespace
 );
 
 const handleEvent = async (

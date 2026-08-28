@@ -31,6 +31,7 @@ const app = createApp({
           version: "1.0.0",
           endpoints: {
             health: "/health",
+            payments: "/payments",
           },
         }),
       );

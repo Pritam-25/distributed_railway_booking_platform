@@ -1,3 +1,16 @@
+/**
+ * `payment-service` bootstrap. Registers user-facing error messages,
+ * wires network dependencies, then delegates full HTTP lifecycle management
+ * to `startServer` from `@irctc/http`.
+ *
+ * Background tasks (Outbox publisher & gRPC server) are managed via
+ * `PaymentContainer` in the `afterListen` and `beforeShutdown` hooks.
+ *
+ * `startServer` owns:
+ * - HTTP bind + signal handlers
+ * - Graceful shutdown with `isShuttingDown` idempotency
+ * - Telemetry shutdown (always the last step)
+ */
 import {
   env,
   initPrisma,
@@ -9,7 +22,12 @@ import {
 } from "@config";
 import { logger } from "@irctc/logger";
 import { registerErrorMessages } from "@irctc/errors";
-import { withTimeout, startServer, runBootstrap } from "@irctc/http";
+import {
+  startServer,
+  runBootstrap,
+  runSteps,
+  runShutdownSteps,
+} from "@irctc/http";
 import { ERROR_MESSAGES } from "@utils/errors";
 
 // 1. Register user-facing error messages with the @irctc/errors registry.
@@ -18,13 +36,15 @@ registerErrorMessages(ERROR_MESSAGES);
 await runBootstrap({
   bootstrap: async () => {
     // 2. Connect network dependencies BEFORE importing container and app.js.
-    await withTimeout("Prisma connect", initPrisma());
-    await withTimeout("Redis connect", initRedis());
-    await withTimeout("Kafka connect", initKafka());
+    await runSteps([
+      ["Prisma connect", initPrisma],
+      ["Redis connect", initRedis],
+      ["Kafka connect", initKafka],
+    ]);
 
     logger.info(
       { module: "server" },
-      "All dependencies connected successfully.",
+      "External infrastructure connected successfully.",
     );
 
     // 3. Dynamically import container, app.js, and gRPC tools after dependencies are ready.
@@ -38,29 +58,21 @@ await runBootstrap({
       environment: env.NODE_ENV,
       serviceName: env.SERVICE_NAME,
       afterListen: async () => {
-        logger.info(
-          { module: "server" },
-          "Starting payment outbox worker & gRPC server...",
-        );
-
         const container = PaymentContainer.getInstance();
         container.start();
 
         await startGrpcServer(env.GRPC_PORT, container.paymentGrpcHandler);
       },
       beforeShutdown: async () => {
-        logger.info(
-          { module: "server" },
-          "Stopping gRPC server & payment outbox worker...",
-        );
-        await withTimeout("gRPC server stop", stopGrpcServer());
+        await runShutdownSteps([["gRPC server stop", stopGrpcServer]]);
         await PaymentContainer.getInstance().disconnect();
       },
-      afterShutdown: async () => {
-        await withTimeout("Kafka disconnect", disconnectKafka());
-        await withTimeout("Redis disconnect", disconnectRedis());
-        await withTimeout("Prisma disconnect", disconnectPrisma());
-      },
+      afterShutdown: () =>
+        runShutdownSteps([
+          ["Kafka disconnect", disconnectKafka],
+          ["Redis disconnect", disconnectRedis],
+          ["Prisma disconnect", disconnectPrisma],
+        ]),
     });
   },
   onFailure: async () => {
@@ -68,9 +80,14 @@ await runBootstrap({
       stopGrpcServer: async () => {},
     }));
 
-    await withTimeout("gRPC server stop", stopGrpcServer()).catch(() => {});
-    await withTimeout("Kafka disconnect", disconnectKafka()).catch(() => {});
-    await withTimeout("Redis disconnect", disconnectRedis()).catch(() => {});
-    await withTimeout("Prisma disconnect", disconnectPrisma()).catch(() => {});
+    await runShutdownSteps(
+      [
+        ["gRPC server stop", stopGrpcServer],
+        ["Kafka disconnect", disconnectKafka],
+        ["Redis disconnect", disconnectRedis],
+        ["Prisma disconnect", disconnectPrisma],
+      ],
+      true,
+    );
   },
 });

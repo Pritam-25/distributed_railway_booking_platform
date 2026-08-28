@@ -1,10 +1,14 @@
-import { createGrpcServer, type Server } from "@irctc/grpc";
+import {
+  createGrpcServer,
+  createGrpcHealthHandler,
+  type Server,
+} from "@irctc/grpc";
 import {
   InventoryServiceDefinition,
   HealthDefinition,
   type InventoryServiceImplementation,
 } from "@irctc/contracts";
-import { healthHandler } from "./health.handler.js";
+import { healthDependencies } from "./health.dependencies.js";
 import { logger } from "@irctc/logger";
 import { env } from "@config";
 
@@ -29,13 +33,20 @@ export const startGrpcServer = async (
     },
   });
 
+  const healthHandler = createGrpcHealthHandler({
+    dependencies: healthDependencies,
+  });
+
   grpcServer.add(InventoryServiceDefinition, handler);
   grpcServer.add(HealthDefinition, healthHandler);
 
   const address = `0.0.0.0:${port}`;
   await grpcServer.listen(address);
 
-  logger.info({ module: "grpc-server" }, `gRPC server listening at ${address}`);
+  logger.info(
+    { module: "grpc-server" },
+    `gRPC server listening at ${address} in (${env.NODE_ENV}) mode`,
+  );
 
   return grpcServer;
 };

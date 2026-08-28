@@ -1,6 +1,4 @@
 /**
- * ## module/server
- *
  * `notification-service` worker bootstrap. The service has no HTTP port;
  * it only runs Kafka consumers. Lifecycle is delegated to `startServer`
  * in `"worker"` mode from `@irctc/http`.
@@ -24,17 +22,30 @@ import {
   disconnectRedis,
 } from "@config";
 import { logger } from "@irctc/logger";
-import { withTimeout, startServer, runBootstrap } from "@irctc/http";
+import {
+  startServer,
+  runBootstrap,
+  runSteps,
+  runShutdownSteps,
+  type BoundedStep,
+} from "@irctc/http";
+
+const shutdownSteps: BoundedStep[] = [
+  ["Kafka disconnect", disconnectKafka],
+  ["Redis disconnect", disconnectRedis],
+];
 
 await runBootstrap({
   bootstrap: async () => {
     // 1. Connect worker network dependencies BEFORE importing container.
     logger.info({ module: "server" }, "Bootstrapping worker dependencies...");
-    await withTimeout("Redis connect", initRedis());
-    await withTimeout("Kafka connect", initKafka());
+    await runSteps([
+      ["Redis connect", initRedis],
+      ["Kafka connect", initKafka],
+    ]);
     logger.info(
       { module: "server" },
-      "All connection channels established successfully.",
+      "External infrastructure connected successfully.",
     );
 
     // 2. Import container and start event consumers via afterListen hook.
@@ -55,14 +66,8 @@ await runBootstrap({
       beforeShutdown: async () => {
         await NotificationContainer.getInstance().disconnect();
       },
-      afterShutdown: async () => {
-        await withTimeout("Kafka disconnect", disconnectKafka());
-        await withTimeout("Redis disconnect", disconnectRedis());
-      },
+      afterShutdown: () => runShutdownSteps(shutdownSteps),
     });
   },
-  onFailure: async () => {
-    await withTimeout("Kafka disconnect", disconnectKafka()).catch(() => {});
-    await withTimeout("Redis disconnect", disconnectRedis()).catch(() => {});
-  },
+  onFailure: () => runShutdownSteps(shutdownSteps, true),
 });

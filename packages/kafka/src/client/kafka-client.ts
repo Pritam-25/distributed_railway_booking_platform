@@ -1,9 +1,10 @@
-import { KafkaJS } from "@confluentinc/kafka-javascript";
-import type { LoggerLike } from "../consumer-runner/kafka-consumer-runner.js";
-
-const { Kafka: ConfluentKafka, logLevel } = KafkaJS;
-type Kafka = KafkaJS.Kafka;
-type KafkaConfig = KafkaJS.KafkaConfig;
+import {
+  ConfluentKafka,
+  logLevel,
+  type Kafka,
+  type KafkaConfig,
+  type LoggerLike,
+} from "../types.js";
 
 export type CreateKafkaClientOptions = Omit<Partial<KafkaConfig>, "logger"> & {
   logger?: LoggerLike;

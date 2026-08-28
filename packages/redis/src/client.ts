@@ -41,10 +41,10 @@ export const createRedisClient = (
     ...overrideOptions,
   });
 
-  // Wires comprehensive observability hooks for Grafana Loki/Tempo tracking
-  client.on("connect", () =>
-    logger.info({ module: "redis" }, "Redis connection initiating..."),
-  );
+  // Wires observability hooks
+  client.on("connect", () => {
+    // logger.info({ module: "redis" }, "Redis connection initiating..."),
+  });
   client.on("ready", () =>
     logger.info({ module: "redis" }, "Redis connected successfully."),
   );
@@ -68,4 +68,75 @@ export const createRedisClient = (
   );
 
   return client;
+};
+
+/**
+ * Creates a dedicated Redis Subscriber client optimized for long-lived Pub/Sub connections.
+ * Sets `maxRetriesPerRequest: null`, `enableReadyCheck: false`, and `autoResubscribe: true`
+ * as required by ioredis for subscriber connections.
+ *
+ * @param url - Connection string (e.g. `redis://localhost:6379`).
+ * @param overrideOptions - Optional overrides.
+ */
+export const createSubscriberClient = (
+  url: string,
+  overrideOptions?: RedisOptions,
+): RedisType => {
+  return createRedisClient(url, {
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
+    autoResubscribe: true,
+    ...overrideOptions,
+  });
+};
+
+/**
+ * Ensures a Redis client is connected and ready to process commands during server bootstrap.
+ *
+ * @param client - Initialized Redis client instance.
+ * @param timeoutMs - Bootstrap connection timeout in milliseconds (defaults to 5000ms).
+ */
+export const initRedis = async (
+  client: RedisType,
+  timeoutMs = 5000,
+): Promise<void> => {
+  if (client.status === "ready") return;
+
+  return new Promise((resolve, reject) => {
+    const onReady = () => {
+      clearTimeout(timeout);
+      client.off("error", onError);
+      resolve();
+    };
+
+    const onError = (err: Error) => {
+      clearTimeout(timeout);
+      client.off("ready", onReady);
+      reject(err);
+    };
+
+    const timeout = setTimeout(() => {
+      client.off("ready", onReady);
+      client.off("error", onError);
+      reject(new Error("Redis connection timed out during bootstrap"));
+    }, timeoutMs);
+
+    client.once("ready", onReady);
+    client.once("error", onError);
+  });
+};
+
+/**
+ * Gracefully closes an active Redis client connection.
+ *
+ * @param client - Initialized Redis client instance.
+ */
+export const disconnectRedis = async (client: RedisType): Promise<void> => {
+  if (client.status !== "end") {
+    logger.info(
+      { module: "redis" },
+      "Gracefully closing Redis connection channels",
+    );
+    await client.quit();
+  }
 };

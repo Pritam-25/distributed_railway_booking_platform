@@ -1,118 +1,96 @@
 # @irctc/http
 
-Centralized HTTP utilities, context management, and response formatters for the IRCTC-style distributed railway booking platform.
+Centralized HTTP application factory, context management, standardized JSON response formatters, and Kubernetes readiness/liveness router for the IRCTC-style distributed railway booking platform.
 
 ## Features
 
-- **Request Context (`AsyncLocalStorage`):** Scopes request-specific metadata (such as `requestId`) down the call stack using Node's `AsyncLocalStorage`.
-- **OpenTelemetry Correlation:** Integrates with `@opentelemetry/api` to resolve the current active span's `traceId` automatically.
-- **Standardized Response Envelopes:** Standard success, paginated, and error wrappers that normalize metadata (`requestId`, `traceId`, `timestamp`).
-- **HTTP Status Code Mapping:** Immutable mapping constants for standard HTTP status code values.
+- **Express App Composition (`createApp`):** Mounts security headers (Helmet), CORS, JSON parsers, health probes, and standard middleware pipelines in a single constructor.
+- **Kubernetes Health Probe Router (`createHealthRouter`):** Mounts `/health/live` (process liveness) and `/health/ready` (dependency probes with bounded timeouts).
+- **Dependency Health Adapters:** Includes readiness check helpers `checkDatabaseHealth` (Prisma) and `checkElasticsearchHealth`.
+- **Request Context (`AsyncLocalStorage`):** Scopes request-specific metadata (`requestId`) down call stacks automatically using Node's `AsyncLocalStorage`.
+- **OpenTelemetry Correlation:** Integrates with `@opentelemetry/api` to capture trace IDs (`getTraceId`).
+- **Standardized Response Envelopes:** Standard success, paginated, and error wrappers that format responses with correlation metadata (`requestId`, `traceId`, `timestamp`).
 
 ## Directory Structure
 
 ```text
 packages/http/
 ├── src/
+│   ├── app/        # Express application factory (createApp)
+│   ├── health/     # Kubernetes health router & readiness probes
 │   ├── constants/  # Standard HTTP status code constants
 │   ├── context/    # AsyncLocalStorage and OpenTelemetry context accessors
 │   ├── response/   # Standardized API response formatters
+│   ├── types.ts    # Centralized HTTP & health check types
 │   └── index.ts    # Main entry point exports
 ```
 
 ## Usage
 
-### 1. Request Context Scoping
-
-Use `runWithRequestContext` inside Express middleware or routing pipelines to isolate request contexts:
+### 1. Creating an Express Application (`createApp`)
 
 ```typescript
-import { runWithRequestContext } from "@irctc/http";
-import { v4 as uuidv4 } from "uuid";
+import {
+  createApp,
+  createHealthRouter,
+  checkDatabaseHealth,
+} from "@irctc/http";
+import { checkRedisHealth } from "@irctc/redis";
+import {
+  requestIdMiddleware,
+  requestLoggerMiddleware,
+  errorHandler,
+  notFoundHandler,
+} from "@irctc/middleware";
+import { prisma, redis } from "@config";
+import router from "./routes/index.js";
 
-app.use((req, res, next) => {
-  const requestId = (req.headers["x-request-id"] as string) || uuidv4();
-  runWithRequestContext({ requestId }, () => {
-    next();
-  });
+const healthRouter = createHealthRouter({
+  dependencies: [
+    { name: "database", check: () => checkDatabaseHealth(prisma) },
+    { name: "redis", check: () => checkRedisHealth(redis) },
+  ],
+});
+
+const app = createApp({
+  serviceName: "booking-service",
+  router,
+  healthRouter,
+  middleware: {
+    requestId: requestIdMiddleware,
+    requestLogger: requestLoggerMiddleware,
+    notFoundHandler,
+    errorHandler,
+  },
 });
 ```
 
-### 2. Standardized Responses
-
-Use the helper formatters to return consistent JSON payloads from controllers:
-
-#### Success Response
+### 2. Standardized Response Envelopes
 
 ```typescript
-import { successResponse, statusCode } from "@irctc/http";
+import {
+  successResponse,
+  paginatedResponse,
+  errorResponse,
+  statusCode,
+} from "@irctc/http";
 
+// Success Response
 res.status(statusCode.success).json(
-  successResponse("User retrieved successfully", {
-    id: "user-1",
+  successResponse("User profile retrieved successfully", {
+    id: "u-123",
     name: "Alice",
   }),
 );
-```
 
-Yields payload:
-
-```json
-{
-  "success": true,
-  "message": "User retrieved successfully",
-  "data": { "id": "user-1", "name": "Alice" },
-  "meta": {
-    "requestId": "4fa8-...",
-    "traceId": "9b1deb...",
-    "timestamp": "2026-07-20T02:00:00.000Z"
-  }
-}
-```
-
-#### Paginated Response
-
-```typescript
-import { paginatedResponse, statusCode } from "@irctc/http";
-
+// Paginated Response
 res.status(statusCode.success).json(
   paginatedResponse("Bookings list", {
-    data: [{ id: "booking-1" }],
-    metadata: {
-      total: 100,
-      page: 1,
-      limit: 10,
-      totalPages: 10,
-    },
+    data: [{ id: "b-1" }],
+    metadata: { total: 100, page: 1, limit: 10, totalPages: 10 },
   }),
 );
+
+// Error Response
+res.status(statusCode.badRequest).json(errorResponse(error));
 ```
-
-#### Error Response
-
-Automatically maps and normalizes raw errors (or custom exceptions from `@irctc/errors`) into safe envelopes:
-
-```typescript
-import { errorResponse, statusCode } from "@irctc/http";
-
-try {
-  throw new Error("Invalid request parameter");
-} catch (err) {
-  res.status(statusCode.badRequest).json(errorResponse(err));
-}
-```
-
-## APIs Reference
-
-### Context Helpers
-
-- `getRequestId()`: Retrieves the `requestId` from the active AsyncLocalStorage request store.
-- `getTraceId()`: Extracts the W3C trace ID from the active OpenTelemetry span context.
-
-### Status Code Mapping
-
-`statusCode` provides read-only properties for:
-
-- Successful codes (`success: 200`, `created: 201`, `noContent: 204`)
-- Client error codes (`badRequest: 400`, `unauthorized: 401`, `forbidden: 403`, `notFound: 404`, `conflict: 409`, `unprocessable: 422`)
-- Server error codes (`internalError: 500`, `badGateway: 502`, `serviceUnavailable: 503`)

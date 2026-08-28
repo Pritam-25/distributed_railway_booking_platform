@@ -1,15 +1,3 @@
-/**
- * ## module/app
- *
- * `admin-service` Express application. The framework boilerplate
- * (helmet, CORS, body parsers, cookie parser, request id, request
- * logger, `/health`, not-found handler, error handler) is wired by
- * `createApp` from `@irctc/http`. Middleware is injected to avoid a
- * cycle with `@irctc/middleware`.
- *
- * The root banner is appended here so the service-specific route
- * catalogue stays alongside the routes.
- */
 import type { Request, Response } from "express";
 import { successResponse, statusCode, createApp } from "@irctc/http";
 import {
