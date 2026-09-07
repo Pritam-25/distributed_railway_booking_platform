@@ -258,6 +258,26 @@ describe("CircuitBreaker Timeouts", () => {
     assert.strictEqual(timeoutCalled, 1);
     assert.strictEqual(cb.getStats().failureCount, 1);
   });
+
+  test("should allow overriding timeoutMs to 0 to disable timeout for long-lived operations", async () => {
+    let timeoutCalled = 0;
+    const cb = new CircuitBreaker({
+      name: "test-cb",
+      timeoutMs: 30,
+      onCircuitTimeout: () => {
+        timeoutCalled++;
+      },
+    });
+
+    const result = await cb.execute(
+      () => delay(50).then(() => "long-running-stream"),
+      { timeoutMs: 0 },
+    );
+
+    assert.strictEqual(result, "long-running-stream");
+    assert.strictEqual(timeoutCalled, 0);
+    assert.strictEqual(cb.getStats().failureCount, 0);
+  });
 });
 
 describe("CircuitBreaker Manual Operations", () => {

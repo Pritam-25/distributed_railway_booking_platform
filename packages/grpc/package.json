@@ -17,6 +17,7 @@
     "lint:fix": "eslint . --fix --no-error-on-unmatched-pattern"
   },
   "dependencies": {
+    "@irctc/contracts": "workspace:*",
     "@irctc/errors": "workspace:*",
     "@irctc/logger": "workspace:*",
     "nice-grpc": "^2.1.10",

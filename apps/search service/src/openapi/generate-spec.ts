@@ -22,7 +22,7 @@ try {
         description: "API Gateway Proxy URL",
       },
       {
-        url: "http://localhost:4004",
+        url: "http://localhost:4003",
         description: "Local Direct Search Service URL",
       },
     ],

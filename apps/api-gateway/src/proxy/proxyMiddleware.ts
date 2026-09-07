@@ -154,8 +154,20 @@ export const createProxyHandler = (route: RouteConfig): RequestHandler => {
       path: req.originalUrl,
     };
 
+    const isStreaming =
+      route.isStreaming === true ||
+      req.headers.accept?.includes("text/event-stream") ||
+      req.headers.upgrade?.toLowerCase() === "websocket" ||
+      Boolean(req.originalUrl?.includes("/seat-events")) ||
+      Boolean(req.path?.includes("/seat-events")) ||
+      Boolean(req.originalUrl?.includes("/events")) ||
+      Boolean(req.path?.includes("/events"));
+
     try {
-      await breaker.execute(() => runProxy(proxy, req, res));
+      await breaker.execute(
+        () => runProxy(proxy, req, res),
+        isStreaming ? { timeoutMs: 0 } : undefined,
+      );
 
       const durationMs = Date.now() - startTime;
       const statusCode = res.statusCode;

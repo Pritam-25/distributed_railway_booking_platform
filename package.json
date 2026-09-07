@@ -8,7 +8,7 @@
     "codegen": "turbo run generate:api && pnpm run format",
     "docs": "turbo run sync:postman",
     "sync:postman": "tsx scripts/sync-postman.ts",
-    "prepare": "husky",
+    "prepare": "husky || true",
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",
     "test": "turbo run test",

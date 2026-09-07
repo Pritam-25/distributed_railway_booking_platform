@@ -6,53 +6,15 @@ import "google/protobuf/timestamp.proto";
 
 // InventoryService provides RPC methods to query seat inventory details.
 service InventoryService {
-  // GetSeatDetails queries the seat details for a given schedule and seat ID.
-  rpc GetSeatDetails (GetSeatDetailsRequest) returns (GetSeatDetailsResponse);
-  // GetSeatsDetailsBatch queries seat details for multiple seats in a single batch call.
-  rpc GetSeatsDetailsBatch (GetSeatsDetailsBatchRequest) returns (GetSeatsDetailsBatchResponse);
   // GetSeatMap returns the full seat-map (coaches + seats) for a schedule,
   // marked with bookings that overlap the (from_station, to_station) segment.
   rpc GetSeatMap (GetSeatMapRequest) returns (GetSeatMapResponse);
-  // ValidateBooking is the synchronous schedule-level pre-flight called by
-  // BookingService.createBooking before any booking row is written. It surfaces
-  // the cheap invariants (schedule exists, schedule ACTIVE, departure time
-  // still in the future) that would otherwise produce a useless PENDING →
-  // SagaLog(HOLD_SEATS) → INVENTORY_SEATS_HOLD_FAILED round-trip.
+  // ValidateBooking performs best-effort synchronous pre-flight validation before
+  // BookingService.createBooking persists a booking. It validates schedule
+  // invariants and, when seat_ids is provided, performs a best-effort check that
+  // the requested seats do not currently have overlapping CONFIRMED or active HELD
+  // allocations for the requested journey segment.
   rpc ValidateBooking (ValidateBookingRequest) returns (ValidateBookingResponse);
-}
-
-// GetSeatDetailsRequest contains the parameters for fetching seat details.
-message GetSeatDetailsRequest {
-  string schedule_id = 1;
-  string seat_id = 2;
-}
-
-// GetSeatsDetailsBatchRequest contains the parameters for fetching batch seat details.
-message GetSeatsDetailsBatchRequest {
-  string schedule_id = 1;
-  repeated string seat_ids = 2;
-}
-
-// GetSeatsDetailsBatchResponse contains batch detailed seat information.
-message GetSeatsDetailsBatchResponse {
-  repeated GetSeatDetailsResponse seats = 1;
-}
-
-// GetSeatDetailsResponse contains detailed seat information.
-message GetSeatDetailsResponse {
-  string schedule_id      = 1;
-  string seat_id          = 2;
-  // Inventory-side row UUID. Booking-service needs this when emitting
-  // BOOKING_HOLD_SEATS_REQUESTED so the consumer can write the matching
-  // SeatAllocation rows.
-  string seat_inventory_id = 10;
-  string train_id         = 3;
-  string coach_id         = 4;
-  string coach_number     = 5;
-  int32  seat_number      = 6;
-  string seat_type        = 7;
-  double price_per_km     = 8;
-  int32  version          = 9;
 }
 
 // GetSeatMapRequest contains the parameters for fetching a full seat-map.
@@ -96,8 +58,8 @@ message SeatMapSeat {
 }
 
 // ValidateBookingRequest is the synchronous pre-flight payload sent by
-// BookingService.createBooking. Carries enough information for inventory-service
-// to reject the obvious schedule-level failures before the booking row is
+// BookingService.createBooking. Carries information for inventory-service
+// to reject obvious schedule or seat availability failures before the booking row is
 // written.
 message ValidateBookingRequest {
   string schedule_id      = 1;
@@ -107,20 +69,38 @@ message ValidateBookingRequest {
   // the request. Used to compare against the schedule's departure date so
   // both services agree on "has the train left?".
   google.protobuf.Timestamp client_requested_at = 4;
+  // Seats selected by the passenger. When provided, inventory validates that
+  // none has an overlapping CONFIRMED allocation or an unexpired HELD
+  // allocation for the requested journey segment.
+  repeated string seat_ids = 5;
 }
 
-// ValidateBookingResponse carries a simple status discriminator:
-//
-//   - "OK"                    : schedule is active and the train has not yet departed.
-//   - "SCHEDULE_NOT_FOUND"    : no schedule with `schedule_id` exists.
-//   - "SCHEDULE_INACTIVE"     : schedule exists but is cancelled.
-//   - "TRAIN_ALREADY_DEPARTED": departure date has passed (with a small
-//                               clock-skew tolerance — see inventory handler).
-//
-// `departure_at` is populated only when status == OK, as an ISO-8601 UTC
-// string the caller can echo back to the user.
+// ValidateBookingResponse carries validation status and resolved metadata.
+// `seat_inventory_ids`, `from_sequence`, and `to_sequence` are populated only when status == OK.
 message ValidateBookingResponse {
-  string status       = 1;
-  string departure_at = 2;
+  // Status represents the result of booking pre-flight validation.
+  enum Status {
+    // Default/unspecified value. Callers must not treat this as success.
+    STATUS_UNSPECIFIED = 0;
+    // Schedule, route, and requested seats passed validation.
+    OK = 1;
+    // Schedule does not exist.
+    SCHEDULE_NOT_FOUND = 2;
+    // Schedule exists but is not active.
+    SCHEDULE_INACTIVE = 3;
+    // The (from_station, to_station) segment is invalid for this schedule route.
+    INVALID_ROUTE = 4;
+    // Departure date has passed (with a small clock-skew tolerance).
+    TRAIN_ALREADY_DEPARTED = 5;
+    // One or more requested seat IDs do not exist for this schedule or are duplicated.
+    INVALID_SEAT_IDS = 6;
+    // One or more requested seats have an overlapping active allocation.
+    SEAT_UNAVAILABLE = 7;
+  }
+
+  Status status                      = 1;
+  repeated string seat_inventory_ids = 2;
+  int32 from_sequence                = 3;
+  int32 to_sequence                  = 4;
 }
 

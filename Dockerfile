@@ -1,68 +1,73 @@
 # syntax=docker/dockerfile:1.7
 #
-# Single, parameterized Dockerfile for every IRCTC application service.
-# Build a specific service with:
+# Parameterized Dockerfile for IRCTC Node.js backend microservices.
+# (Note: Frontend Next.js app uses dedicated `Dockerfile.web`).
 #
-#   docker build --build-arg SERVICE=user-service -t irctc-user-service .
+# Build a specific backend service with:
 #
-# The SERVICE argument drives `turbo prune`, the optional Prisma generate
-# step, the build filter, and the deploy filter.
-#
-# Why this exists: six per-service Dockerfiles caused `pnpm install` to run
-# six times in parallel during `docker compose build`. Each install pounded
-# registry.npmjs.org, hitting rate limits and socket timeouts. This file
-# shares every cacheable layer between services and configures pnpm with
-# knobs that survive parallel registry contention.
+#   docker build --build-arg SERVICE=inventory-service -t irctc-inventory-service .
 
 # ==========================================================
-# Stage 1 — Prune the monorepo to just this service's deps
+# Stage 0a — Shared build base image with pnpm & turbo pre-installed
 # ==========================================================
-FROM node:22-slim AS pruner
-
-ARG SERVICE
+FROM node:22-slim AS base
 
 WORKDIR /repo
 
 ENV CI=true
 ENV TURBO_TELEMETRY_DISABLED=1
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
 
-# Install only the `turbo` binary globally — `turbo prune` only needs
-# the workspace structure, not the full dependency graph, so we skip
-# a full `pnpm install` here. The pruned output (out/json) drives the
-# install in the build stage.
-#
+# Install pnpm and turbo ONCE in the base image. Because this stage has no
+# ARG SERVICE, Docker BuildKit builds and caches this layer EXACTLY ONCE across
+# all microservices, preventing parallel npm network contention.
+RUN --mount=type=cache,target=/root/.npm \
+    npm config set fetch-retries 10 \
+ && npm config set fetch-retry-mintimeout 20000 \
+ && npm config set fetch-retry-maxtimeout 180000 \
+ && npm config set fetch-timeout 600000 \
+ && npm install -g pnpm@11.17.0 turbo@2.9.18 --ignore-scripts
+
+# ==========================================================
+# Stage 0b — Shared runtime base image with health probe toolchain
+# ==========================================================
+FROM node:22-slim AS runtime_base
+
+# Install wget & copy gRPC health probe binary ONCE across all microservices.
+# Because this stage has no ARG SERVICE, Docker BuildKit resolves ghcr.io metadata
+# EXACTLY ONCE, preventing parallel gRPC connection drops during docker compose build.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates wget \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/grpc-ecosystem/grpc-health-probe:v0.4.35 /ko-app/grpc-health-probe /usr/local/bin/grpc_health_probe
+
+# ==========================================================
+# Stage 1 — Prune the monorepo to just this service's deps
+# ==========================================================
+FROM base AS pruner
+
+ARG SERVICE
+
 # `pnpm-lock.yaml` is required: `turbo prune` reads it to compute which
-# transitive dependencies belong in `out/json/`. Without it, prune aborts
-# with "Cannot prune without parsed lockfile".
+# transitive dependencies belong in `out/json/`.
 COPY package.json pnpm-lock.yaml turbo.json pnpm-workspace.yaml ./
 COPY apps ./apps
 COPY packages ./packages
 
-# Pin the turbo version to whatever is in the root package.json so the
-# build stays reproducible. `npm install -g turbo@<version>` is a single
-# small registry fetch per build, replacing the previous pattern of
-# running a full `pnpm install` against the entire monorepo lockfile.
-RUN TURBO_VERSION=$(node -e "console.log(require('./package.json').devDependencies.turbo.replace(/^[~^]/, ''))") \
- && npm install -g "pnpm@11.17.0" "turbo@${TURBO_VERSION}" --ignore-scripts \
- && turbo prune "${SERVICE}" --docker
+RUN turbo prune "${SERVICE}" --docker
 
 # ==========================================================
 # Stage 2 — Install full deps, build, and deploy to /deploy
 # ==========================================================
-FROM node:22-slim AS build
+FROM base AS build
 
 ARG SERVICE
-
-WORKDIR /repo
-
-ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
-
-RUN npm install -g pnpm@11.17.0 --ignore-scripts
+ENV npm_config_nodedir=/usr/local
 
 # Build toolchain required by `pnpm rebuild @confluentinc/kafka-javascript`
-# (librdkafka native bindings). Carried only by the build stage, never the
-# runtime image.
+# (librdkafka native bindings).
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates g++ make python3 \
  && rm -rf /var/lib/apt/lists/*
@@ -71,76 +76,44 @@ RUN apt-get update \
 # lockfile for this service changes.
 COPY --from=pruner /repo/out/json/ ./
 
-# Install with knobs that keep pnpm polite when six builds run together.
-# `--config.<kebab>=value` coerces everything to string and trips pnpm 11.17's
-# numeric parsers ("Expected `concurrency` to be a number … got `8` (string)").
-# Settings are written to `.npmrc` instead — pnpm parses these natively and
-# the file is local to this stage (never reaches the runtime image).
-#
-#   verify-deps-before-run=false  skip per-attestation fetch (also: see
-#                                 `trustLockfile: true` in
-#                                 pnpm-workspace.yaml)
-#   network-concurrency=8         cap parallel registry sockets
-#   fetch-retries=10              survive transient undici socket drops;
-#                                 bumped from 5 because pnpm-bundled
-#                                 installers (e.g. node-pre-gyp) retry
-#                                 independently of the registry step
-#   fetch-timeout=300000          ms per registry request (5 min); bumped
-#                                 from 60s so the per-package installer
-#                                 survives GitHub's anti-throttle on
-#                                 parallel release-asset downloads
 RUN echo "verify-deps-before-run=false" > .npmrc \
- && echo "network-concurrency=2"         >> .npmrc \
- && echo "fetch-retries=15"              >> .npmrc \
- && echo "fetch-retry-mintimeout=20000"  >> .npmrc \
- && echo "fetch-retry-maxtimeout=180000" >> .npmrc \
- && echo "fetch-timeout=600000"          >> .npmrc
+ && echo "network-concurrency=1"         >> .npmrc \
+ && echo "fetch-retries=5"               >> .npmrc \
+ && echo "fetch-retry-mintimeout=10000"  >> .npmrc \
+ && echo "fetch-retry-maxtimeout=60000"  >> .npmrc \
+ && echo "fetch-timeout=300000"          >> .npmrc
 
-# Per-service cache mount. Scoping the ID by ${SERVICE} stops the six
-# parallel builds from queueing on a single shared cache lock; each build
-# now reads from its own warm store and writes back at the end.
-#
-# Why this still works in parallel: each install copies roughly the same
-# ~830 packages. `network-concurrency=8` caps pnpm's per-process socket
-# pool, so even though 6 builds run together, pnpm opens at most 8
-# sockets per process (48 total) — well under registry rate limits.
-# Shared cache mount across services so common monorepo packages are downloaded once.
-RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
-    pnpm install --frozen-lockfile --ignore-scripts \
+# Shared cache mount across services so common monorepo packages are downloaded once and reused locally.
+# sharing=locked prevents parallel Docker Compose service builds from corrupting shared store cache.
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,sharing=locked \
+    --mount=type=cache,id=pnpm-cache,target=/root/.cache/pnpm,sharing=locked \
+    pnpm install --frozen-lockfile --ignore-scripts --filter="${SERVICE}..." \
  && pnpm rebuild
 
 # Bring in the full source tree.
 COPY --from=pruner /repo/out/full/ ./
 
-# Install `turbo` globally in the build stage as well, pinned to the
-# version declared in the root `package.json`. This avoids a second
-# `pnpm install` against the lockfile (which would need to be combined
-# with `--frozen-lockfile` to keep dependency resolution locked) and
-# keeps the global binary on PATH for the `turbo run build` step below.
-RUN TURBO_VERSION=$(node -e "console.log(require('./package.json').devDependencies.turbo.replace(/^[~^]/, ''))") \
- && npm install -g "turbo@${TURBO_VERSION}" --ignore-scripts
-
-# Generate Prisma client only when the service owns a Prisma schema. The
-# three services with one today are user-service, admin-service, and
-# inventory-service. api-gateway, notification-service, and search-service
-# have no `prisma/schema.prisma`, so the prisma binary isn't installed
-# and `pnpm exec prisma` errors with "Command prisma not found". The `if`
-# guard prevents the noisy error on every build; the runtime `prisma
-# migrate deploy` step in compose handles regeneration if needed.
-RUN if [ -f "apps/${SERVICE}/prisma/schema.prisma" ]; then \
-       pnpm --filter="${SERVICE}" exec prisma generate || true; \
+# Generate Prisma client only when the service owns a Prisma schema.
+# Mount /root/.cache/prisma so downloaded Prisma engine binaries are cached across Docker builds.
+RUN --mount=type=cache,id=prisma-cache,target=/root/.cache/prisma,sharing=locked \
+    if [ -f "apps/${SERVICE}/prisma/schema.prisma" ]; then \
+       pnpm --filter="${SERVICE}" exec prisma generate; \
     fi
 
 # Build the service and its workspace dependencies.
 RUN turbo run build --filter="${SERVICE}"
 
-# Produce a flat, standalone deployment package.
-RUN pnpm --filter="${SERVICE}" deploy /deploy --prod --legacy
+# Produce a flat, standalone production deployment package.
+# --legacy is required because this workspace uses a shared lockfile and
+# does not use inject-workspace-packages.
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,sharing=locked \
+    --mount=type=cache,id=pnpm-cache,target=/root/.cache/pnpm,sharing=locked \
+    pnpm --filter="${SERVICE}" deploy /deploy --prod --legacy --prefer-offline
 
 # ==========================================================
 # Stage 3 — Runtime
 # ==========================================================
-FROM node:22-slim AS runtime
+FROM runtime_base AS runtime
 
 WORKDIR /deploy
 

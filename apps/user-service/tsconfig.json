@@ -17,7 +17,6 @@
       "@dto": ["./src/dto/index.ts"],
       "@mappers": ["./src/mappers/index.js"],
       "@publishers": ["./src/publishers/index.js"],
-      "@health": ["./src/health/index.js"],
       "@generated/*": ["./src/generated/*"]
     }
   },

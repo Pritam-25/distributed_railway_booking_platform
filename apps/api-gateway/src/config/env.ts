@@ -37,9 +37,9 @@ export const env = createEnv({
     // matching entry in `upstreams.ts` for each new service.
     USER_UPSTREAM: z.url().default("http://localhost:4001"),
     ADMIN_UPSTREAM: z.url().default("http://localhost:4002"),
-    BOOKING_UPSTREAM: z.url().default("http://localhost:4005"),
-    SEARCH_UPSTREAM: z.url().default("http://localhost:4004"),
-    PAYMENT_UPSTREAM: z.url().default("http://localhost:4006"),
+    SEARCH_UPSTREAM: z.url().default("http://localhost:4003"),
+    BOOKING_UPSTREAM: z.url().default("http://localhost:4004"),
+    PAYMENT_UPSTREAM: z.url().default("http://localhost:4005"),
 
     JWT_SECRET: z.string().min(1),
 

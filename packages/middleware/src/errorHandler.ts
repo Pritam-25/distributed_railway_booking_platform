@@ -26,7 +26,7 @@ import { ApiError, COMMON_ERROR_CODES, normalizeError } from "@irctc/errors";
  * @returns A standardized JSON error response, or delegates to the next
  * error handler if the response has already begun.
  */
-const errorHandlerMiddleware: ErrorRequestHandler = (err, req, res, next) => {
+export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
   // Delegate to Express if the response has already started.
   if (res.headersSent) {
     return next(err);
@@ -92,4 +92,4 @@ const errorHandlerMiddleware: ErrorRequestHandler = (err, req, res, next) => {
     .json(errorResponse(operationalError));
 };
 
-export default errorHandlerMiddleware;
+export default errorHandler;

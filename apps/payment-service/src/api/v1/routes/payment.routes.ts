@@ -1,10 +1,17 @@
-import express, { Router } from "express";
-import { asyncHandler, validateSchema } from "@irctc/middleware";
+import { Router } from "express";
+import {
+  asyncHandler,
+  validateSchema,
+  validateParams,
+} from "@irctc/middleware";
 import { PaymentContainer } from "@container";
-import { verifyPaymentSchema } from "@dto";
+import {
+  verifyPaymentSchema,
+  paymentOrderIdParamSchema,
+  refundPaymentRequestSchema,
+} from "@dto";
 
 const router: Router = Router();
-const rawBodyMiddleware = express.raw({ type: "application/json" });
 
 /**
  * Verify Razorpay payment signature from client checkout modal.
@@ -19,12 +26,24 @@ router.post(
 );
 
 /**
+ * Initiate a payment refund directly via HTTP.
+ * Endpoint: POST /api/v1/payments/:paymentOrderId/refund
+ */
+router.post(
+  "/:paymentOrderId/refund",
+  validateParams(paymentOrderIdParamSchema),
+  validateSchema(refundPaymentRequestSchema),
+  asyncHandler((req, res) =>
+    PaymentContainer.getInstance().paymentController.refundPayment(req, res),
+  ),
+);
+
+/**
  * Webhook endpoint for Razorpay payment captured/failed events.
  * Endpoint: POST /api/v1/payments/webhook
  */
 router.post(
   "/webhook",
-  rawBodyMiddleware,
   asyncHandler((req, res) =>
     PaymentContainer.getInstance().paymentController.handleWebhook(req, res),
   ),

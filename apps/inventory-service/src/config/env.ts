@@ -4,8 +4,8 @@ import { z } from "zod";
 
 export const env = createEnv({
   server: {
-    PORT: z.coerce.number().int().min(1).max(65535).default(4003),
     GRPC_PORT: z.coerce.number().int().min(1).max(65535).default(50051),
+
     GRPC_INTERNAL_AUTH_TOKEN: z
       .string()
       .min(32, "GRPC_INTERNAL_AUTH_TOKEN must be at least 32 characters"),

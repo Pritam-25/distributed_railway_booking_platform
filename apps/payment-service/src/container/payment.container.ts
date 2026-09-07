@@ -1,10 +1,20 @@
-import { prisma, getProducerSync } from "@config";
-import { PostgresOutboxRepository, OutboxPublisherWorker } from "@irctc/kafka";
+import { prisma, getProducerSync, getConsumer } from "@config";
+import {
+  PostgresOutboxRepository,
+  OutboxPublisherWorker,
+  KafkaConsumerRunner,
+} from "@irctc/kafka";
 import { logger } from "@irctc/logger";
+import { CONSUMER_GROUPS } from "@irctc/contracts";
 import { PaymentRepository } from "@repository";
-import { PaymentService } from "@services";
+import {
+  PaymentService,
+  PaymentRefundService,
+  WebhookProcessor,
+} from "@services";
 import { PaymentGrpcHandler } from "@grpc";
 import { PaymentController } from "@controllers";
+import { RefundRequestedConsumer } from "../consumers/index.js";
 
 /**
  * Dependency injection container for payment-service acting as the composition root.
@@ -18,6 +28,7 @@ export class PaymentContainer {
   public readonly paymentGrpcHandler: PaymentGrpcHandler;
 
   private readonly outboxWorker: OutboxPublisherWorker;
+  private readonly refundRequestedConsumer: RefundRequestedConsumer;
 
   private constructor() {
     // 1. Local Repositories & Workers
@@ -30,30 +41,60 @@ export class PaymentContainer {
       logger,
     );
 
-    // 2. Local Services
+    // 2. Local Domain Services
     const paymentService = new PaymentService(
       prisma,
       paymentRepository,
       outboxRepository,
     );
 
-    // 3. Public External Adapters
-    this.paymentController = new PaymentController(paymentService);
+    const paymentRefundService = new PaymentRefundService(
+      prisma,
+      paymentRepository,
+      outboxRepository,
+    );
+
+    // 3. Webhook Router
+    const webhookProcessor = new WebhookProcessor(
+      paymentService,
+      paymentRefundService,
+    );
+
+    // 4. Kafka Consumers
+    const refundConsumerInstance = getConsumer(
+      CONSUMER_GROUPS.PAYMENT_REFUND_REQUESTED,
+    );
+    const refundRunner = new KafkaConsumerRunner(
+      refundConsumerInstance,
+      logger,
+    );
+    this.refundRequestedConsumer = new RefundRequestedConsumer(
+      getProducerSync(),
+      refundRunner,
+      paymentRefundService,
+      logger,
+    );
+
+    // 5. Public External Adapters
+    this.paymentController = new PaymentController(
+      paymentService,
+      paymentRefundService,
+      webhookProcessor,
+    );
     this.paymentGrpcHandler = new PaymentGrpcHandler(paymentService);
 
-    logger.info({ module: "payment-container" }, "Payment dependencies wired.");
+    logger.info(
+      { module: "payment-container" },
+      "Application components & container initialized.",
+    );
   }
 
   /**
-   * Starts background outbox worker polling loop.
+   * Starts background outbox worker and consumer loops.
    */
-  start(): void {
-    logger.info({ module: "container" }, "Starting payment outbox worker...");
+  async start(): Promise<void> {
     this.outboxWorker.start();
-    logger.info(
-      { module: "container" },
-      "Payment outbox worker started successfully.",
-    );
+    await this.refundRequestedConsumer.start();
   }
 
   /**
@@ -70,17 +111,10 @@ export class PaymentContainer {
   }
 
   /**
-   * Gracefully stops outbox worker.
+   * Gracefully stops outbox worker and consumer loops.
    */
   async disconnect(): Promise<void> {
-    logger.info(
-      { module: "container" },
-      "Initiating graceful shutdown of payment outbox worker...",
-    );
+    await this.refundRequestedConsumer.stop();
     await this.outboxWorker.stop();
-    logger.info(
-      { module: "container" },
-      "Payment outbox worker shut down successfully.",
-    );
   }
 }

@@ -4,3 +4,5 @@ modules:
 lint:
   use:
     - STANDARD
+  ignore:
+    - proto/grpc/health/v1

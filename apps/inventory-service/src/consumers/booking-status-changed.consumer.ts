@@ -68,8 +68,7 @@ export class BookingStatusChangedConsumer {
           });
         } else if (
           event.currentStatus === BookingStatus.CANCELLED ||
-          event.currentStatus === BookingStatus.FAILED ||
-          event.currentStatus === BookingStatus.EXPIRED
+          event.currentStatus === BookingStatus.FAILED
         ) {
           this.logger.info(
             {

@@ -1,13 +1,18 @@
-import { type InventoryServiceClient } from "@irctc/contracts";
+import {
+  ValidateBookingResponse_Status,
+  type InventoryServiceClient,
+} from "@irctc/contracts";
 import { mapGrpcClientErrorToApiError } from "@irctc/grpc";
 import { ApiError, COMMON_ERROR_CODES } from "@irctc/errors";
 import { statusCode } from "@irctc/http";
 import { ERROR_CODES } from "@utils/errors";
+import { env } from "@config";
 
 export interface ValidateBookingScheduleParams {
   scheduleId: string;
   fromStationId: string;
   toStationId: string;
+  seatIds: string[];
 }
 
 /**
@@ -24,50 +29,84 @@ export class InventoryAdapter {
 
   /**
    * Calls `inventory.ValidateBooking` over gRPC and translates the
-   * response into either a no-op (`OK`) or an `ApiError` that surfaces
-   * synchronously to the caller.
+   * response into validation metadata (`seatInventoryIds`, `fromSequence`, `toSequence`)
+   * or an `ApiError` that surfaces synchronously to the caller.
    *
    * @param params - Schedule validation parameters.
+   * @returns Resolved inventory seat IDs and station sequence numbers.
+   * @throws {ApiError} 400 if `INVALID_SEAT_IDS` or `INVALID_ROUTE`.
    * @throws {ApiError} 404 if `SCHEDULE_NOT_FOUND`.
-   * @throws {ApiError} 409 if `SCHEDULE_INACTIVE` or `TRAIN_ALREADY_DEPARTED`.
+   * @throws {ApiError} 409 if `SCHEDULE_INACTIVE`, `TRAIN_ALREADY_DEPARTED`, or `SEAT_UNAVAILABLE`.
    * @throws {ApiError} 503 if inventory-service is unreachable.
    */
-  async validateBooking(params: ValidateBookingScheduleParams): Promise<void> {
+  async validateBooking(params: ValidateBookingScheduleParams): Promise<{
+    seatInventoryIds: string[];
+    fromSequence: number;
+    toSequence: number;
+  }> {
     let response;
     try {
-      response = await this.client.validateBooking({
-        scheduleId: params.scheduleId,
-        fromStationId: params.fromStationId,
-        toStationId: params.toStationId,
-        clientRequestedAt: new Date(),
-      });
+      response = await this.client.validateBooking(
+        {
+          scheduleId: params.scheduleId,
+          fromStationId: params.fromStationId,
+          toStationId: params.toStationId,
+          clientRequestedAt: new Date(),
+          seatIds: params.seatIds,
+        },
+        {
+          signal: AbortSignal.timeout(env.BOOKING_VALIDATE_DEADLINE_MS),
+        },
+      );
     } catch (err) {
       throw mapGrpcClientErrorToApiError(
         err,
-        "Could not validate booking schedule. Please retry shortly.",
+        "Could not validate booking. Please retry shortly.",
       );
     }
 
     switch (response.status) {
-      case "OK":
-        return;
-      case "SCHEDULE_NOT_FOUND":
+      case ValidateBookingResponse_Status.OK:
+        return {
+          seatInventoryIds: response.seatInventoryIds,
+          fromSequence: response.fromSequence,
+          toSequence: response.toSequence,
+        };
+      case ValidateBookingResponse_Status.SCHEDULE_NOT_FOUND:
         throw new ApiError(
           statusCode.notFound,
           ERROR_CODES.SCHEDULE_NOT_FOUND,
           "The selected train schedule could not be found.",
         );
-      case "SCHEDULE_INACTIVE":
+      case ValidateBookingResponse_Status.SCHEDULE_INACTIVE:
         throw new ApiError(
           statusCode.conflict,
           ERROR_CODES.SCHEDULE_INACTIVE,
           "The selected train schedule is no longer accepting bookings.",
         );
-      case "TRAIN_ALREADY_DEPARTED":
+      case ValidateBookingResponse_Status.INVALID_ROUTE:
+        throw new ApiError(
+          statusCode.badRequest,
+          ERROR_CODES.INVALID_ROUTE,
+          "The requested origin and destination stations are invalid for this train route.",
+        );
+      case ValidateBookingResponse_Status.TRAIN_ALREADY_DEPARTED:
         throw new ApiError(
           statusCode.conflict,
           ERROR_CODES.TRAIN_ALREADY_DEPARTED,
           "The train for this schedule has already departed.",
+        );
+      case ValidateBookingResponse_Status.INVALID_SEAT_IDS:
+        throw new ApiError(
+          statusCode.badRequest,
+          ERROR_CODES.INVALID_SEAT_IDS,
+          "One or more selected seats are invalid for this schedule.",
+        );
+      case ValidateBookingResponse_Status.SEAT_UNAVAILABLE:
+        throw new ApiError(
+          statusCode.conflict,
+          ERROR_CODES.SEAT_UNAVAILABLE,
+          "One or more selected seats are no longer available for this journey.",
         );
       default:
         throw new ApiError(
@@ -75,60 +114,6 @@ export class InventoryAdapter {
           COMMON_ERROR_CODES.INTERNAL_ERROR,
           "An unexpected error occurred while validating the train schedule.",
         );
-    }
-  }
-
-  /**
-   * Resolves booking-side `seatId` values (the public UUIDs the user
-   * sees) to inventory-side `seatInventoryId` row IDs via a single batch
-   * `GetSeatsDetailsBatch` gRPC call.
-   *
-   * @param scheduleId - The schedule UUID the seats belong to.
-   * @param seatIds - Booking-side seat UUIDs from the request DTO.
-   * @returns Inventory-side `seatInventoryId` values, one per input.
-   * @throws {ApiError} 404 if any seat cannot be resolved.
-   * @throws {ApiError} 503 if inventory-service is unreachable.
-   */
-  async resolveSeatInventoryIds(
-    scheduleId: string,
-    seatIds: string[],
-  ): Promise<string[]> {
-    try {
-      const response = await this.client.getSeatsDetailsBatch({
-        scheduleId,
-        seatIds,
-      });
-
-      if (response.seats.length !== seatIds.length) {
-        throw new ApiError(
-          statusCode.notFound,
-          COMMON_ERROR_CODES.NOT_FOUND,
-          "One or more selected seats could not be found or validated.",
-        );
-      }
-
-      // Preserve input array order matching seatIds
-      const seatMap = new Map(
-        response.seats.map((s) => [s.seatId, s.seatInventoryId]),
-      );
-
-      return seatIds.map((id) => {
-        const inventoryId = seatMap.get(id);
-        if (!inventoryId) {
-          throw new ApiError(
-            statusCode.notFound,
-            COMMON_ERROR_CODES.NOT_FOUND,
-            `Seat could not be found or validated.`,
-          );
-        }
-        return inventoryId;
-      });
-    } catch (err) {
-      if (err instanceof ApiError) throw err;
-      throw mapGrpcClientErrorToApiError(
-        err,
-        "One of the selected seats could not be found or validated.",
-      );
     }
   }
 }

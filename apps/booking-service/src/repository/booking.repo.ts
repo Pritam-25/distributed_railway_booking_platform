@@ -5,6 +5,10 @@ import {
   type PrismaClient,
 } from "@generated/prisma/client.js";
 
+export type BookingSeatUpdateItem = {
+  seatId: string;
+} & Prisma.BookingSeatUncheckedUpdateInput;
+
 /**
  * Repository class handling database operations for the `Booking` aggregate.
  *
@@ -45,12 +49,13 @@ export class BookingRepository {
    * @param tx - Optional transaction client.
    * @returns The booking row, or `null` when no row matches.
    */
-  async findById(
-    bookingId: string,
-    tx?: Prisma.TransactionClient,
-  ): Promise<Booking | null> {
+  async findById(bookingId: string, tx?: Prisma.TransactionClient) {
     return this.getClient(tx).booking.findUnique({
       where: { id: bookingId },
+      include: {
+        passengers: true,
+        seats: true,
+      },
     });
   }
 
@@ -214,33 +219,20 @@ export class BookingRepository {
    * a `seatId` per passenger when it created the booking).
    *
    * @param bookingId - The booking UUID.
-   * @param updates - One update per booking-side seat row, keyed by `seatId`.
+   * @param updates - One update per booking-side seat row, containing `seatId` and allocated seat metadata.
    * @param tx - Optional transaction client.
    */
-  async updatePassengers(
+  async updateSeats(
     bookingId: string,
-    updates: ReadonlyArray<{
-      seatId: string;
-      seatInventoryId: string;
-      coachNumber: string;
-      seatNumber: number;
-      seatType: string;
-      price: number;
-    }>,
+    updates: BookingSeatUpdateItem[],
     tx?: Prisma.TransactionClient,
   ): Promise<void> {
     const client = this.getClient(tx);
     await Promise.all(
-      updates.map((u) =>
+      updates.map(({ seatId, ...data }) =>
         client.bookingSeat.updateMany({
-          where: { bookingId, seatId: u.seatId },
-          data: {
-            seatInventoryId: u.seatInventoryId,
-            coachNumber: u.coachNumber,
-            seatNumber: u.seatNumber,
-            seatType: u.seatType,
-            price: u.price,
-          },
+          where: { bookingId, seatId },
+          data,
         }),
       ),
     );

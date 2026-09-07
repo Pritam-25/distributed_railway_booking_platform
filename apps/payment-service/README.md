@@ -1,1 +1,1 @@
-# `booking-service`
+# `payment-service`

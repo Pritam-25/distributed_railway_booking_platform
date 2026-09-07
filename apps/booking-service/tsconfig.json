@@ -37,7 +37,7 @@
       "@controllers": ["./src/controllers/index.js"],
       "@consumers": ["./src/consumers/index.js"],
       "@grpc": ["./src/grpc/index.js"],
-      "@health": ["./src/health/index.js"],
+      "@sse": ["./src/sse/index.js"],
       "@utils/errors": ["./src/utils/errors/index.js"],
       "@dto": ["./src/dto/index.js"],
       "@mappers": ["./src/mappers/index.js"],

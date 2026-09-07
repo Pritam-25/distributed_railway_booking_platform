@@ -16,6 +16,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh
     networks:
       - irctc-network
     healthcheck:
@@ -269,7 +270,7 @@ services:
     command: sh -c "npx prisma migrate deploy && exec node --import @irctc/telemetry/instrumentation dist/server.js"
     environment:
       PORT: 4001
-      DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-password}@irctc-postgres:5432/irctc_db
+      DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-password}@irctc-postgres:5432/irctc_user_db
       REDIS_URL: redis://irctc-redis:6379
       KAFKA_BROKERS: irctc-kafka:29092
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
@@ -317,9 +318,11 @@ services:
     command: sh -c "npx prisma migrate deploy && exec node --import @irctc/telemetry/instrumentation dist/server.js"
     environment:
       PORT: 4002
-      DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-password}@irctc-postgres:5432/irctc_db
+      DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-password}@irctc-postgres:5432/irctc_admin_db
       KAFKA_BROKERS: irctc-kafka:29092
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin12345}
       SERVICE_NAME: admin-service
       OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
     expose:
@@ -377,6 +380,53 @@ services:
           memory: 512M
           cpus: "1.0"
 
+  inventory-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: inventory-service
+    container_name: irctc-inventory-service
+    profiles: ["prod"]
+    restart: always
+    command: sh -c "npx prisma migrate deploy && exec node --import @irctc/telemetry/instrumentation dist/server.js"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-password}@irctc-postgres:5432/irctc_inventory_db
+      REDIS_URL: redis://irctc-redis:6379
+      KAFKA_BROKERS: irctc-kafka:29092
+      GRPC_PORT: 50051
+      GRPC_INTERNAL_AUTH_TOKEN: ${GRPC_INTERNAL_AUTH_TOKEN:-c9b74e8f1a23456789abcdef0123456789abcdef0123456789abcdef01234567}
+      SERVICE_NAME: inventory-service
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
+    expose:
+      - "50051"
+    networks:
+      - irctc-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "grpc_health_probe",
+          "-addr=localhost:50051",
+          "-service=readiness",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+
   search-service:
     build:
       context: .
@@ -387,16 +437,18 @@ services:
     profiles: ["prod"]
     restart: always
     environment:
-      PORT: 4004
+      PORT: 4003
       REDIS_URL: redis://irctc-redis:6379
       ELASTICSEARCH_NODE: http://irctc-elasticsearch:9200
       ELASTICSEARCH_USERNAME: elastic
       ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD:-password}
       KAFKA_BROKERS: irctc-kafka:29092
+      INVENTORY_GRPC_URL: irctc-inventory-service:50051
+      GRPC_INTERNAL_AUTH_TOKEN: ${GRPC_INTERNAL_AUTH_TOKEN:-c9b74e8f1a23456789abcdef0123456789abcdef0123456789abcdef01234567}
       SERVICE_NAME: search-service
       OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
     expose:
-      - "4004"
+      - "4003"
     networks:
       - irctc-network
     depends_on:
@@ -406,11 +458,116 @@ services:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
+      inventory-service:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --quiet --tries=1 --spider http://localhost:4003/health/live || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+
+  booking-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: booking-service
+    container_name: irctc-booking-service
+    profiles: ["prod"]
+    restart: always
+    command: sh -c "npx prisma migrate deploy && exec node --import @irctc/telemetry/instrumentation dist/server.js"
+    environment:
+      PORT: 4004
+      DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-password}@irctc-postgres:5432/irctc_booking_db
+      REDIS_URL: redis://irctc-redis:6379
+      KAFKA_BROKERS: irctc-kafka:29092
+      INVENTORY_GRPC_URL: irctc-inventory-service:50051
+      PAYMENT_GRPC_URL: irctc-payment-service:50052
+      GRPC_INTERNAL_AUTH_TOKEN: ${GRPC_INTERNAL_AUTH_TOKEN:-c9b74e8f1a23456789abcdef0123456789abcdef0123456789abcdef01234567}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
+      SERVICE_NAME: booking-service
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
+    expose:
+      - "4004"
+    networks:
+      - irctc-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      inventory-service:
+        condition: service_healthy
+      payment-service:
+        condition: service_healthy
+
     healthcheck:
       test:
         [
           "CMD-SHELL",
           "wget --quiet --tries=1 --spider http://localhost:4004/health/live || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE: payment-service
+    container_name: irctc-payment-service
+    profiles: ["prod"]
+    restart: always
+    command: sh -c "npx prisma migrate deploy && exec node --import @irctc/telemetry/instrumentation dist/server.js"
+    environment:
+      PORT: 4005
+      GRPC_PORT: 50052
+      DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-password}@irctc-postgres:5432/irctc_payment_db
+      REDIS_URL: redis://irctc-redis:6379
+      KAFKA_BROKERS: irctc-kafka:29092
+      GRPC_INTERNAL_AUTH_TOKEN: ${GRPC_INTERNAL_AUTH_TOKEN:-c9b74e8f1a23456789abcdef0123456789abcdef0123456789abcdef01234567}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-rzp_test_TSrSlVyUKSDDSn}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-AZX2E1HrSWMK1XxXaKAH8z0Z}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-irctc_payment_webhook_secret}
+      SERVICE_NAME: payment-service
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
+    expose:
+      - "4005"
+      - "50052"
+    networks:
+      - irctc-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --quiet --tries=1 --spider http://localhost:4005/health/live || exit 1",
         ]
       interval: 10s
       timeout: 5s
@@ -438,6 +595,9 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-"http://localhost:3000"}
       USER_UPSTREAM: http://irctc-user-service:4001
       ADMIN_UPSTREAM: http://irctc-admin-service:4002
+      SEARCH_UPSTREAM: http://irctc-search-service:4003
+      BOOKING_UPSTREAM: http://irctc-booking-service:4004
+      PAYMENT_UPSTREAM: http://irctc-payment-service:4005
       SERVICE_NAME: api-gateway
       OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
     ports:
@@ -446,6 +606,18 @@ services:
       - irctc-network
     depends_on:
       redis:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      admin-service:
+        condition: service_healthy
+      search-service:
+        condition: service_healthy
+      booking-service:
+        condition: service_healthy
+      inventory-service:
+        condition: service_healthy
+      payment-service:
         condition: service_healthy
     healthcheck:
       test:
@@ -457,6 +629,42 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: irctc-web
+    profiles: ["prod"]
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: "0.0.0.0"
+    ports:
+      - "3000:3000"
+    networks:
+      - irctc-network
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     deploy:
       resources:
         limits:

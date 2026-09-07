@@ -15,11 +15,6 @@ let client: PaymentServiceClient | undefined;
  */
 export const getPaymentGrpcClient = (): PaymentServiceClient => {
   if (!client) {
-    logger.info(
-      { module: "grpc-client" },
-      `Connecting Payment gRPC channel to http://${env.PAYMENT_GRPC_URL}`,
-    );
-
     const res = createGrpcClient(
       PaymentServiceDefinition,
       env.PAYMENT_GRPC_URL,
@@ -34,6 +29,11 @@ export const getPaymentGrpcClient = (): PaymentServiceClient => {
 
     channel = res.channel;
     client = res.client as unknown as PaymentServiceClient;
+
+    logger.info(
+      { module: "grpc-client" },
+      `Payment gRPC channel connected to http://${env.PAYMENT_GRPC_URL}`,
+    );
   }
 
   return client;

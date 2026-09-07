@@ -31,8 +31,8 @@ export const startGrpcServer = async (
   await grpcServer.listen(address);
 
   logger.info(
-    { module: "grpc-server", port },
-    `Payment gRPC server listening at ${address}`,
+    { module: "grpc-server" },
+    `gRPC server listening at ${address} in (${env.NODE_ENV}) mode`,
   );
 
   return grpcServer;

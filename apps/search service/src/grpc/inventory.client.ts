@@ -18,7 +18,7 @@ let client: InventoryServiceClient | undefined;
 export const getInventoryGrpcClient = (): InventoryServiceClient => {
   if (!client) {
     logger.info(
-      { module: "grpc-client", url: env.INVENTORY_GRPC_URL },
+      { module: "grpc-client" },
       `Connecting Inventory gRPC channel to ${env.INVENTORY_GRPC_URL}`,
     );
 

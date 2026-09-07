@@ -1,16 +1,17 @@
-/**
- * ## routes/health
- *
- * `api-gateway` Kubernetes-friendly liveness and readiness probe routes.
- * Delegates to `createHealthRouter` from `@irctc/http` and the
- * per-service adapters from `health/dependencies.ts`.
- *
- * Mounted at `/health` by `routes/index.ts`. Probes registered: redis
- * (see `healthDependencies`).
- */
-import { createHealthRouter } from "@irctc/http";
-import { healthDependencies } from "../health/dependencies.js";
+import { createHealthRouter, type HealthDependency } from "@irctc/http";
+import { checkRedisHealth } from "@irctc/redis";
+import { redis } from "@config";
 
-export const healthRouter = createHealthRouter({
+/**
+ * Dependencies for Kubernetes readiness probes.
+ * - redis: checks the Redis connection using the PING command
+ */
+const healthDependencies: HealthDependency[] = [
+  { name: "redis", check: () => checkRedisHealth(redis) },
+];
+/**
+ * Routes to check the health of the API gateway.
+ */
+export const healthRoutes = createHealthRouter({
   dependencies: healthDependencies,
 });

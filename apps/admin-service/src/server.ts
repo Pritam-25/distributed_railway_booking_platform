@@ -1,6 +1,4 @@
 /**
- * ## module/server
- *
  * `admin-service` bootstrap. Registers the user-facing error messages,
  * wires dependencies, then delegates the full lifecycle to
  * `startServer` from `@irctc/http`.
@@ -20,20 +18,33 @@ import {
 } from "@config";
 import { logger } from "@irctc/logger";
 import { registerErrorMessages } from "@irctc/errors";
-import { withTimeout, startServer, runBootstrap } from "@irctc/http";
+import {
+  startServer,
+  runBootstrap,
+  runSteps,
+  runShutdownSteps,
+  type BoundedStep,
+} from "@irctc/http";
 import { ERROR_MESSAGES } from "@utils/errors";
 
 // 1. Register user-facing error messages with the @irctc/errors registry.
 registerErrorMessages(ERROR_MESSAGES);
 
+const shutdownSteps: BoundedStep[] = [
+  ["Kafka disconnect", disconnectKafka],
+  ["Prisma disconnect", disconnectPrisma],
+];
+
 await runBootstrap({
   bootstrap: async () => {
     // 2. Connect network dependencies BEFORE importing app.js / adminContainer.
-    await withTimeout("Prisma connect", initPrisma());
-    await withTimeout("Kafka connect", initKafka());
+    await runSteps([
+      ["Prisma connect", initPrisma],
+      ["Kafka connect", initKafka],
+    ]);
     logger.info(
       { module: "server" },
-      "All dependencies connected successfully.",
+      "External infrastructure connected successfully.",
     );
 
     // 3. Dynamically import container and app.js after dependencies are ready.
@@ -46,27 +57,13 @@ await runBootstrap({
       environment: env.NODE_ENV,
       serviceName: env.SERVICE_NAME,
       afterListen: async () => {
-        logger.info(
-          { module: "server" },
-          "Starting admin outbox publisher worker...",
-        );
         AdminContainer.getInstance().start();
       },
       beforeShutdown: async () => {
-        logger.info(
-          { module: "server" },
-          "Stopping admin outbox publisher worker...",
-        );
         await AdminContainer.getInstance().disconnect();
       },
-      afterShutdown: async () => {
-        await withTimeout("Kafka disconnect", disconnectKafka());
-        await withTimeout("Prisma disconnect", disconnectPrisma());
-      },
+      afterShutdown: () => runShutdownSteps(shutdownSteps),
     });
   },
-  onFailure: async () => {
-    await withTimeout("Kafka disconnect", disconnectKafka()).catch(() => {});
-    await withTimeout("Prisma disconnect", disconnectPrisma()).catch(() => {});
-  },
+  onFailure: () => runShutdownSteps(shutdownSteps, true),
 });

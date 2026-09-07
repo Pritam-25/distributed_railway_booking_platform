@@ -144,18 +144,23 @@ export function verifyWebhookSignature(
   rawBody: string | Buffer,
   signatureHeader: string,
 ): boolean {
-  const isDummyKey =
-    !env.RAZORPAY_WEBHOOK_SECRET ||
-    env.RAZORPAY_WEBHOOK_SECRET.includes("dummy");
-
-  if (isDummyKey) {
-    return true;
+  if (!signatureHeader) {
+    return false;
   }
+
+  const cleanSignature = signatureHeader.trim();
 
   const expectedSignature = crypto
     .createHmac("sha256", env.RAZORPAY_WEBHOOK_SECRET)
     .update(rawBody)
     .digest("hex");
 
-  return expectedSignature === signatureHeader;
+  const expectedBuf = Buffer.from(expectedSignature, "utf8");
+  const receivedBuf = Buffer.from(cleanSignature, "utf8");
+
+  if (expectedBuf.length !== receivedBuf.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(expectedBuf, receivedBuf);
 }

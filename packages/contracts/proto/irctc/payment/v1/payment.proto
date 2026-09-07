@@ -49,7 +49,15 @@ message GetOrderStatusResponse {
   // Razorpay payment ID (populated once captured).
   string razorpay_payment_id = 3;
   // Current payment status (e.g. "CAPTURED", "FAILED", "PENDING").
-  string status = 4;
+  enum Status {
+    CREATED = 0;
+    PENDING = 1;
+    CAPTURED = 2;
+    FAILED = 3;
+    REFUNDED = 4;
+  } ;
+  
+  Status status = 4;
   // Amount in smallest currency unit (e.g. 125050 paise for 1250.50 INR).
   int64 amount = 5;
   // Currency code.

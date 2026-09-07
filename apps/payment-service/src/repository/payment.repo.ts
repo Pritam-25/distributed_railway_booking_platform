@@ -116,6 +116,23 @@ export class PaymentRepository {
   }
 
   /**
+   * Finds a payment record by Razorpay paymentId.
+   *
+   * @param razorpayPaymentId - Razorpay payment ID (e.g. "pay_xxxx").
+   * @param tx - Optional active Prisma transaction.
+   * @returns Payment record or null.
+   */
+  async findByRazorpayPaymentId(
+    razorpayPaymentId: string,
+    tx?: PrismaTransaction,
+  ): Promise<Payment | null> {
+    const client = tx || this.prisma;
+    return client.payment.findFirst({
+      where: { razorpayPaymentId },
+    });
+  }
+
+  /**
    * Idempotent status transition PENDING -> CAPTURED (CAS update).
    *
    * @param params - Capture parameters including paymentOrderId and razorpayPaymentId.

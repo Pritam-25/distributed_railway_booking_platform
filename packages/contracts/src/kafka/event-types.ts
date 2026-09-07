@@ -32,6 +32,7 @@ export const EVENT_TYPES = {
   // inventory domain
   INVENTORY_SCHEDULE_PROJECTED: "InventoryScheduleProjectedV1",
   INVENTORY_SCHEDULE_STATUS_CHANGED: "InventoryScheduleStatusChangedV1",
+  SEAT_AVAILABILITY_CHANGED: "SeatAvailabilityChangedV1",
   // booking ↔ inventory saga
   HOLD_SEATS_REQUESTED: "HoldSeatsRequestedV1",
   INVENTORY_SEATS_HELD: "SeatsHeldV1",
@@ -39,6 +40,8 @@ export const EVENT_TYPES = {
   INVENTORY_SEAT_HOLD_EXPIRED: "SeatHoldExpiredV1",
   // booking domain
   BOOKING_STATUS_CHANGED: "BookingStatusChangedV1",
+  // booking → payment cancellation saga
+  BOOKING_REFUND_REQUESTED: "BookingRefundRequestedV1",
   // payment domain
   PAYMENT_ORDER_CREATED: "PaymentOrderCreatedV1",
   PAYMENT_SUCCESS: "PaymentSuccessV1",

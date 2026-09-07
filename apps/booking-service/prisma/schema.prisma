@@ -22,6 +22,19 @@ enum OutboxStatus {
   DEAD
 }
 
+/*
+| State             | Meaning                                                   |
+| ----------------- | --------------------------------------------------------- |
+| `PENDING`         | Booking created, Saga hasn't completed seat hold          |
+| `SEATS_HELD`      | Inventory successfully held seats                         |
+| `PAYMENT_PENDING` | Waiting for payment                                       |
+| `CONFIRMING`      | Payment succeeded; final seat confirmation is in progress |
+| `CONFIRMED`       | Booking completely confirmed                              |
+| `CANCELLING`      | Cancellation/compensation is in progress                  |
+| `CANCELLED`       | Cancellation completed                                    |
+| `EXPIRED`         | Booking/hold expired                                      |
+| `FAILED`          | Saga permanently failed                                   |
+*/
 enum BookingStatus {
   PENDING
   SEATS_HELD
@@ -38,6 +51,15 @@ enum PassengerGender {
   MALE
   FEMALE
   OTHER
+}
+
+enum BerthPreference {
+  LOWER
+  MIDDLE
+  UPPER
+  SIDE_LOWER
+  SIDE_UPPER
+  NO_PREFERENCE
 }
 
 enum BookingQuota {
@@ -65,13 +87,14 @@ enum SagaStep {
   HOLD_SEATS
   CREATE_PAYMENT
   CONFIRM_SEATS
+  RELEASE_SEATS
+  REFUND_PAYMENT
 }
 
 enum SagaStatus {
   PENDING
   COMPLETED
   FAILED
-  COMPENSATED
 }
 
 // ============================================================
@@ -137,7 +160,7 @@ model BookingPassenger {
   fullName        String                @map("full_name")
   age             Int
   gender          PassengerGender
-  berthPreference String?               @map("berth_preference")
+  berthPreference BerthPreference?      @map("berth_preference")
   idType          IdentityDocumentType? @map("id_type")
   idNumber        String?               @map("id_number")
 

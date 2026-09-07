@@ -15,7 +15,6 @@
       "@utils/constants": ["./src/utils/constants/index.js"],
       "@dto": ["./src/dto/index.js"],
       "@mappers": ["./src/mappers/index.js"],
-      "@health": ["./src/health/index.js"],
       "@generated/*": ["./src/generated/*"]
     }
   },

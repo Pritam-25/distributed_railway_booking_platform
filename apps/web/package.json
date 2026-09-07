@@ -10,7 +10,9 @@
     "start": "next start",
     "lint": "eslint",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "docker:build": "docker build -t web:latest -f Dockerfile ../..",
+    "docker:run": "docker run --rm --name web -p 3000:3000 web:latest"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

@@ -1,13 +1,3 @@
-/**
- * ## module/app
- *
- * Express app composition for `booking-service`. Delegates the canonical
- * middleware stack to `createApp` from `@irctc/http`. The framework owns
- * helmet, body parsers, cookie parser, request id, request logger, health
- * router, and error handler. The service owns the root banner and any
- * service-specific routes mounted after `createApp`.
- */
-
 import type { Request, Response } from "express";
 import { successResponse, statusCode, createApp } from "@irctc/http";
 import {
@@ -42,6 +32,7 @@ const app = createApp({
           endpoints: {
             health: "/health",
             bookings: "/bookings",
+            schedules: "/schedules",
           },
         }),
       );

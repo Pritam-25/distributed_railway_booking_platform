@@ -1,6 +1,4 @@
 /**
- * ## module/server
- *
  * `search-service` bootstrap. Registers the user-facing error messages,
  * wires dependencies, then delegates the full lifecycle to
  * `startServer` from `@irctc/http`.
@@ -26,21 +24,35 @@ import {
 } from "@config";
 import { logger } from "@irctc/logger";
 import { registerErrorMessages } from "@irctc/errors";
-import { withTimeout, startServer, runBootstrap } from "@irctc/http";
+import {
+  startServer,
+  runBootstrap,
+  runSteps,
+  runShutdownSteps,
+  type BoundedStep,
+} from "@irctc/http";
 import { ERROR_MESSAGES } from "@utils/errors";
 
 // 1. Register user-facing error messages with the @irctc/errors registry.
 registerErrorMessages(ERROR_MESSAGES);
 
+const shutdownSteps: BoundedStep[] = [
+  ["Kafka disconnect", disconnectKafka],
+  ["Redis disconnect", disconnectRedis],
+  ["Elasticsearch disconnect", disconnectElasticsearch],
+];
+
 await runBootstrap({
   bootstrap: async () => {
     // 2. Connect network dependencies BEFORE importing container and app.js.
-    await withTimeout("Elasticsearch connect", initElasticsearch());
-    await withTimeout("Redis connect", initRedis());
-    await withTimeout("Kafka connect", initKafka());
+    await runSteps([
+      ["Elasticsearch connect", initElasticsearch],
+      ["Redis connect", initRedis],
+      ["Kafka connect", initKafka],
+    ]);
     logger.info(
       { module: "server" },
-      "All dependencies connected successfully.",
+      "External infrastructure connected successfully.",
     );
 
     // 3. Import SearchContainer and app.js.
@@ -58,22 +70,8 @@ await runBootstrap({
       beforeShutdown: async () => {
         await SearchContainer.getInstance().disconnect();
       },
-      afterShutdown: async () => {
-        await withTimeout("Kafka disconnect", disconnectKafka());
-        await withTimeout("Redis disconnect", disconnectRedis());
-        await withTimeout(
-          "Elasticsearch disconnect",
-          disconnectElasticsearch(),
-        );
-      },
+      afterShutdown: () => runShutdownSteps(shutdownSteps),
     });
   },
-  onFailure: async () => {
-    await withTimeout("Kafka disconnect", disconnectKafka()).catch(() => {});
-    await withTimeout("Redis disconnect", disconnectRedis()).catch(() => {});
-    await withTimeout(
-      "Elasticsearch disconnect",
-      disconnectElasticsearch(),
-    ).catch(() => {});
-  },
+  onFailure: () => runShutdownSteps(shutdownSteps, true),
 });

@@ -4,7 +4,8 @@ import { z } from "zod";
 
 export const env = createEnv({
   server: {
-    PORT: z.coerce.number().int().min(1).max(65535).default(4005),
+    PORT: z.coerce.number().int().min(1).max(65535).default(4004),
+
     INVENTORY_GRPC_URL: z.string().default("localhost:50051"),
     PAYMENT_GRPC_URL: z.string().default("localhost:50052"),
     GRPC_INTERNAL_AUTH_TOKEN: z
@@ -45,7 +46,7 @@ export const env = createEnv({
       .refine((brokers) => brokers.length > 0, {
         message: "KAFKA_BROKERS must include at least one broker",
       }),
-    KAFKA_CLIENT_ID: z.string().default("inventory-service"),
+    KAFKA_CLIENT_ID: z.string().default("booking-service"),
 
     /**
      * TTL for the Redis idempotency `PROCESSING` lease held while a

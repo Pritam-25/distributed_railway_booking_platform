@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import {
   AllocationStatus,
   ScheduleInventoryStatus,
@@ -9,14 +10,20 @@ import {
 import {
   EVENT_TYPES,
   KAFKA_TOPICS,
+  SeatAvailabilityStatus,
+  SeatAvailabilityReason,
+  ValidateBookingResponse_Status,
   type HoldSeatsRequestedV1Type,
   type SeatAllocationV1Type,
   type SeatsHeldV1Type,
   type SeatsHoldFailedV1Type,
   type SeatHoldFailureReasonType,
+  type SeatAvailabilityChangedV1Type,
+  calculateSeatFareRupees,
 } from "@irctc/contracts";
 import { type OutboxRepository } from "@irctc/kafka";
 import { logger } from "@irctc/logger";
+import { env } from "@config";
 
 export type CoachMapItem = {
   coachId: string;
@@ -149,7 +156,7 @@ export class SeatAllocationService {
 
     const locksAcquired = await this.seatLockService.acquireSeatLocks({
       ...lockParams,
-      ttlSeconds: 30,
+      ttlSeconds: env.SEAT_LOCK_TTL_SEC,
     });
 
     if (!locksAcquired) {
@@ -292,11 +299,8 @@ export class SeatAllocationService {
 
     const allocationRows = seatInventoryIds.map((id) => {
       const seat = seatById.get(id)!;
-      const pricePerKm = Number(seat.pricePerKm);
-      const price =
-        distance > 0
-          ? Number((distance * pricePerKm).toFixed(2))
-          : Number(pricePerKm.toFixed(2));
+      const effectiveDistance = Math.max(0, distance);
+      const price = calculateSeatFareRupees(effectiveDistance, seat.pricePerKm);
       return {
         scheduleId,
         seatInventoryId: id,
@@ -339,12 +343,14 @@ export class SeatAllocationService {
           tx,
         );
 
+        const now = new Date();
         const hasOverlap =
           await this.seatAllocationRepository.hasOverlappingAllocation(
             scheduleId,
             sortedSeatInventoryIds,
             effectiveFromSeq,
             effectiveToSeq,
+            now,
             tx,
           );
 
@@ -357,12 +363,19 @@ export class SeatAllocationService {
         const createdAllocations =
           await this.seatAllocationRepository.findByBookingId(bookingId, tx);
 
-        const historyData = createdAllocations.map((a) => ({
-          allocationId: a.id,
-          oldStatus: AllocationStatus.HELD,
-          newStatus: AllocationStatus.HELD,
-          reason: "Seat hold requested",
-        }));
+        const historyData = createdAllocations
+          .filter(
+            (a) =>
+              a.status === AllocationStatus.HELD &&
+              a.fromSequence === effectiveFromSeq &&
+              a.toSequence === effectiveToSeq,
+          )
+          .map((a) => ({
+            allocationId: a.id,
+            oldStatus: AllocationStatus.HELD,
+            newStatus: AllocationStatus.HELD,
+            reason: "Seat hold requested",
+          }));
         await this.seatAllocationRepository.createHistoryMany(historyData, tx);
 
         await this.idempotencyRepository.create(eventKey, tx);
@@ -374,6 +387,31 @@ export class SeatAllocationService {
           topic: KAFKA_TOPICS.INVENTORY_SEATS_HELD,
           payload: heldPayload,
         });
+
+        for (const alloc of createdAllocations) {
+          const seat = seatById.get(alloc.seatInventoryId);
+          if (!seat) continue;
+          const seatAvailabilityPayload: SeatAvailabilityChangedV1Type = {
+            eventId: crypto.randomUUID(),
+            scheduleId: alloc.scheduleId,
+            seatId: seat.seatId,
+            seatInventoryId: seat.id,
+            status: SeatAvailabilityStatus.HELD,
+            reason: SeatAvailabilityReason.HELD,
+            fromSequence: alloc.fromSequence,
+            toSequence: alloc.toSequence,
+            bookingId: alloc.bookingId,
+            version: seat.version + 1,
+            timestamp: new Date(),
+          };
+          await this.outboxRepository.insert(tx, {
+            aggregateType: "SeatInventory",
+            aggregateId: `${alloc.scheduleId}:${seat.seatId}`,
+            eventType: EVENT_TYPES.SEAT_AVAILABILITY_CHANGED,
+            topic: KAFKA_TOPICS.SEAT_AVAILABILITY_CHANGED,
+            payload: seatAvailabilityPayload,
+          });
+        }
       });
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -484,6 +522,41 @@ export class SeatAllocationService {
             historyData,
             tx,
           );
+
+          const seatInventoryIds = heldAllocations.map(
+            (a) => a.seatInventoryId,
+          );
+          const seats = await this.seatInventoryRepository.findManyByIds(
+            heldAllocations[0]!.scheduleId,
+            seatInventoryIds,
+            tx,
+          );
+          const seatMap = new Map(seats.map((s) => [s.id, s]));
+
+          for (const alloc of heldAllocations) {
+            const seat = seatMap.get(alloc.seatInventoryId);
+            if (!seat) continue;
+            const seatAvailabilityPayload: SeatAvailabilityChangedV1Type = {
+              eventId: crypto.randomUUID(),
+              scheduleId: alloc.scheduleId,
+              seatId: seat.seatId,
+              seatInventoryId: seat.id,
+              status: SeatAvailabilityStatus.BOOKED,
+              reason: SeatAvailabilityReason.BOOKED,
+              fromSequence: alloc.fromSequence,
+              toSequence: alloc.toSequence,
+              bookingId: alloc.bookingId,
+              version: seat.version + 1,
+              timestamp: new Date(),
+            };
+            await this.outboxRepository.insert(tx, {
+              aggregateType: "SeatInventory",
+              aggregateId: `${alloc.scheduleId}:${seat.seatId}`,
+              eventType: EVENT_TYPES.SEAT_AVAILABILITY_CHANGED,
+              topic: KAFKA_TOPICS.SEAT_AVAILABILITY_CHANGED,
+              payload: seatAvailabilityPayload,
+            });
+          }
         }
 
         await this.idempotencyRepository.create(eventKey, tx);
@@ -562,6 +635,41 @@ export class SeatAllocationService {
             historyData,
             tx,
           );
+
+          const seatInventoryIds = activeAllocations.map(
+            (a) => a.seatInventoryId,
+          );
+          const seats = await this.seatInventoryRepository.findManyByIds(
+            activeAllocations[0]!.scheduleId,
+            seatInventoryIds,
+            tx,
+          );
+          const seatMap = new Map(seats.map((s) => [s.id, s]));
+
+          for (const alloc of activeAllocations) {
+            const seat = seatMap.get(alloc.seatInventoryId);
+            if (!seat) continue;
+            const seatAvailabilityPayload: SeatAvailabilityChangedV1Type = {
+              eventId: crypto.randomUUID(),
+              scheduleId: alloc.scheduleId,
+              seatId: seat.seatId,
+              seatInventoryId: seat.id,
+              status: SeatAvailabilityStatus.AVAILABLE,
+              reason: SeatAvailabilityReason.RELEASED,
+              fromSequence: alloc.fromSequence,
+              toSequence: alloc.toSequence,
+              bookingId: alloc.bookingId,
+              version: seat.version + 1,
+              timestamp: new Date(),
+            };
+            await this.outboxRepository.insert(tx, {
+              aggregateType: "SeatInventory",
+              aggregateId: `${alloc.scheduleId}:${seat.seatId}`,
+              eventType: EVENT_TYPES.SEAT_AVAILABILITY_CHANGED,
+              topic: KAFKA_TOPICS.SEAT_AVAILABILITY_CHANGED,
+              payload: seatAvailabilityPayload,
+            });
+          }
         }
 
         await this.idempotencyRepository.create(eventKey, tx);
@@ -632,51 +740,6 @@ export class SeatAllocationService {
   }
 
   /**
-   * Fetches single seat details for a schedule and seat ID.
-   */
-  async getSeatDetails(scheduleId: string, seatId: string) {
-    const seat = await this.seatInventoryRepository.findByScheduleAndSeatId(
-      scheduleId,
-      seatId,
-    );
-    if (!seat) return null;
-    return {
-      scheduleId: seat.scheduleId,
-      seatId: seat.seatId,
-      seatInventoryId: seat.id,
-      trainId: seat.trainId,
-      coachId: seat.coachId,
-      coachNumber: seat.coachNumber,
-      seatNumber: seat.seatNumber,
-      seatType: seat.seatType,
-      pricePerKm: Number(seat.pricePerKm),
-      version: seat.version,
-    };
-  }
-
-  /**
-   * Fetches batch seat details for a schedule and seat IDs using single findMany query.
-   */
-  async getSeatsDetailsBatch(scheduleId: string, seatIds: string[]) {
-    const seats = await this.seatInventoryRepository.findByScheduleAndSeats(
-      scheduleId,
-      seatIds,
-    );
-    return seats.map((seat) => ({
-      scheduleId: seat.scheduleId,
-      seatId: seat.seatId,
-      seatInventoryId: seat.id,
-      trainId: seat.trainId,
-      coachId: seat.coachId,
-      coachNumber: seat.coachNumber,
-      seatNumber: seat.seatNumber,
-      seatType: seat.seatType,
-      pricePerKm: Number(seat.pricePerKm),
-      version: seat.version,
-    }));
-  }
-
-  /**
    * Fetches the full seat-map with dynamic seat availability status (AVAILABLE, HELD, BOOKED).
    */
   async getSeatMapData(
@@ -707,9 +770,26 @@ export class SeatAllocationService {
         segment.toSequence,
       );
 
+    logger.info(
+      {
+        module: "getSeatMapData",
+        scheduleId,
+        fromStationId,
+        toStationId,
+        fromSequence: segment.fromSequence,
+        toSequence: segment.toSequence,
+        allocationsCount: allocations.length,
+        allocations,
+      },
+      "[DEBUG] getSeatMapData segment allocation lookup",
+    );
+
     const allocationStatusMap = new Map<string, AllocationStatus>();
     for (const alloc of allocations) {
-      allocationStatusMap.set(alloc.seatInventoryId, alloc.status);
+      const existing = allocationStatusMap.get(alloc.seatInventoryId);
+      if (!existing || alloc.status === AllocationStatus.CONFIRMED) {
+        allocationStatusMap.set(alloc.seatInventoryId, alloc.status);
+      }
     }
 
     const { coachesById, coachOrder } = this.buildCoachesMap(
@@ -785,7 +865,7 @@ export class SeatAllocationService {
         coach = {
           coachId: seat.coachId,
           coachNumber: seat.coachNumber,
-          coachType: "SL",
+          coachType: seat.coachType,
           totalSeats: 0,
           seats: [],
         };
@@ -793,29 +873,28 @@ export class SeatAllocationService {
         coachOrder.push(seat.coachId);
       }
 
-      const pricePerKm = Number(seat.pricePerKm);
-      const calculatedPrice =
-        segmentDistance > 0
-          ? (segmentDistance * pricePerKm).toFixed(2)
-          : pricePerKm.toString();
+      const calculatedPrice = calculateSeatFareRupees(
+        Math.max(0, segmentDistance),
+        seat.pricePerKm,
+      );
 
       const allocStatus = allocationStatusMap.get(seat.id);
-      let statusStr = "AVAILABLE";
+      let statusStr = SeatAvailabilityStatus.AVAILABLE;
       if (allocStatus === AllocationStatus.CONFIRMED) {
-        statusStr = "BOOKED";
+        statusStr = SeatAvailabilityStatus.BOOKED;
       } else if (allocStatus === AllocationStatus.HELD) {
-        statusStr = "HELD";
+        statusStr = SeatAvailabilityStatus.HELD;
       }
-      const isBooked = statusStr !== "AVAILABLE";
+      const isBooked = statusStr !== SeatAvailabilityStatus.AVAILABLE;
 
       coach.seats.push({
         seatId: seat.seatId,
         seatNumber: seat.seatNumber,
         seatType: seat.seatType,
-        berthType: "SEATER",
+        berthType: seat.seatType,
         price: calculatedPrice,
         isBooked,
-        quota: "GENERAL",
+        quota: seat.quota,
         status: statusStr,
       });
       coach.totalSeats = coach.seats.length;
@@ -866,27 +945,45 @@ export class SeatAllocationService {
 
   /**
    * Pre-flight validation for booking requests.
+   * Validates schedule existence, status, train departure date, and best-effort seat availability when seatIds are provided.
    */
   async validateBooking(
     scheduleId: string,
     fromStationId: string,
     toStationId: string,
+    seatIds: string[],
     clientRequestedAt?: Date,
   ) {
     const schedule =
       await this.scheduleInventoryRepository.findByScheduleId(scheduleId);
-    if (!schedule) return { status: "SCHEDULE_NOT_FOUND", departureAt: "" };
+    if (!schedule)
+      return {
+        status: ValidateBookingResponse_Status.SCHEDULE_NOT_FOUND,
+        seatInventoryIds: [],
+        fromSequence: 0,
+        toSequence: 0,
+      };
     if (schedule.status !== ScheduleInventoryStatus.ACTIVE) {
-      return { status: "SCHEDULE_INACTIVE", departureAt: "" };
+      return {
+        status: ValidateBookingResponse_Status.SCHEDULE_INACTIVE,
+        seatInventoryIds: [],
+        fromSequence: 0,
+        toSequence: 0,
+      };
     }
 
-    const stops: RouteStop[] =
-      await this.routeStopRepository.findStopsByScheduleAndStations(
-        scheduleId,
-        [fromStationId, toStationId],
-      );
-    if (stops.length < 2) {
-      return { status: "SCHEDULE_INACTIVE", departureAt: "" };
+    const segment = await this.resolveSeatMapSegmentStops(
+      scheduleId,
+      fromStationId,
+      toStationId,
+    );
+    if (!segment) {
+      return {
+        status: ValidateBookingResponse_Status.INVALID_ROUTE,
+        seatInventoryIds: [],
+        fromSequence: 0,
+        toSequence: 0,
+      };
     }
 
     const requestedAt = clientRequestedAt ?? new Date();
@@ -895,12 +992,67 @@ export class SeatAllocationService {
       requestedAt.getTime() >
       schedule.departureDate.getTime() + toleranceMs
     ) {
-      return { status: "TRAIN_ALREADY_DEPARTED", departureAt: "" };
+      return {
+        status: ValidateBookingResponse_Status.TRAIN_ALREADY_DEPARTED,
+        seatInventoryIds: [],
+        fromSequence: segment.fromSequence,
+        toSequence: segment.toSequence,
+      };
+    }
+
+    // 1. Check duplicate seat IDs
+    if (new Set(seatIds).size !== seatIds.length) {
+      return {
+        status: ValidateBookingResponse_Status.INVALID_SEAT_IDS,
+        seatInventoryIds: [],
+        fromSequence: segment.fromSequence,
+        toSequence: segment.toSequence,
+      };
+    }
+
+    // 2. Fetch seat inventory rows to verify existence & schedule belonging
+    const seats = await this.seatInventoryRepository.findByScheduleAndSeats(
+      scheduleId,
+      seatIds,
+    );
+    if (seats.length !== seatIds.length) {
+      return {
+        status: ValidateBookingResponse_Status.INVALID_SEAT_IDS,
+        seatInventoryIds: [],
+        fromSequence: segment.fromSequence,
+        toSequence: segment.toSequence,
+      };
+    }
+
+    // Preserve input seatIds ordering
+    const seatMap = new Map(seats.map((s) => [s.seatId, s.id]));
+    const seatInventoryIds = seatIds.map((id) => seatMap.get(id)!);
+
+    // 3. Check for active (CONFIRMED or unexpired HELD) overlapping allocations
+    const now = new Date();
+    const hasOverlap =
+      await this.seatAllocationRepository.hasOverlappingAllocation(
+        scheduleId,
+        seatInventoryIds,
+        segment.fromSequence,
+        segment.toSequence,
+        now,
+      );
+
+    if (hasOverlap) {
+      return {
+        status: ValidateBookingResponse_Status.SEAT_UNAVAILABLE,
+        seatInventoryIds: [],
+        fromSequence: segment.fromSequence,
+        toSequence: segment.toSequence,
+      };
     }
 
     return {
-      status: "OK",
-      departureAt: schedule.departureDate.toISOString(),
+      status: ValidateBookingResponse_Status.OK,
+      seatInventoryIds,
+      fromSequence: segment.fromSequence,
+      toSequence: segment.toSequence,
     };
   }
 }

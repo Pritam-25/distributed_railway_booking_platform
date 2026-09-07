@@ -1,12 +1,13 @@
 import { z } from "zod";
+import { moneyRupeesSchema, currencySchema } from "../money/index.js";
 
 export const paymentOrderCreatedV1Schema = z.object({
   eventId: z.uuid(),
   bookingId: z.uuid(),
   paymentOrderId: z.uuid(),
   razorpayOrderId: z.string(),
-  amount: z.string(),
-  currency: z.string().default("INR"),
+  amount: moneyRupeesSchema,
+  currency: currencySchema.default("INR"),
   createdAt: z.coerce.date(),
 });
 
@@ -18,7 +19,7 @@ export const paymentSuccessV1Schema = z.object({
   paymentId: z.uuid(),
   paymentOrderId: z.uuid(),
   razorpayPaymentId: z.string(),
-  amount: z.string(),
+  amount: moneyRupeesSchema,
   source: z.enum(["CLIENT", "WEBHOOK"]),
   createdAt: z.coerce.date(),
 });

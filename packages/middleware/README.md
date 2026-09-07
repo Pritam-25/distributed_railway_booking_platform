@@ -4,11 +4,13 @@ Centralized Express middleware components for the IRCTC-style distributed railwa
 
 ## Features
 
-- **Error Handling (`errorHandler` & `notFoundHandler`):** Intercepts exceptions globally, normalizes them, and returns standardized JSON error responses.
-- **Request Context (`requestId` & `requestLogger`):** Generates and attaches unique request IDs to each connection and logs metrics (duration, path, HTTP verbs).
+- **Direct Platform Logging:** Integrates directly with `@irctc/logger` to attach child loggers bound to incoming request correlation IDs (`x-request-id`).
+- **Error Handling (`errorHandler` & `notFoundHandler`):** Intercepts exceptions globally, normalizes them, logs 500-level errors with request IDs, and returns standardized JSON error envelopes.
+- **Request Context (`requestIdMiddleware` & `requestLoggerMiddleware`):** Assigns or forwards unique request correlation IDs, sets `X-Request-Id` headers, and logs duration, path, HTTP verb, status code, and trace IDs upon completion.
 - **Validation Middlewares (`validateSchema`, `validateQuery`, `validateParams`):** Integrates Zod schemas to validate request body, query parameters, and route parameters dynamically.
-- **Auth Guard (`auth`):** Validates session JSON Web Tokens (JWTs) and asserts authorization constraints based on roles (User, Admin).
-- **Async Utility (`asyncHandler`):** Wrapper simplifying error propagation in Express controller functions using `Promise` resolve pipelines.
+- **Auth Guard (`auth`):** Validates session JWT tokens and asserts authorization constraints based on roles (User, Admin).
+- **Async Utility (`asyncHandler`):** Wrapper simplifying error propagation in Express controller functions.
+- **Centralized Types:** Re-exports middleware options and Express request/response type augmentations from `src/types.ts`.
 
 ## Directory Structure
 
@@ -17,13 +19,16 @@ packages/middleware/
 ├── src/
 │   ├── asyncHandler.ts     # Wrapper for async routes to catch errors
 │   ├── auth.ts             # JWT authentication and RBAC validation
-│   ├── errorHandler.ts     # Global express error responder
+│   ├── errorHandler.ts     # Global express error responder using @irctc/logger
+│   ├── express.ts          # Express Request/Response type augmentations
 │   ├── notFoundHandler.ts  # Fallback handler for unmatched paths
-│   ├── requestId.ts        # Request ID injector middleware
-│   ├── requestLogger.ts    # HTTP request/response metrics logger
+│   ├── requestId.ts        # Request ID injector middleware using @irctc/logger
+│   ├── requestLogger.ts    # HTTP request/response metrics logger using @irctc/logger
+│   ├── validateHeaders.ts  # Zod validator for HTTP headers
 │   ├── validateParams.ts   # Zod validator for route path parameters
 │   ├── validateQuery.ts    # Zod validator for URL search parameters
 │   ├── validateSchema.ts   # Zod validator for HTTP body payloads
+│   ├── types.ts            # Centralized middleware options interfaces
 │   └── index.ts            # Main entry point exports
 ```
 
@@ -31,14 +36,12 @@ packages/middleware/
 
 ### 1. Registering Core Global Middlewares
 
-Register infrastructure middlewares in your Express application startup file:
-
 ```typescript
 import express from "express";
 import {
   requestIdMiddleware,
   requestLoggerMiddleware,
-  errorHandlerMiddleware,
+  errorHandler,
   notFoundHandler,
 } from "@irctc/middleware";
 
@@ -52,12 +55,10 @@ app.use(requestLoggerMiddleware);
 
 // Register fallback routes & error interceptor last
 app.use(notFoundHandler);
-app.use(errorHandlerMiddleware);
+app.use(errorHandler);
 ```
 
 ### 2. Request Validation Middlewares
-
-Validate incoming path parameters, query params, and body schemas using Zod:
 
 ```typescript
 import { Router } from "express";
@@ -65,6 +66,7 @@ import {
   validateSchema,
   validateQuery,
   validateParams,
+  asyncHandler,
 } from "@irctc/middleware";
 import { z } from "zod";
 
@@ -75,7 +77,7 @@ const searchSchema = z.object({
 });
 
 const pathSchema = z.object({
-  id: z.uuid(),
+  id: z.string().uuid(),
 });
 
 const bodySchema = z.object({
@@ -88,32 +90,28 @@ router.post(
   validateQuery(searchSchema),
   validateSchema(bodySchema),
   asyncHandler(async (req, res) => {
-    // Parameter, query, and body data are parsed and typed here
     const { id } = req.params;
     const { date } = req.query;
     const { passengers } = req.body;
 
-    res.json({ success: true });
+    res.json({ success: true, bookingId: id });
   }),
 );
 ```
 
 ### 3. Authentication & Authorization Guard
 
-Protect API endpoints based on user session roles:
-
 ```typescript
 import { Router } from "express";
-import { auth, asyncHandler } from "@irctc/middleware";
+import { authUser, authAdmin, asyncHandler } from "@irctc/middleware";
 
 const router = Router();
 
 // User authenticated routes
 router.get(
   "/profile",
-  auth(),
+  authUser,
   asyncHandler(async (req, res) => {
-    // Access authenticated context
     const user = req.user;
     res.json({ user });
   }),
@@ -122,8 +120,9 @@ router.get(
 // Admin restricted routes
 router.post(
   "/trains",
-  auth(["ADMIN"]),
+  authAdmin,
   asyncHandler(async (req, res) => {
+    const admin = req.admin;
     res.json({ message: "Train created successfully" });
   }),
 );

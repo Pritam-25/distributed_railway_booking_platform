@@ -7,19 +7,16 @@ import {
   type PaymentOrderCreatedV1,
   type PaymentSuccessV1,
   type PaymentFailedV1,
+  paiseToRupees,
+  formatRupees,
 } from "@irctc/contracts";
-import { RAZORPAY_WEBHOOK_EVENTS } from "@constants";
 import { type OutboxRepository } from "@irctc/kafka";
 import { logger } from "@irctc/logger";
 import { ApiError, COMMON_ERROR_CODES } from "@irctc/errors";
 import { statusCode } from "@irctc/http";
 import { env } from "@config";
 import { PaymentRepository, type PrismaTransaction } from "@repository";
-import {
-  createRazorpayOrder,
-  verifyPaymentSignature,
-  verifyWebhookSignature,
-} from "@utils";
+import { createRazorpayOrder, verifyPaymentSignature } from "@utils";
 
 type OutboxPrismaParam = Parameters<OutboxRepository["insert"]>[0];
 
@@ -65,7 +62,7 @@ export interface VerifyPaymentOutput {
 }
 
 /**
- * Core business service managing payment order creation, verification, and webhooks.
+ * Core business service managing payment order creation, verification, and failure handling.
  */
 export class PaymentService {
   /**
@@ -102,7 +99,7 @@ export class PaymentService {
 
     const paymentOrderId = crypto.randomUUID();
     const amountInPaise = input.amount;
-    const decimalAmountStr = (input.amount / 100).toFixed(2);
+    const decimalAmountStr = paiseToRupees(BigInt(input.amount));
 
     // Create order with Razorpay SDK (or mock if using dummy keys)
     const razorpayOrder = await createRazorpayOrder({
@@ -135,7 +132,7 @@ export class PaymentService {
         paymentOrderId: payment.paymentOrderId,
         razorpayOrderId: razorpayOrder.id,
         amount: decimalAmountStr,
-        currency: input.currency || "INR",
+        currency: "INR",
         createdAt: new Date(),
       };
 
@@ -176,18 +173,20 @@ export class PaymentService {
   async verifyAndCapture(
     input: VerifyPaymentInput,
   ): Promise<VerifyPaymentOutput> {
-    const isValidSignature = verifyPaymentSignature({
-      razorpayOrderId: input.razorpayOrderId,
-      razorpayPaymentId: input.razorpayPaymentId,
-      razorpaySignature: input.razorpaySignature,
-    });
+    if (input.source !== "WEBHOOK") {
+      const isValidSignature = verifyPaymentSignature({
+        razorpayOrderId: input.razorpayOrderId,
+        razorpayPaymentId: input.razorpayPaymentId,
+        razorpaySignature: input.razorpaySignature,
+      });
 
-    if (!isValidSignature) {
-      throw new ApiError(
-        statusCode.badRequest,
-        COMMON_ERROR_CODES.INVALID_INPUT,
-        "Invalid Razorpay payment signature.",
-      );
+      if (!isValidSignature) {
+        throw new ApiError(
+          statusCode.badRequest,
+          COMMON_ERROR_CODES.INVALID_INPUT,
+          "Invalid Razorpay payment signature.",
+        );
+      }
     }
 
     const payment = await this.paymentRepo.findByRazorpayOrderId(
@@ -236,7 +235,7 @@ export class PaymentService {
         paymentId: payment.id,
         paymentOrderId: payment.paymentOrderId,
         razorpayPaymentId: input.razorpayPaymentId,
-        amount: payment.amount.toString(),
+        amount: formatRupees(payment.amount),
         source: input.source || "CLIENT",
         createdAt: new Date(),
       };
@@ -318,68 +317,6 @@ export class PaymentService {
       },
       "Payment marked as FAILED and PaymentFailedV1 outbox event published.",
     );
-  }
-
-  /**
-   * Processes raw Razorpay webhook payload and signature.
-   *
-   * @param rawBody - Raw HTTP body payload string or Buffer.
-   * @param signature - Signature from `x-razorpay-signature` header.
-   * @returns Status summary object.
-   */
-  async handleWebhook(
-    rawBody: string | Buffer,
-    signature: string,
-  ): Promise<{ status: string; event?: string }> {
-    const isValid = verifyWebhookSignature(rawBody, signature);
-    if (!isValid) {
-      throw new ApiError(
-        statusCode.badRequest,
-        COMMON_ERROR_CODES.INVALID_INPUT,
-        "Invalid webhook signature.",
-      );
-    }
-
-    const webhookBody =
-      typeof rawBody === "string"
-        ? JSON.parse(rawBody)
-        : JSON.parse(rawBody.toString("utf8"));
-
-    const event = webhookBody.event as string;
-    const eventPayload = webhookBody.payload;
-
-    logger.info(
-      { module: "PaymentWebhook", event },
-      "Razorpay webhook received.",
-    );
-
-    if (
-      event === RAZORPAY_WEBHOOK_EVENTS.PAYMENT_CAPTURED ||
-      event === RAZORPAY_WEBHOOK_EVENTS.ORDER_PAID
-    ) {
-      const entity =
-        eventPayload?.payment?.entity || eventPayload?.order?.entity;
-      if (entity?.order_id && entity.id) {
-        await this.verifyAndCapture({
-          razorpayOrderId: entity.order_id,
-          razorpayPaymentId: entity.id,
-          razorpaySignature: signature,
-          source: "WEBHOOK",
-        });
-      }
-    } else if (event === RAZORPAY_WEBHOOK_EVENTS.PAYMENT_FAILED) {
-      const entity =
-        eventPayload?.payment?.entity || eventPayload?.order?.entity;
-      if (entity?.order_id) {
-        const errorReason =
-          entity.error_description ||
-          entity.error_code ||
-          "Payment failed at gateway";
-        await this.markAsFailed(entity.order_id, errorReason);
-      }
-    }
-
-    return { status: "PROCESSED", event };
   }
 
   /**

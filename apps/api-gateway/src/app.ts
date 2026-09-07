@@ -1,22 +1,3 @@
-/**
- * ## module/app
- *
- * `api-gateway` Express application. The framework boilerplate (helmet,
- * CORS, cookie parser, request id, request logger, not-found handler,
- * error handler) is wired by `createApp` from `@irctc/http`. Middleware
- * is injected to avoid a cycle with `@irctc/middleware`.
- *
- * CORS is enabled because the gateway is the public edge; the framework
- * defaults are overridden to match the gateway's existing allowed /
- * exposed header set.
- *
- * Body parsers are registered by `createApp` but inert here — the
- * gateway is a pure proxy and never reads `req.body`.
- *
- * The root banner and per-prefix proxy chains (`mountRoutes`) are
- * appended after `createApp` so service-specific routing lives next to
- * the route configuration.
- */
 import type { Request, Response } from "express";
 import { successResponse, statusCode, createApp } from "@irctc/http";
 import {
@@ -54,8 +35,11 @@ const app = createApp({
             health: "/health",
             auth: "/api/v1/auth",
             users: "/api/v1/users",
+            admin: "/api/v1/admin",
+            bookings: "/api/v1/bookings",
+            schedules: "/api/v1/schedules",
             search: "/api/v1/search",
-            inventory: "/api/v1/inventory",
+            payments: "/api/v1/payments",
           },
         }),
       );

@@ -1,22 +1,36 @@
 import type { Request, Response } from "express";
 import { successResponse, statusCode } from "@irctc/http";
-import { PaymentService } from "@services";
-import type { VerifyPaymentDto } from "@dto";
+import {
+  PaymentService,
+  PaymentRefundService,
+  WebhookProcessor,
+} from "@services";
+import type {
+  VerifyPaymentDto,
+  PaymentOrderIdParamDto,
+  RefundPaymentRequestDto,
+} from "@dto";
 
 export interface RequestWithRawBody extends Request {
   rawBody?: Buffer | string;
 }
 
 /**
- * HTTP Controller for payment verification and webhook processing.
+ * HTTP Controller for payment verification, refunds, and webhook processing.
  */
 export class PaymentController {
   /**
    * Initializes PaymentController.
    *
-   * @param paymentService - PaymentService instance injected by the DI container.
+   * @param paymentService - PaymentService instance for checkout & verification.
+   * @param refundService - PaymentRefundService instance for refund processing.
+   * @param webhookProcessor - WebhookProcessor instance for routing external gateway events.
    */
-  constructor(private readonly paymentService: PaymentService) {}
+  constructor(
+    private readonly paymentService: PaymentService,
+    private readonly refundService: PaymentRefundService,
+    private readonly webhookProcessor: WebhookProcessor,
+  ) {}
 
   /**
    * REST endpoint to verify Razorpay checkout signature.
@@ -42,6 +56,27 @@ export class PaymentController {
   }
 
   /**
+   * REST endpoint to initiate a payment refund directly via HTTP.
+   *
+   * @param req - Express Request object containing paymentOrderId param and optional body.
+   * @param res - Express Response object returning 202 Accepted.
+   */
+  async refundPayment(req: Request, res: Response): Promise<void> {
+    const { paymentOrderId } = req.params as unknown as PaymentOrderIdParamDto;
+    const body = req.body as RefundPaymentRequestDto | undefined;
+
+    const result = await this.refundService.initiateHttpRefund(
+      paymentOrderId,
+      body?.amount,
+      body?.reason,
+    );
+
+    res
+      .status(statusCode.accepted)
+      .json(successResponse("Refund request accepted for processing.", result));
+  }
+
+  /**
    * Razorpay Webhook endpoint.
    *
    * @param req - Express Request object with rawBody populated for signature check.
@@ -51,8 +86,11 @@ export class PaymentController {
     const signature = req.headers["x-razorpay-signature"] as string;
 
     const customReq = req as RequestWithRawBody;
-    const rawBody = customReq.rawBody || JSON.stringify(req.body);
-    const result = await this.paymentService.handleWebhook(rawBody, signature);
+    const rawBody =
+      customReq.rawBody ||
+      (Buffer.isBuffer(req.body) ? req.body : String(req.body));
+
+    const result = await this.webhookProcessor.process(rawBody, signature);
 
     res.status(statusCode.success).json(result);
   }

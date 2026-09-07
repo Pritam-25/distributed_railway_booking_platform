@@ -1,4 +1,11 @@
-import { prisma, redis, env, getProducerSync, getConsumer } from "@config";
+import {
+  prisma,
+  redis,
+  redisSubscriber,
+  env,
+  getProducerSync,
+  getConsumer,
+} from "@config";
 import { BookingController, BookingEventsController } from "@controllers";
 import {
   BookingSagaOrchestrator,
@@ -14,11 +21,21 @@ import {
 import { IdempotencyRepository } from "@irctc/redis";
 import { logger } from "@irctc/logger";
 import { CONSUMER_GROUPS } from "@irctc/contracts";
-import { BookingEventBroadcaster } from "../sse/booking-event-broadcaster.js";
+import {
+  BookingEventBroadcaster,
+  SeatEventBroadcaster,
+  SeatEventsController,
+  BookingSseManager,
+  SeatSseManager,
+  RedisSubscriptionManager,
+  RealtimeEventRouter,
+  DistributedBookingEventRouter,
+} from "@sse";
 import {
   SeatsResultConsumer,
   PaymentResultConsumer,
-} from "../consumers/index.js";
+  RefundResultConsumer,
+} from "@consumers";
 import {
   getInventoryGrpcClient,
   InventoryAdapter,
@@ -51,6 +68,11 @@ export class BookingContainer {
   public readonly bookingEventsController: BookingEventsController;
 
   /**
+   * SSE controller for `GET /schedules/:scheduleId/seat-events`.
+   */
+  public readonly seatEventsController: SeatEventsController;
+
+  /**
    * Outbox publisher worker instance.
    */
   private readonly outboxWorker: OutboxPublisherWorker;
@@ -59,6 +81,16 @@ export class BookingContainer {
    * Kafka consumer that fans out `BookingStatusChangedV1` to Redis pub/sub.
    */
   private readonly bookingEventBroadcaster: BookingEventBroadcaster;
+
+  /**
+   * Realtime event router attached to redisSubscriber.
+   */
+  private readonly realtimeEventRouter: RealtimeEventRouter;
+
+  /**
+   * Kafka consumer that fans out `SeatAvailabilityChangedV1` to Redis pub/sub.
+   */
+  private readonly seatEventBroadcaster: SeatEventBroadcaster;
 
   /**
    * Kafka consumer for inventory-service saga-result events.
@@ -70,15 +102,21 @@ export class BookingContainer {
    */
   private readonly paymentResultConsumer: PaymentResultConsumer;
 
+  /**
+   * Kafka consumer for payment-service refund result events.
+   */
+  private readonly refundResultConsumer: RefundResultConsumer;
+
   private constructor() {
     // 1. Repositories
     const outboxRepository = new PostgresOutboxRepository(prisma);
     const bookingRepository = new BookingRepository(prisma);
     const sagaRepository = new SagaRepository(prisma);
 
-    // 2. Services
     const inventoryAdapter = new InventoryAdapter(getInventoryGrpcClient());
     const paymentAdapter = new PaymentAdapter(getPaymentGrpcClient());
+
+    // 2. Services
     const seatLockService = new SeatLockService(redis);
     const bookingService = new BookingService(
       prisma,
@@ -103,17 +141,30 @@ export class BookingContainer {
       bookingRepository,
       sagaRepository,
       sagaIdempotencyRepository,
-      bookingService,
+      outboxRepository,
     );
 
-    // 3. Controllers
+    // 3. Process-local SSE Managers & Routers
+    const bookingSseManager = new BookingSseManager();
+    const subscriptionManager = new RedisSubscriptionManager(redisSubscriber);
+    const seatSseManager = new SeatSseManager(subscriptionManager);
+
+    const bookingEventRouter = new DistributedBookingEventRouter(redis);
+    this.realtimeEventRouter = new RealtimeEventRouter(
+      redisSubscriber,
+      bookingSseManager,
+      seatSseManager,
+    );
+
+    // 4. Controllers
     this.bookingController = new BookingController(bookingService);
     this.bookingEventsController = new BookingEventsController(
       bookingRepository,
-      () => redis.duplicate(),
+      bookingSseManager,
     );
+    this.seatEventsController = new SeatEventsController(seatSseManager);
 
-    // 4. SSE Kafka consumer → Redis pub/sub broadcaster
+    // 5. SSE Kafka consumer → Event Router
     const statusBroadcastConsumer = getConsumer(
       CONSUMER_GROUPS.BOOKING_STATUS_BROADCAST,
     );
@@ -123,11 +174,24 @@ export class BookingContainer {
     );
     this.bookingEventBroadcaster = new BookingEventBroadcaster(
       statusBroadcastRunner,
+      bookingEventRouter,
+      logger,
+    );
+
+    const seatBroadcastConsumer = getConsumer(
+      CONSUMER_GROUPS.SEAT_AVAILABILITY_BROADCAST,
+    );
+    const seatBroadcastRunner = new KafkaConsumerRunner(
+      seatBroadcastConsumer,
+      logger,
+    );
+    this.seatEventBroadcaster = new SeatEventBroadcaster(
+      seatBroadcastRunner,
       redis,
       logger,
     );
 
-    // 5. Saga-result Kafka consumer → orchestrator
+    // 6. Saga-result Kafka consumer → orchestrator
     const seatsHeldConsumer = getConsumer(CONSUMER_GROUPS.BOOKING_SEATS_RESULT);
     const seatsHoldFailedConsumer = getConsumer(
       CONSUMER_GROUPS.BOOKING_SEATS_RESULT,
@@ -153,7 +217,7 @@ export class BookingContainer {
       logger,
     );
 
-    // 6. Payment success Kafka consumer → orchestrator
+    // 7. Payment success Kafka consumer → orchestrator
     const paymentSuccessConsumer = getConsumer(
       CONSUMER_GROUPS.BOOKING_PAYMENT_SUCCESS,
     );
@@ -168,14 +232,32 @@ export class BookingContainer {
       logger,
     );
 
-    // 7. Outbox publisher worker
+    // 7b. Payment refund result Kafka consumer → orchestrator
+    const refundResultConsumerInstance = getConsumer(
+      CONSUMER_GROUPS.BOOKING_REFUND_RESULT,
+    );
+    const refundResultRunner = new KafkaConsumerRunner(
+      refundResultConsumerInstance,
+      logger,
+    );
+    this.refundResultConsumer = new RefundResultConsumer(
+      getProducerSync(),
+      refundResultRunner,
+      bookingSagaOrchestrator,
+      logger,
+    );
+
+    // 8. Outbox publisher worker
     this.outboxWorker = new OutboxPublisherWorker(
       outboxRepository,
       getProducerSync,
       logger,
     );
 
-    logger.info({ module: "booking-container" }, "Dependencies wired.");
+    logger.info(
+      { module: "booking-container" },
+      "Application components & container initialized.",
+    );
   }
 
   /**
@@ -185,9 +267,12 @@ export class BookingContainer {
    */
   async start(): Promise<void> {
     this.outboxWorker.start();
+    await this.realtimeEventRouter.start();
     await this.bookingEventBroadcaster.start();
+    await this.seatEventBroadcaster.start();
     await this.seatsResultConsumer.start();
     await this.paymentResultConsumer.start();
+    await this.refundResultConsumer.start();
   }
 
   /**
@@ -212,9 +297,12 @@ export class BookingContainer {
    *   consumers have stopped.
    */
   async disconnect(): Promise<void> {
+    await this.realtimeEventRouter.stop();
     await this.bookingEventBroadcaster.stop();
+    await this.seatEventBroadcaster.stop();
     await this.seatsResultConsumer.stop();
     await this.paymentResultConsumer.stop();
+    await this.refundResultConsumer.stop();
     await this.outboxWorker.stop();
   }
 }

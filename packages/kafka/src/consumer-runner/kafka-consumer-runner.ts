@@ -1,25 +1,8 @@
-import { KafkaJS } from "@confluentinc/kafka-javascript";
 import { SpanKind, SpanStatusCode, context, trace } from "@opentelemetry/api";
-
-type Consumer = KafkaJS.Consumer;
-type EachMessagePayload = KafkaJS.EachMessagePayload;
 import { extractTraceContextFromKafkaHeaders } from "@irctc/telemetry";
+import type { Consumer, EachMessagePayload, LoggerLike } from "../types.js";
 
-/**
- * Minimal diagnostic logging interface.
- *
- * Encapsulates standard log levels required by {@link KafkaConsumerRunner} without creating a rigid dependency on Pino.
- */
-export interface LoggerLike {
-  /** Log informational messages. */
-  info: (obj: Record<string, unknown>, msg: string) => void;
-  /** Log non-fatal warnings. */
-  warn: (obj: Record<string, unknown>, msg: string) => void;
-  /** Log execution errors. */
-  error: (obj: Record<string, unknown>, msg: string) => void;
-  /** Log fatal unrecoverable errors. */
-  fatal?: (obj: Record<string, unknown>, msg: string) => void;
-}
+export type { LoggerLike };
 
 /**
  * Async message handler callback function signature.
@@ -76,8 +59,17 @@ export class KafkaConsumerRunner {
             `${payload.topic} process`,
             { kind: SpanKind.CONSUMER },
             async (span) => {
+              const startTime = Date.now();
               try {
                 await handler(payload);
+                this.logger.info(
+                  {
+                    module: "kafka-consumer-runner",
+                    topic: payload.topic,
+                    durationMs: Date.now() - startTime,
+                  },
+                  `Kafka message successfully processed from topic "${payload.topic}"`,
+                );
               } catch (err) {
                 span.recordException(err as Error);
                 span.setStatus({

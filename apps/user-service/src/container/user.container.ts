@@ -40,7 +40,10 @@ export class UserContainer {
     this.authController = new AuthController(authService);
     this.userController = new UserController(userService);
 
-    logger.info({ module: "user-container" }, "Dependencies wired.");
+    logger.info(
+      { module: "user-container" },
+      "Application components & container initialized.",
+    );
   }
 
   /**

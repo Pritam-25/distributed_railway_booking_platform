@@ -38,6 +38,7 @@ export const KAFKA_TOPICS = {
   // ------------ inventory domain ------------
   INVENTORY_SCHEDULE_PROJECTED: "inventory.schedule-projected.v1",
   INVENTORY_SCHEDULE_STATUS_CHANGED: "inventory.schedule-status-changed.v1",
+  SEAT_AVAILABILITY_CHANGED: "seat.availability-changed.v1",
 
   // ------------ booking ↔ inventory saga ------------
   BOOKING_HOLD_SEATS_REQUESTED: "booking.hold-seats-requested.v1",
@@ -47,6 +48,9 @@ export const KAFKA_TOPICS = {
 
   // ------------ booking domain ------------
   BOOKING_STATUS_CHANGED: "booking.status-changed.v1",
+
+  // ------------ booking → payment cancellation saga ------------
+  BOOKING_REFUND_REQUESTED: "booking.refund-requested.v1",
 
   // ------------ payment domain ------------
   PAYMENT_ORDER_CREATED: "payment.order-created.v1",

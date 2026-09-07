@@ -11,6 +11,8 @@ export const CONSUMER_GROUPS = {
   SEARCH_SCHEDULE_STATUS_CHANGED:
     "search-service-schedule-status-change-consumer",
   BOOKING_STATUS_BROADCAST: "booking-service-status-broadcast-consumer",
+  SEAT_AVAILABILITY_BROADCAST:
+    "booking-service-seat-availability-broadcast-consumer",
   BOOKING_SEATS_RESULT: "booking-service-seats-result-consumer",
   INVENTORY_HOLD_SEATS_REQUESTED:
     "inventory-service-hold-seats-requested-consumer",
@@ -19,4 +21,7 @@ export const CONSUMER_GROUPS = {
   PAYMENT_BOOKING_CANCELLED: "payment-service-booking-cancelled-consumer",
   INVENTORY_BOOKING_STATUS_CHANGED:
     "inventory-service-booking-status-changed-consumer",
+  // cancellation refund saga
+  PAYMENT_REFUND_REQUESTED: "payment-service-refund-requested-consumer",
+  BOOKING_REFUND_RESULT: "booking-service-refund-result-consumer",
 } as const;
