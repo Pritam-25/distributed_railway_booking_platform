@@ -9,7 +9,6 @@ import { redis } from "@config";
 const healthDependencies: HealthDependency[] = [
   { name: "redis", check: () => checkRedisHealth(redis) },
 ];
-
 /**
  * Routes to check the health of the API gateway.
  */

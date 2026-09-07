@@ -18,4 +18,6 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
     "One or more selected seats are no longer available for this journey.",
   INVALID_ROUTE:
     "The requested origin and destination stations are invalid for this train route.",
+  CANCELLATION_NOT_ALLOWED:
+    "Booking cannot be cancelled in its current state or past the cancellation cutoff.",
 };

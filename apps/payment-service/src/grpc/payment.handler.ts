@@ -1,9 +1,10 @@
-import type {
-  PaymentServiceImplementation,
-  CreateOrderRequest,
-  CreateOrderResponse,
-  GetOrderStatusRequest,
-  GetOrderStatusResponse,
+import {
+  GetOrderStatusResponse_Status,
+  type PaymentServiceImplementation,
+  type CreateOrderRequest,
+  type CreateOrderResponse,
+  type GetOrderStatusRequest,
+  type GetOrderStatusResponse,
 } from "@irctc/contracts";
 import { PaymentService } from "@services";
 import { logger } from "@irctc/logger";
@@ -86,7 +87,7 @@ export class PaymentGrpcHandler implements PaymentServiceImplementation {
       paymentOrderId: status.paymentOrderId,
       razorpayOrderId: status.razorpayOrderId,
       razorpayPaymentId: status.razorpayPaymentId,
-      status: status.status,
+      status: GetOrderStatusResponse_Status.CAPTURED,
       amount: status.amount,
       currency: status.currency,
     };

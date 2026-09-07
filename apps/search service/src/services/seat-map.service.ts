@@ -51,11 +51,6 @@ export class SeatMapService {
     query: SeatMapQueryDto,
     headers?: Record<string, string | string[] | undefined>,
   ): Promise<SeatMapResponseDto> {
-    logger.debug(
-      { module: "seat-map-service", scheduleId: params.scheduleId },
-      "1. Starting getSeatMap execution",
-    );
-
     const cacheKey = this.buildCacheKey(params.scheduleId, query);
 
     const headerVal = Array.isArray(headers?.["cache-control"])
@@ -67,25 +62,12 @@ export class SeatMapService {
 
     const noCache = headerVal?.includes("no-cache") || pragmaVal === "no-cache";
 
-    if (!noCache) {
-      logger.debug(
-        { module: "seat-map-service", cacheKey },
-        "2. Reading Redis cache",
-      );
+    if (!noCache && env.SEAT_MAP_CACHE_TTL_SECONDS > 0) {
       const cached = await this.tryReadCache(cacheKey);
       if (cached) return cached;
     }
 
-    logger.debug(
-      { module: "seat-map-service", scheduleId: params.scheduleId },
-      "3. Running precheckSchedule against Elasticsearch",
-    );
     await this.precheckSchedule(params.scheduleId);
-
-    logger.debug(
-      { module: "seat-map-service", scheduleId: params.scheduleId },
-      "4. Calling callInventoryGetSeatMap gRPC",
-    );
     const grpcResponse = await this.callInventoryGetSeatMap(
       {
         scheduleId: params.scheduleId,
@@ -95,14 +77,6 @@ export class SeatMapService {
       headers,
     );
 
-    logger.debug(
-      {
-        module: "seat-map-service",
-        scheduleId: params.scheduleId,
-        status: grpcResponse.status,
-      },
-      "5. Validating and mapping gRPC response DTO",
-    );
     this.validateGrpcResponseStatus(grpcResponse.status);
 
     const response = SeatMapMapper.toResponseDto(grpcResponse);
@@ -189,6 +163,7 @@ export class SeatMapService {
     key: string,
     payload: SeatMapResponseDto,
   ): Promise<void> {
+    if (env.SEAT_MAP_CACHE_TTL_SECONDS <= 0) return;
     try {
       const serialized = JSON.stringify(payload);
       await this.redis.set(
@@ -197,7 +172,6 @@ export class SeatMapService {
         "EX",
         env.SEAT_MAP_CACHE_TTL_SECONDS,
       );
-      logger.debug({ module: "seat-map-service", key }, "Redis cache write OK");
     } catch (err) {
       logger.warn(
         { module: "seat-map-service", key, err },

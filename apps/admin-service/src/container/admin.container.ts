@@ -123,7 +123,10 @@ export class AdminContainer {
     this.routeController = new RouteController(routeService);
     this.scheduleController = new ScheduleController(scheduleService);
 
-    logger.info({ module: "admin-container" }, "Dependencies wired.");
+    logger.info(
+      { module: "admin-container" },
+      "Application components & container initialized.",
+    );
   }
 
   /**

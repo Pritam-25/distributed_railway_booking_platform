@@ -6,6 +6,7 @@ import { mapGrpcClientErrorToApiError } from "@irctc/grpc";
 import { ApiError, COMMON_ERROR_CODES } from "@irctc/errors";
 import { statusCode } from "@irctc/http";
 import { ERROR_CODES } from "@utils/errors";
+import { env } from "@config";
 
 export interface ValidateBookingScheduleParams {
   scheduleId: string;
@@ -45,17 +46,22 @@ export class InventoryAdapter {
   }> {
     let response;
     try {
-      response = await this.client.validateBooking({
-        scheduleId: params.scheduleId,
-        fromStationId: params.fromStationId,
-        toStationId: params.toStationId,
-        clientRequestedAt: new Date(),
-        seatIds: params.seatIds,
-      });
+      response = await this.client.validateBooking(
+        {
+          scheduleId: params.scheduleId,
+          fromStationId: params.fromStationId,
+          toStationId: params.toStationId,
+          clientRequestedAt: new Date(),
+          seatIds: params.seatIds,
+        },
+        {
+          signal: AbortSignal.timeout(env.BOOKING_VALIDATE_DEADLINE_MS),
+        },
+      );
     } catch (err) {
       throw mapGrpcClientErrorToApiError(
         err,
-        "Could not validate booking schedule. Please retry shortly.",
+        "Could not validate booking. Please retry shortly.",
       );
     }
 

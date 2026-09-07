@@ -97,7 +97,7 @@ export const env = createEnv({
     // toStationId) tuple. The 60s window is bounded by the booking-service
     // pre-flight `CheckAvailability` call, which closes the race even on a
     // stale read.
-    SEAT_MAP_CACHE_TTL_SECONDS: z.coerce.number().int().min(1).default(60),
+    SEAT_MAP_CACHE_TTL_SECONDS: z.coerce.number().int().min(0).default(0),
     SEAT_MAP_CACHE_KEY_PREFIX: z.string().default("cache:seat-map"),
 
     // Telemetry configuration environment

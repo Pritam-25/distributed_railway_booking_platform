@@ -35,6 +35,8 @@ export const HoldSeatsRequestedV1 = z.object({
 
 export type HoldSeatsRequestedV1Type = z.input<typeof HoldSeatsRequestedV1>;
 
+import { moneyRupeesSchema } from "../money/index.js";
+
 /**
  * Per-seat allocation row carried by {@link SeatsHeldV1}.
  */
@@ -44,8 +46,8 @@ export const SeatAllocationV1 = z.object({
   coachNumber: z.string().min(1),
   seatNumber: z.number().int().positive(),
   seatType: z.string().min(1),
-  /** Price in the smallest currency unit (rupees, integer). */
-  price: z.number().nonnegative(),
+  /** Price formatted as a canonical 2-decimal string in Rupees (e.g. "250.00"). */
+  price: moneyRupeesSchema,
 });
 
 export type SeatAllocationV1Type = z.infer<typeof SeatAllocationV1>;

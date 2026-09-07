@@ -17,11 +17,11 @@ import type { CreateHealthRouterOptions, HealthChecks } from "./types.js";
  * - `GET /ready` — readiness. Runs every dependency probe in parallel,
  *   bounded by `probeTimeoutMs`. Returns:
  *
- *   | Outcome | Status | Body |
- *   | --- | --- | --- |
- *   | All probes pass | 200 | `{ status: "ready", checks }` |
- *   | Any probe fails | 503 | `{ status: "unhealthy", checks }` |
- *   | Aggregate throws | 503 | `{ status: "error", error }` |
+ *   | Outcome          | Status | Body                              |
+ *   | ---------------- | ------ | --------------------------------- |
+ *   | All probes pass  | 200    | `{ status: "ready", checks }`     |
+ *   | Any probe fails  | 503    | `{ status: "unhealthy", checks }` |
+ *   | Aggregate throws | 503    | `{ status: "error", error }`      |
  *
  *   Each `HealthDependency.check()` is wrapped in `withTimeout(...)` so a
  *   single slow dependency cannot hang the response past the k8s grace

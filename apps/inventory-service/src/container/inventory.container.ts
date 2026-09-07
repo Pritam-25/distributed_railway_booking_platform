@@ -184,7 +184,10 @@ export class InventoryContainer {
       logger,
     );
 
-    logger.info({ module: "inventory-container" }, "Dependencies wired.");
+    logger.info(
+      { module: "inventory-container" },
+      "Application components & container initialized.",
+    );
   }
 
   /**

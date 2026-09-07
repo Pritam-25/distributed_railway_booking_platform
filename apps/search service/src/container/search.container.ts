@@ -178,7 +178,10 @@ export class SearchContainer {
       logger,
     );
 
-    logger.info({ module: "search-container" }, "Dependencies wired.");
+    logger.info(
+      { module: "search-container" },
+      "Application components & container initialized.",
+    );
   }
 
   /**

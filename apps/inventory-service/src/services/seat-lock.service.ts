@@ -143,7 +143,7 @@ export class SeatLockService {
         },
         "Error acquiring inventory seat-segment locks via Redis Lua",
       );
-      return false;
+      throw error;
     }
   }
 
@@ -192,7 +192,7 @@ export class SeatLockService {
         },
         "Error releasing inventory seat-segment locks via Redis Lua",
       );
-      return 0;
+      throw error;
     }
   }
 }

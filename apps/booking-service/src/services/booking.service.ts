@@ -9,8 +9,14 @@ import {
 import {
   EVENT_TYPES,
   KAFKA_TOPICS,
+  GetOrderStatusResponse_Status,
+  RefundStatus,
   type BookingStatusChangedV1Type,
   type HoldSeatsRequestedV1Type,
+  type BookingRefundRequestedV1Type,
+  formatRupees,
+  rupeesToPaise,
+  paiseToNumber,
 } from "@irctc/contracts";
 import { type OutboxRepository } from "@irctc/kafka";
 import { ApiError, COMMON_ERROR_CODES } from "@irctc/errors";
@@ -21,49 +27,32 @@ import { InventoryAdapter, PaymentAdapter } from "@grpc";
 import { env } from "@config";
 import { type BookingRepository, type SagaRepository } from "@repository";
 import { ERROR_CODES } from "@utils/errors";
-import { type CreateBookingDto, type CreateBookingResponse } from "@dto";
+import {
+  type CreateBookingDto,
+  type CreateBookingResponse,
+  type CancelBookingResponse,
+  type PayBookingResponse,
+} from "@dto";
 import { SeatLockService } from "./seat-lock.service.js";
+import {
+  CANCELLABLE_BOOKING_STATUSES,
+  executeBookingTransition,
+  mapSagaStatusToRefundStatus,
+} from "./booking-state-machine.js";
 
 /**
- * Partial database fields that can be updated during a booking state transition.
- */
-interface BookingTransitionUpdate {
-  lockExpiresAt: Date;
-  paymentOrderId: string;
-  failureReason: string;
-}
-
-/**
- * Arguments for transitioning a booking status.
- */
-interface TransitionArgs {
-  bookingId: string;
-  target: BookingStatus;
-  allowedFrom?: BookingStatus;
-  fromStates?: readonly BookingStatus[];
-  updates?: Partial<BookingTransitionUpdate>;
-}
-
-/**
- * Service class implementing the booking-saga business logic.
+ * Service class implementing the booking domain and user-facing lifecycle.
  *
  * ## Responsibilities
  * - Validates and persists new bookings (`createBooking`).
- * - Drives the nine-state lifecycle: `PENDING → SEATS_HELD →
- *   PAYMENT_PENDING → CONFIRMING → CONFIRMED`, plus terminal branches
- *   `FAILED`, `EXPIRED`, `CANCELLING → CANCELLED`.
- * - Writes one `BookingStatusChangedV1` row to the transactional outbox
- *   per state transition so downstream consumers (and the future SSE
- *   broadcaster) see every CAS change atomically with the booking row.
+ * - Executes user-driven cancellations and refund dispatch (`cancelBooking`).
+ * - Coordinates payment order generation with payment-service (`createPaymentOrder`).
+ * - Provides authenticated queries (`findByIdForUser`, `findByPnr`).
  *
- * ## Concurrency
- * Every transition funnels through `bookingRepository.updateStatus`,
- * which uses an `updateMany` with a `version: { lt: expectedVersion }`
- * guard. Concurrent writers race at the database; exactly one wins,
- * the rest observe `updated: false` and surface `BOOKING_INVALID_TRANSITION`.
- *
- * Side effects: Postgres writes (always inside a transaction) and one
- * outbox-row insert per transition.
+ * ## Concurrency & Consistency
+ * State mutations are funneled through `executeBookingTransition`, enforcing
+ * optimistic concurrency control via version-guarded CAS and publishing
+ * `BookingStatusChangedV1` outbox events atomically.
  */
 export class BookingService {
   /**
@@ -98,9 +87,10 @@ export class BookingService {
    * Concurrency: acquires Redis-backed distributed seat locks before
    * creating database records to prevent race conditions on seat availability.
    *
-   * @param userId -  The authenticated user's UUID.
+   * @param userId - The authenticated user's UUID.
    * @param dto - The validated `CreateBookingDto`.
-   * @returns - The persisted booking response summary.
+   * @param idempotencyKey - Unique idempotency key from request header.
+   * @returns The persisted booking response summary.
    */
   async createBooking(
     userId: string,
@@ -120,21 +110,17 @@ export class BookingService {
         },
         "Idempotency check passed for idempotency key, returning existing booking response.",
       );
-      const responseBody = existingCheck.responseBody as CreateBookingResponse;
-      return responseBody;
+      return existingCheck.responseBody as CreateBookingResponse;
     }
 
-    // 2. Synchronous gRPC pre-flight — schedule invariants, best-effort seat availability, seat inventory ID resolution, AND station sequence derivation in a single RPC call.
-    //    Surfaces SCHEDULE_NOT_FOUND / SCHEDULE_INACTIVE / TRAIN_ALREADY_DEPARTED / INVALID_SEAT_IDS / SEAT_UNAVAILABLE
-    //    before any booking row is written, no Redis lock, no outbox row.
+    // 2. Synchronous gRPC pre-flight — schedule invariants, seat availability, sequence derivation
     const { seatInventoryIds, fromSequence, toSequence } =
       await this.inventoryAdapter.validateBooking(dto);
 
-    // 3. Concurrency Lock: Acquire Redis distributed lock on seats & exact journey leg segments before DB transaction
+    // 3. Concurrency Lock: Acquire Redis distributed lock on seats & journey legs
     const bookingId = crypto.randomUUID();
     const lockTtlSeconds = Math.ceil(env.SEAT_HOLD_TTL_MS / 1000);
 
-    // Authoritatively derive journey leg sequence indices from inventory gRPC validation
     const legIndices =
       toSequence > fromSequence
         ? Array.from(
@@ -174,7 +160,7 @@ export class BookingService {
             return existing.responseBody as CreateBookingResponse;
           }
 
-          // 5. Generate PNR + insert booking row.
+          // 5. Generate PNR + insert booking row
           const pnr = generatePnr();
 
           const booking = await this.bookingRepository.create(
@@ -191,7 +177,7 @@ export class BookingService {
             tx,
           );
 
-          // 6. Persist seat rows + passenger rows.
+          // 6. Persist seat rows + passenger rows
           await this.bookingRepository.createSeats(
             dto.seatIds.map((seatId) => ({
               bookingId: booking.id,
@@ -211,7 +197,7 @@ export class BookingService {
             tx,
           );
 
-          // 7. Emit first BookingStatusChangedV1 row (PENDING with no previous status) to transactional outbox.
+          // 7. Emit first BookingStatusChangedV1 row (PENDING with no previous status)
           const statusChangedPayload: BookingStatusChangedV1Type = {
             eventId: crypto.randomUUID(),
             bookingId: booking.id,
@@ -232,8 +218,7 @@ export class BookingService {
             payload: statusChangedPayload,
           });
 
-          // 7b. Saga log row (HOLD_SEATS, PENDING) so the orchestrator can
-          //     advance the step to COMPLETED once the inventory reply lands.
+          // 7b. Initialize saga steps
           await this.sagaRepository.create(
             {
               bookingId: booking.id,
@@ -261,9 +246,7 @@ export class BookingService {
             tx,
           );
 
-          // 7d. Emit BOOKING_HOLD_SEATS_REQUESTED outbox event. Inventory's
-          //     hold-seats consumer will pick this up, allocate seats, and
-          //     emit INVENTORY_SEATS_HELD (or _FAILED) back to us.
+          // 7c. Emit BOOKING_HOLD_SEATS_REQUESTED outbox event
           const holdSeatsPayload: HoldSeatsRequestedV1Type = {
             eventId: crypto.randomUUID(),
             bookingId: booking.id,
@@ -286,7 +269,7 @@ export class BookingService {
             payload: holdSeatsPayload,
           });
 
-          // 8. Record the idempotency mapping so a retry returns the same booking.
+          // 8. Record the idempotency mapping
           const responseBody: CreateBookingResponse = {
             id: booking.id,
             pnr: booking.pnr,
@@ -295,7 +278,7 @@ export class BookingService {
 
           await this.bookingRepository.createIdempotencyKey(
             {
-              idempotencyKey: idempotencyKey,
+              idempotencyKey,
               bookingId: booking.id,
               responseBody: responseBody as unknown as Prisma.InputJsonValue,
             },
@@ -317,7 +300,6 @@ export class BookingService {
         { timeout: 10000 },
       );
     } catch (err) {
-      // Release seat locks if database transaction fails
       logger.warn(
         {
           module: "booking-service",
@@ -358,185 +340,124 @@ export class BookingService {
   }
 
   /**
-   * Returns a booking by id, enforcing the owner check. Throws
-   * `BOOKING_NOT_FOUND` (404) when the row is missing,
-   * `BOOKING_FORBIDDEN` (403) when the requesting user doesn't own it.
+   * Cancels a booking atomically in a single database transaction.
    *
+   * 1. Validates ownership and cancellability against state machine rules.
+   * 2. Checks if captured payment exists requiring a refund.
+   * 3. Transitions status to CANCELLED atomically via CAS and emits status change outbox event.
+   * 4. If refund required, records REFUND_PAYMENT saga log (PENDING) and emits
+   *    BookingRefundRequestedV1 to outbox.
+   *
+   * @param bookingId - The booking UUID.
    * @param userId - The authenticated user's UUID.
-   * @param bookingId - The booking UUID.
+   * @returns Cancellation summary with bookingId, status, and refund details or null.
    */
-  async findByIdForUser(userId: string, bookingId: string) {
-    const booking = await this.bookingRepository.findById(bookingId);
-    if (!booking) {
-      throw new ApiError(statusCode.notFound, ERROR_CODES.BOOKING_NOT_FOUND);
-    }
-    if (booking.userId !== userId) {
-      throw new ApiError(statusCode.forbidden, ERROR_CODES.BOOKING_FORBIDDEN);
-    }
-    return {
-      id: booking.id,
-      pnr: booking.pnr,
-      userId: booking.userId,
-      scheduleId: booking.scheduleId,
-      fromStationId: booking.fromStationId,
-      toStationId: booking.toStationId,
-      status: booking.status,
-      totalPrice: booking.totalPrice.toString(),
-      paymentOrderId: booking.paymentOrderId,
-      failureReason: booking.failureReason,
-      lockExpiresAt: booking.lockExpiresAt,
-      createdAt: booking.createdAt,
-      updatedAt: booking.updatedAt,
-    };
-  }
-
-  /**
-   * Loads a booking by its PNR string. Throws `BOOKING_NOT_FOUND` (404) when missing.
-   *
-   * @param pnr - The PNR string.
-   */
-  async findByPnr(pnr: string) {
-    const booking = await this.bookingRepository.findByPnr(pnr);
-    if (!booking) {
-      throw new ApiError(
-        statusCode.notFound,
-        ERROR_CODES.BOOKING_NOT_FOUND,
-        "No booking was found matching the provided PNR.",
-      );
-    }
-    return booking;
-  }
-
-  /**
-   * Marks the booking as `SEATS_HELD`. Called by the saga after
-   * inventory-service has confirmed the seat hold.
-   *
-   * @param bookingId - The booking UUID.
-   * @param lockExpiresAt - Expiration timestamp for the seat hold.
-   */
-  async markSeatsHeld(bookingId: string, lockExpiresAt: Date): Promise<void> {
-    await this.transition({
-      bookingId,
-      allowedFrom: BookingStatus.PENDING,
-      target: BookingStatus.SEATS_HELD,
-      updates: { lockExpiresAt },
-    });
-  }
-
-  /**
-   * Marks the booking as `PAYMENT_PENDING`. Called after payment-service
-   * has created the order and a payment URL is ready.
-   *
-   * @param bookingId - The booking UUID.
-   * @param paymentOrderId - Associated payment order UUID.
-   */
-  async markPaymentPending(
+  async cancelBooking(
     bookingId: string,
-    paymentOrderId: string,
-  ): Promise<void> {
-    await this.transition({
-      bookingId,
-      allowedFrom: BookingStatus.SEATS_HELD,
-      target: BookingStatus.PAYMENT_PENDING,
-      updates: { paymentOrderId },
-    });
-  }
+    userId: string,
+  ): Promise<CancelBookingResponse> {
+    const booking = await this.getOwnedBooking(bookingId, userId);
 
-  /**
-   * Marks the booking as `CONFIRMING` once payment-service reports a
-   * successful capture. The saga then commits the inventory-side seat
-   * confirmations before flipping to `CONFIRMED`.
-   *
-   * @param bookingId - The booking UUID.
-   */
-  async markConfirming(bookingId: string): Promise<void> {
-    await this.transition({
-      bookingId,
-      allowedFrom: BookingStatus.PAYMENT_PENDING,
-      target: BookingStatus.CONFIRMING,
-    });
-  }
-
-  /**
-   * Marks the booking as `CONFIRMED` after inventory-service confirms
-   * the seats have been promoted from HELD to CONFIRMED.
-   *
-   * @param bookingId - The booking UUID.
-   */
-  async markConfirmed(bookingId: string): Promise<void> {
-    await this.transition({
-      bookingId,
-      allowedFrom: BookingStatus.CONFIRMING,
-      target: BookingStatus.CONFIRMED,
-    });
-  }
-
-  /**
-   * Marks the booking as `FAILED`. The failure reason is persisted
-   * alongside the status change.
-   *
-   * @param bookingId - The booking UUID.
-   * @param reason - Reason describing why the booking failed.
-   */
-  async markFailed(bookingId: string, reason: string): Promise<void> {
-    await this.transition({
-      bookingId,
-      target: BookingStatus.FAILED,
-      updates: {
-        failureReason: reason,
-      },
-    });
-  }
-
-  /**
-   * Marks the booking as `EXPIRED`. Called by the seat-hold expiry
-   * sweeper when the inventory-side lock lapses.
-   *
-   * @param bookingId - The booking UUID.
-   */
-  async markExpired(bookingId: string): Promise<void> {
-    await this.transition({
-      bookingId,
-      target: BookingStatus.EXPIRED,
-    });
-  }
-
-  /**
-   * Initiates a cancellation: first flips the row to `CANCELLING` so
-   * downstream observers see the transition, then to `CANCELLED` once
-   * the inventory-side release is acknowledged.
-   *
-   * @param bookingId - The booking UUID.
-   * @param userId - The authenticated user's UUID.
-   */
-  async cancelBooking(bookingId: string, userId: string): Promise<void> {
-    const booking = await this.bookingRepository.findById(bookingId);
-    if (!booking) {
-      throw new ApiError(
-        statusCode.notFound,
-        ERROR_CODES.BOOKING_NOT_FOUND,
-        `Booking not found for bookingId=${bookingId}.`,
+    // Idempotent fast path: already cancelled
+    if (booking.status === BookingStatus.CANCELLED) {
+      const refundSaga = await this.sagaRepository.findByBookingAndStep(
+        bookingId,
+        SagaStep.REFUND_PAYMENT,
       );
+      return {
+        bookingId,
+        status: BookingStatus.CANCELLED,
+        refund: refundSaga
+          ? {
+              id: null,
+              status: mapSagaStatusToRefundStatus(refundSaga.status),
+              amount: booking.totalPrice
+                ? booking.totalPrice.toString()
+                : "0.00",
+              currency: "INR",
+            }
+          : null,
+      };
     }
-    if (booking.userId !== userId) {
+
+    // Validate cancellation eligibility against allowed states
+    if (!CANCELLABLE_BOOKING_STATUSES.includes(booking.status)) {
       throw new ApiError(
-        statusCode.forbidden,
-        ERROR_CODES.BOOKING_FORBIDDEN,
-        `Booking ${bookingId} does not belong to this user.`,
+        statusCode.conflict,
+        ERROR_CODES.CANCELLATION_NOT_ALLOWED,
+        `Booking in ${booking.status} status cannot be cancelled.`,
       );
     }
 
-    await this.transition({
-      bookingId,
-      target: BookingStatus.CANCELLING,
-      fromStates: [BookingStatus.CONFIRMED, BookingStatus.SEATS_HELD],
+    // Determine if captured payment requires a refund
+    const requiresRefund = await this.isPaymentCaptured(booking);
+    const sagaId = crypto.randomUUID();
+
+    await this.prisma.$transaction(async (tx) => {
+      // 1. Atomic transition to CANCELLED via state transition engine
+      await executeBookingTransition(
+        {
+          tx,
+          bookingRepository: this.bookingRepository,
+          outboxRepository: this.outboxRepository,
+        },
+        {
+          booking,
+          target: BookingStatus.CANCELLED,
+          allowedFrom: CANCELLABLE_BOOKING_STATUSES,
+        },
+      );
+
+      // 2. If refund required: record saga log + emit BookingRefundRequestedV1
+      if (requiresRefund && booking.paymentOrderId) {
+        await this.sagaRepository.upsert(
+          bookingId,
+          SagaStep.REFUND_PAYMENT,
+          SagaStatus.PENDING,
+          null,
+          tx,
+        );
+
+        const refundRequestedPayload: BookingRefundRequestedV1Type = {
+          eventId: crypto.randomUUID(),
+          bookingId: booking.id,
+          paymentId: booking.paymentOrderId,
+          paymentOrderId: booking.paymentOrderId,
+          amount: formatRupees(booking.totalPrice ?? "0.00"),
+          currency: "INR",
+          idempotencyKey: crypto.randomUUID(),
+          reason: "User-initiated cancellation",
+          sagaId,
+          createdAt: new Date(),
+        };
+
+        await this.outboxRepository.insert(tx, {
+          aggregateType: "Booking",
+          aggregateId: booking.id,
+          eventType: EVENT_TYPES.BOOKING_REFUND_REQUESTED,
+          topic: KAFKA_TOPICS.BOOKING_REFUND_REQUESTED,
+          payload: refundRequestedPayload,
+        });
+      }
     });
 
-    await this.transition({
+    logger.info(
+      { module: "booking-service", bookingId, requiresRefund, sagaId },
+      "Booking cancelled atomically and outbox event published.",
+    );
+
+    return {
       bookingId,
-      allowedFrom: BookingStatus.CANCELLING,
-      target: BookingStatus.CANCELLED,
-    });
+      status: BookingStatus.CANCELLED,
+      refund: requiresRefund
+        ? {
+            id: null,
+            status: RefundStatus.PENDING,
+            amount: formatRupees(booking.totalPrice ?? "0.00"),
+            currency: "INR",
+          }
+        : null,
+    };
   }
 
   /**
@@ -546,21 +467,19 @@ export class BookingService {
    * @param bookingId - The booking UUID.
    * @param userId - The authenticated user's UUID.
    */
-  async createPaymentOrder(bookingId: string, userId: string) {
-    const booking = await this.bookingRepository.findById(bookingId);
-    if (!booking) {
-      throw new ApiError(statusCode.notFound, ERROR_CODES.BOOKING_NOT_FOUND);
-    }
-    if (booking.userId !== userId) {
-      throw new ApiError(statusCode.forbidden, ERROR_CODES.BOOKING_FORBIDDEN);
-    }
+  async createPaymentOrder(
+    bookingId: string,
+    userId: string,
+  ): Promise<PayBookingResponse> {
+    const booking = await this.getOwnedBooking(bookingId, userId);
 
     let paymentOrder;
     try {
+      const amountPaise = rupeesToPaise(booking.totalPrice);
       paymentOrder = await this.paymentAdapter.createOrder({
         bookingId: booking.id,
         userId: booking.userId,
-        amount: Math.round(Number(booking.totalPrice) * 100),
+        amount: paiseToNumber(amountPaise),
         currency: "INR",
       });
     } catch (err) {
@@ -588,8 +507,23 @@ export class BookingService {
       .upsert(bookingId, SagaStep.CREATE_PAYMENT, SagaStatus.COMPLETED, null)
       .catch(() => {});
 
+    // Transition from SEATS_HELD to PAYMENT_PENDING if not already transitioned
     if (booking.status === BookingStatus.SEATS_HELD) {
-      await this.markPaymentPending(bookingId, paymentOrder.paymentOrderId);
+      await this.prisma.$transaction(async (tx) => {
+        await executeBookingTransition(
+          {
+            tx,
+            bookingRepository: this.bookingRepository,
+            outboxRepository: this.outboxRepository,
+          },
+          {
+            booking,
+            target: BookingStatus.PAYMENT_PENDING,
+            allowedFrom: [BookingStatus.SEATS_HELD],
+            updates: { paymentOrderId: paymentOrder.paymentOrderId },
+          },
+        );
+      });
     }
 
     return {
@@ -601,124 +535,63 @@ export class BookingService {
   }
 
   /**
-   * Simulates payment confirmation for a booking at `SEATS_HELD` or `PAYMENT_PENDING`.
-   * Drives the booking row through `CONFIRMING → CONFIRMED` and completes the saga step.
-   * Emits `BookingStatusChangedV1` outbox events for each status transition.
+   * Loads a booking and ensures the requesting user is the owner.
+   * Throws 404 (BOOKING_NOT_FOUND) when missing, 403 (BOOKING_FORBIDDEN) when unowned.
    *
    * @param bookingId - The booking UUID.
-   * @param userId - The authenticated user's UUID.
+   * @param userId - The requesting user UUID.
+   * @param tx - Optional transaction client.
+   * @returns The authenticated Booking record.
    */
-  async confirmPayment(bookingId: string, userId: string): Promise<void> {
-    const booking = await this.bookingRepository.findById(bookingId);
+  async getOwnedBooking(
+    bookingId: string,
+    userId: string,
+    tx?: Prisma.TransactionClient,
+  ) {
+    const booking = await this.bookingRepository.findById(bookingId, tx);
     if (!booking) {
       throw new ApiError(statusCode.notFound, ERROR_CODES.BOOKING_NOT_FOUND);
     }
     if (booking.userId !== userId) {
       throw new ApiError(statusCode.forbidden, ERROR_CODES.BOOKING_FORBIDDEN);
     }
-
-    if (booking.status === BookingStatus.SEATS_HELD) {
-      await this.markPaymentPending(bookingId, `PAY-${crypto.randomUUID()}`);
-    }
-
-    await this.markConfirming(bookingId);
-    await this.markConfirmed(bookingId);
-    await this.sagaRepository.upsert(
-      bookingId,
-      SagaStep.CONFIRM_SEATS,
-      SagaStatus.COMPLETED,
-      null,
-    );
+    return booking;
   }
 
   /**
-   * Executes a state transition for a booking record, enforcing state machine rules,
-   * optimistic concurrency control, optional metadata updates, and transactional outbox event publishing.
-   *
-   * @param args - Object containing state transition parameters.
-   * @param args.bookingId - The UUID of the booking to transition.
-   * @param args.target - The target `BookingStatus` after transition.
-   * @param args.allowedFrom - Optional single expected current status required for a valid transition.
-   * @param args.fromStates - Optional list of permitted starting statuses when valid from multiple states.
-   * @param args.updates - Optional partial column updates (`lockExpiresAt`, `paymentOrderId`, `failureReason`).
+   * Determines if a captured payment exists for this booking that requires a refund.
+   * For CONFIRMED bookings, payment is already captured.
+   * For PAYMENT_PENDING bookings, queries payment-service via gRPC to check authoritative status.
    */
-  private async transition({
-    bookingId,
-    allowedFrom,
-    target,
-    fromStates,
-    updates,
-  }: TransitionArgs): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
-      // Step 1: Find booking by ID in current transaction
-      const booking = await this.bookingRepository.findById(bookingId, tx);
-      if (!booking) {
+  private async isPaymentCaptured(booking: {
+    status: BookingStatus;
+    paymentOrderId: string | null;
+  }): Promise<boolean> {
+    if (booking.status === BookingStatus.CONFIRMED) {
+      return true;
+    }
+    if (
+      booking.status === BookingStatus.PAYMENT_PENDING &&
+      booking.paymentOrderId
+    ) {
+      try {
+        const orderStatus = await this.paymentAdapter.getOrderStatus({
+          paymentOrderId: booking.paymentOrderId,
+        });
+        return orderStatus.status === GetOrderStatusResponse_Status.CAPTURED;
+      } catch (err) {
         logger.warn(
-          { module: "booking-service", bookingId },
-          "Booking not found, cannot perform transition.",
+          {
+            module: "booking-service",
+            paymentOrderId: booking.paymentOrderId,
+            err,
+          },
+          "Failed to query payment status over gRPC during cancellation. Defaulting to false.",
         );
-        throw new ApiError(statusCode.notFound, ERROR_CODES.BOOKING_NOT_FOUND);
+        return false;
       }
-
-      // Step 2: Validate allowed source state transition
-      const permittedStates = fromStates ?? (allowedFrom ? [allowedFrom] : []);
-
-      if (
-        permittedStates.length > 0 &&
-        !permittedStates.includes(booking.status)
-      ) {
-        throw new ApiError(
-          statusCode.conflict,
-          ERROR_CODES.BOOKING_INVALID_TRANSITION,
-          `Booking ${bookingId} cannot transition from ${booking.status} to ${target}.`,
-        );
-      }
-
-      // Step 3: Compute incremented version number
-      const newVersion = booking.version + 1;
-
-      // Step 4: Apply optional column updates (e.g. lockExpiresAt, paymentOrderId, failureReason)
-      if (updates) {
-        await this.bookingRepository.update(bookingId, updates, tx);
-      }
-
-      // Step 5: Execute atomic Compare-And-Swap (CAS) status update & version bump
-      const updated = await this.bookingRepository.updateStatus(
-        bookingId,
-        target,
-        newVersion,
-        tx,
-      );
-
-      if (!updated) {
-        throw new ApiError(
-          statusCode.conflict,
-          ERROR_CODES.BOOKING_INVALID_TRANSITION,
-          `Booking ${bookingId} status CAS failed — version ${booking.version} was stale.`,
-        );
-      }
-
-      // Step 6: Emit BookingStatusChangedV1 event to transactional outbox
-      const statusChangedPayload: BookingStatusChangedV1Type = {
-        eventId: crypto.randomUUID(),
-        bookingId: booking.id,
-        pnr: booking.pnr,
-        userId: booking.userId,
-        previousStatus:
-          booking.status as BookingStatusChangedV1Type["previousStatus"],
-        currentStatus: target as BookingStatusChangedV1Type["currentStatus"],
-        version: newVersion,
-        updatedAt: new Date(),
-      };
-
-      await this.outboxRepository.insert(tx, {
-        aggregateType: "Booking",
-        aggregateId: booking.id,
-        eventType: EVENT_TYPES.BOOKING_STATUS_CHANGED,
-        topic: KAFKA_TOPICS.BOOKING_STATUS_CHANGED,
-        payload: statusChangedPayload,
-      });
-    });
+    }
+    return false;
   }
 }
 

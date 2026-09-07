@@ -14,6 +14,28 @@ datasource db {
 // Enums
 // ============================================================
 
+enum CoachType {
+  GEN
+  SL
+  AC_3E
+  AC_3A
+  AC_2A
+  AC_1A
+  CC
+  EC
+}
+
+enum Quota {
+  GENERAL
+  LADIES
+  SENIOR_CITIZEN
+  PERSON_WITH_DISABILITY
+  TATKAL
+  PREMIUM_TATKAL
+  DEFENCE
+  FOREIGN_TOURIST
+}
+
 enum ScheduleInventoryStatus {
   ACTIVE
   CANCELLED
@@ -73,12 +95,14 @@ model SeatInventory {
   id          String   @id @default(uuid())
   scheduleId  String   @map("schedule_id")
   trainId     String   @map("train_id")
-  coachId     String   @map("coach_id")
-  coachNumber String   @map("coach_number")
-  seatId      String   @map("seat_id")
-  seatNumber  Int      @map("seat_number")
-  seatType    SeatType @map("seat_type")
-  pricePerKm  Decimal  @default(0.0) @map("price_per_km") @db.Decimal(10, 4)
+  coachId     String    @map("coach_id")
+  coachNumber String    @map("coach_number")
+  coachType   CoachType @default(SL) @map("coach_type")
+  seatId      String    @map("seat_id")
+  seatNumber  Int       @map("seat_number")
+  seatType    SeatType  @map("seat_type")
+  quota       Quota     @default(GENERAL) @map("quota")
+  pricePerKm  Decimal   @default(0.0) @map("price_per_km") @db.Decimal(10, 4)
   version     Int      @default(0)
 
   schedule ScheduleInventory @relation(fields: [scheduleId], references: [scheduleId], onDelete: Cascade)

@@ -108,7 +108,10 @@ export class NotificationContainer {
       logger,
     );
 
-    logger.info({ module: "notification-container" }, "Dependencies wired.");
+    logger.info(
+      { module: "notification-container" },
+      "Application components & container initialized.",
+    );
   }
 
   /**

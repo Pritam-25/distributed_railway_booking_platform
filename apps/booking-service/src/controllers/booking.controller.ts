@@ -63,9 +63,9 @@ export class BookingController {
     const userId = this.requireUserId(req);
     const { bookingId } = req.params as unknown as BookingIdParamDto;
 
-    const booking = await this.bookingService.findByIdForUser(
-      userId,
+    const booking = await this.bookingService.getOwnedBooking(
       bookingId,
+      userId,
     );
 
     res
@@ -87,25 +87,30 @@ export class BookingController {
     const userId = this.requireUserId(req);
     const { bookingId } = req.params as unknown as BookingIdParamDto;
 
-    await this.bookingService.cancelBooking(bookingId, userId);
-    const booking = await this.bookingService.findByIdForUser(
-      userId,
-      bookingId,
-    );
+    const result = await this.bookingService.cancelBooking(bookingId, userId);
 
     res
-      .status(statusCode.success)
-      .json(successResponse("Booking cancelled successfully", booking));
+      .status(statusCode.accepted)
+      .json(
+        successResponse(
+          result.refund
+            ? "Booking cancelled successfully. Refund is being processed."
+            : "Booking cancelled successfully.",
+          result,
+        ),
+      );
   }
 
   /**
    * `POST /api/v1/bookings/:bookingId/pay`
    *
-   * Simulates successful payment for a booking at `SEATS_HELD` / `PAYMENT_PENDING`.
-   * Drives the booking row through `CONFIRMING` → `CONFIRMED` and emits `BookingStatusChangedV1` events.
+   * Creates a payment order for a booking at `SEATS_HELD` / `PAYMENT_PENDING`.
+   * If the booking is `SEATS_HELD`, it also transitions the row to
+   * `PAYMENT_PENDING`. Confirmation happens later, when payment-service
+   * emits `PaymentSuccessV1`.
    *
    * @param req - Express request with `req.params.bookingId`.
-   * @param res - Express response returning the confirmed booking.
+   * @param res - Express response returning the created payment order.
    */
   async payBooking(req: Request, res: Response): Promise<void> {
     const userId = this.requireUserId(req);

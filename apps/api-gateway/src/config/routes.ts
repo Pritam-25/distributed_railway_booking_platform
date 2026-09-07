@@ -12,7 +12,6 @@ import type { RateLimitPresetName } from "@ratelimit";
  * - `admin`    — throws 401 if no valid admin JWT
  */
 export type AuthLevel = "none" | "required" | "optional" | "admin";
-
 /**
  * Configuration for a single gateway route.
  *
@@ -43,6 +42,12 @@ export interface RouteConfig {
    * gateway returns 405 before invoking the proxy.
    */
   methods?: readonly string[];
+
+  /**
+   * Optional flag indicating if this route includes long-lived SSE / streaming endpoints.
+   * Disables circuit breaker timeout so streams don't prematurely trip the breaker.
+   */
+  isStreaming?: boolean;
 }
 
 /**
@@ -104,6 +109,14 @@ export const routes: readonly RouteConfig[] = [
     upstream: upstreams.booking,
     auth: "required",
     rateLimit: "default",
+    isStreaming: true,
+  },
+  {
+    prefix: "/api/v1/schedules",
+    upstream: upstreams.booking,
+    auth: "optional",
+    rateLimit: "default",
+    isStreaming: true,
   },
   {
     prefix: "/api/v1/search",

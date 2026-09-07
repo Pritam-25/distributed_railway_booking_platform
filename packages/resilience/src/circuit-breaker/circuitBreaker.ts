@@ -131,13 +131,18 @@ export class CircuitBreaker {
    * Executes a given operation under the protection of the circuit breaker.
    *
    * @param fn The function to execute.
+   * @param options Optional per-execution configuration.
+   * @param options.timeoutMs Optional execution timeout in ms. Set to 0 to disable timeout (e.g. for streaming endpoints).
    * @returns The resolved value of the executed function.
    * @throws {CircuitBreakerOpenError} If the circuit breaker is OPEN.
    * @throws {CircuitBreakerHalfOpenError} If the circuit breaker is HALF_OPEN and max concurrent trials are reached.
    * @throws {CircuitBreakerTimeoutError} If the operation takes longer than the configured timeout limit.
    * @throws {Error} Any error thrown by the executed function.
    */
-  public async execute<T>(fn: () => Promise<T> | T): Promise<T> {
+  public async execute<T>(
+    fn: () => Promise<T> | T,
+    options?: { timeoutMs?: number },
+  ): Promise<T> {
     this.checkRecovery();
 
     if (this.state === CircuitBreakerState.OPEN) {
@@ -152,7 +157,7 @@ export class CircuitBreaker {
       this.activeTrialsCount++;
     }
 
-    const timeoutMs = this.options.timeoutMs ?? 5000;
+    const timeoutMs = options?.timeoutMs ?? this.options.timeoutMs ?? 5000;
     let timerId: NodeJS.Timeout | undefined;
 
     try {

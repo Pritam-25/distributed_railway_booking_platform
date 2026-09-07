@@ -59,7 +59,7 @@ await runBootstrap({
       serviceName: env.SERVICE_NAME,
       afterListen: async () => {
         const container = PaymentContainer.getInstance();
-        container.start();
+        await container.start();
 
         await startGrpcServer(env.GRPC_PORT, container.paymentGrpcHandler);
       },

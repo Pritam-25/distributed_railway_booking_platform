@@ -114,8 +114,12 @@ export class ScheduleRepository {
   /**
    * Retrieves a list of schedules matching the filters.
    *
-   * @param filters Filtering parameters (trainId, status).
-   * @param pagination Pagination skip/take values.
+   * @param filters - Filtering parameters.
+   * @param filters.trainId - Optional train ID filter.
+   * @param filters.status - Optional schedule status filter.
+   * @param pagination - Pagination skip/take values.
+   * @param pagination.skip - Number of records to skip.
+   * @param pagination.take - Number of records to take.
    * @returns A promise resolving to an array of schedules.
    */
   async listSchedules(
@@ -144,7 +148,9 @@ export class ScheduleRepository {
   /**
    * Counts the total number of schedules matching the given filters.
    *
-   * @param filters Filtering parameters.
+   * @param filters - Filtering parameters.
+   * @param filters.trainId - Optional train ID filter.
+   * @param filters.status - Optional schedule status filter.
    * @returns A promise resolving to the matching schedule count.
    */
   async countSchedules(filters: {

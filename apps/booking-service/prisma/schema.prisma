@@ -53,6 +53,15 @@ enum PassengerGender {
   OTHER
 }
 
+enum BerthPreference {
+  LOWER
+  MIDDLE
+  UPPER
+  SIDE_LOWER
+  SIDE_UPPER
+  NO_PREFERENCE
+}
+
 enum BookingQuota {
   GENERAL
   LADIES
@@ -151,7 +160,7 @@ model BookingPassenger {
   fullName        String                @map("full_name")
   age             Int
   gender          PassengerGender
-  berthPreference String?               @map("berth_preference")
+  berthPreference BerthPreference?      @map("berth_preference")
   idType          IdentityDocumentType? @map("id_type")
   idNumber        String?               @map("id_number")
 

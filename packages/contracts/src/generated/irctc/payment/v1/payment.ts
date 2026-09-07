@@ -48,12 +48,67 @@ export interface GetOrderStatusResponse {
   razorpayOrderId: string;
   /** Razorpay payment ID (populated once captured). */
   razorpayPaymentId: string;
-  /** Current payment status (e.g. "CAPTURED", "FAILED", "PENDING"). */
-  status: string;
+  status: GetOrderStatusResponse_Status;
   /** Amount in smallest currency unit (e.g. 125050 paise for 1250.50 INR). */
   amount: number;
   /** Currency code. */
   currency: string;
+}
+
+/** Current payment status (e.g. "CAPTURED", "FAILED", "PENDING"). */
+export enum GetOrderStatusResponse_Status {
+  CREATED = 0,
+  PENDING = 1,
+  CAPTURED = 2,
+  FAILED = 3,
+  REFUNDED = 4,
+  UNRECOGNIZED = -1,
+}
+
+export function getOrderStatusResponse_StatusFromJSON(
+  object: any,
+): GetOrderStatusResponse_Status {
+  switch (object) {
+    case 0:
+    case "CREATED":
+      return GetOrderStatusResponse_Status.CREATED;
+    case 1:
+    case "PENDING":
+      return GetOrderStatusResponse_Status.PENDING;
+    case 2:
+    case "CAPTURED":
+      return GetOrderStatusResponse_Status.CAPTURED;
+    case 3:
+    case "FAILED":
+      return GetOrderStatusResponse_Status.FAILED;
+    case 4:
+    case "REFUNDED":
+      return GetOrderStatusResponse_Status.REFUNDED;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return GetOrderStatusResponse_Status.UNRECOGNIZED;
+  }
+}
+
+export function getOrderStatusResponse_StatusToJSON(
+  object: GetOrderStatusResponse_Status,
+): string {
+  switch (object) {
+    case GetOrderStatusResponse_Status.CREATED:
+      return "CREATED";
+    case GetOrderStatusResponse_Status.PENDING:
+      return "PENDING";
+    case GetOrderStatusResponse_Status.CAPTURED:
+      return "CAPTURED";
+    case GetOrderStatusResponse_Status.FAILED:
+      return "FAILED";
+    case GetOrderStatusResponse_Status.REFUNDED:
+      return "REFUNDED";
+    case GetOrderStatusResponse_Status.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
 }
 
 function createBaseCreateOrderRequest(): CreateOrderRequest {
@@ -351,7 +406,7 @@ function createBaseGetOrderStatusResponse(): GetOrderStatusResponse {
     paymentOrderId: "",
     razorpayOrderId: "",
     razorpayPaymentId: "",
-    status: "",
+    status: 0,
     amount: 0,
     currency: "",
   };
@@ -371,8 +426,8 @@ export const GetOrderStatusResponse: MessageFns<GetOrderStatusResponse> = {
     if (message.razorpayPaymentId !== "") {
       writer.uint32(26).string(message.razorpayPaymentId);
     }
-    if (message.status !== "") {
-      writer.uint32(34).string(message.status);
+    if (message.status !== 0) {
+      writer.uint32(32).int32(message.status);
     }
     if (message.amount !== 0) {
       writer.uint32(40).int64(message.amount);
@@ -419,11 +474,11 @@ export const GetOrderStatusResponse: MessageFns<GetOrderStatusResponse> = {
           continue;
         }
         case 4: {
-          if (tag !== 34) {
+          if (tag !== 32) {
             break;
           }
 
-          message.status = reader.string();
+          message.status = reader.int32() as any;
           continue;
         }
         case 5: {
@@ -468,7 +523,9 @@ export const GetOrderStatusResponse: MessageFns<GetOrderStatusResponse> = {
         : isSet(object.razorpay_payment_id)
           ? globalThis.String(object.razorpay_payment_id)
           : "",
-      status: isSet(object.status) ? globalThis.String(object.status) : "",
+      status: isSet(object.status)
+        ? getOrderStatusResponse_StatusFromJSON(object.status)
+        : 0,
       amount: isSet(object.amount) ? globalThis.Number(object.amount) : 0,
       currency: isSet(object.currency)
         ? globalThis.String(object.currency)
@@ -487,8 +544,8 @@ export const GetOrderStatusResponse: MessageFns<GetOrderStatusResponse> = {
     if (message.razorpayPaymentId !== "") {
       obj.razorpayPaymentId = message.razorpayPaymentId;
     }
-    if (message.status !== "") {
-      obj.status = message.status;
+    if (message.status !== 0) {
+      obj.status = getOrderStatusResponse_StatusToJSON(message.status);
     }
     if (message.amount !== 0) {
       obj.amount = Math.round(message.amount);

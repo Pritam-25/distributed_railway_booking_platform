@@ -2,12 +2,11 @@ import type { Request, Response } from "express";
 import { ApiError, COMMON_ERROR_CODES } from "@irctc/errors";
 import { statusCode } from "@irctc/http";
 import { logger } from "@irctc/logger";
-import type { Redis } from "@irctc/redis";
 
 import type { BookingRepository } from "@repository";
 import { ERROR_CODES } from "@utils/errors";
 
-import { bookingStatusChannel } from "./booking-event-broadcaster.js";
+import type { BookingSseManager } from "../connection-managers/booking-sse-manager.js";
 
 /** Heartbeat cadence — keeps the connection alive through nginx + corporate proxies. */
 const HEARTBEAT_INTERVAL_MS = 30_000;
@@ -18,23 +17,20 @@ const HEARTBEAT_INTERVAL_MS = 30_000;
  * ### Responsibilities
  * - Verify the booking exists and is owned by the authenticated user.
  * - Open a `text/event-stream` response.
- * - Forward every Redis pub/sub message on `booking:status:<bookingId>`.
+ * - Register socket with {@link BookingSseManager} for real-time invalidation signals.
  * - Emit periodic `: keepalive` comments to defeat intermediate timeouts.
- * - Clean up the subscriber on `req.close` / `req.error`.
+ * - Clean up local registration on `req.close` / `req.error`.
  */
 export class BookingEventsController {
   /**
    * Creates an instance of BookingEventsController.
    *
    * @param bookingRepository - Booking aggregate repository (used for ownership check).
-   * @param createSubscriber - Factory that returns a fresh `ioredis`
-   *   connection dedicated to pub/sub subscription. `ioredis` blocks
-   *   the primary client connection while in subscribe mode, so a
-   *   duplicated connection per browser tab is mandatory.
+   * @param sseManager - Connection registry managing local SSE sockets.
    */
   constructor(
     private readonly bookingRepository: BookingRepository,
-    private readonly createSubscriber: () => Redis,
+    private readonly sseManager: BookingSseManager,
   ) {}
 
   /**
@@ -88,66 +84,44 @@ export class BookingEventsController {
     //    immediately even if no events arrive for a while.
     res.write(`event: connected\ndata: ${JSON.stringify({ bookingId })}\n\n`);
 
-    // 4. Subscribe to the per-booking Redis channel on a fresh
-    //    connection. `ioredis` blocks the primary connection while in
-    //    subscribe mode, so a separate connection per tab is required.
-    const subscriber = this.createSubscriber();
-    const channel = bookingStatusChannel(bookingId);
-    await subscriber.subscribe(channel);
+    // 4. Register connection with process-local SSE manager.
+    this.sseManager.register(bookingId, res);
+    logger.info(
+      { module: "booking-events-controller", bookingId, userId },
+      "SSE booking-events stream opened",
+    );
 
-    const onMessage = (chan: string, message: string): void => {
-      if (chan !== channel) return;
-      // `res.write` may throw if the response has already been closed
-      // (client navigated away). Catch and log; cleanup runs via `req.close`.
-      try {
-        res.write(`event: booking.status_changed\ndata: ${message}\n\n`);
-      } catch (err) {
-        logger.warn(
-          { module: "booking-events-controller", bookingId, err },
-          "Failed to write SSE event; client likely disconnected.",
-        );
-      }
-    };
-    subscriber.on("message", onMessage);
+    let cleaned = false;
 
     // 5. Periodic keepalive — `: keepalive\n\n` is an SSE comment line
     //    that the browser ignores but proxies use to keep the socket open.
     const heartbeat = setInterval(() => {
       try {
+        if (res.writableEnded || res.destroyed) {
+          cleanup();
+          return;
+        }
         res.write(`: keepalive\n\n`);
       } catch {
-        // Response is already closed; the req.close handler will clean up.
+        cleanup();
       }
     }, HEARTBEAT_INTERVAL_MS);
     heartbeat.unref?.();
 
     // 6. Cleanup on disconnect. Both `close` and `error` events fire on
-    //    client navigation / network failure; idempotent because the
-    //    handler detaches itself.
-    let cleaned = false;
-    const cleanup = async (): Promise<void> => {
+    //    client navigation / network failure.
+    const cleanup = (): void => {
       if (cleaned) return;
       cleaned = true;
       clearInterval(heartbeat);
-      subscriber.off("message", onMessage);
-      try {
-        await subscriber.unsubscribe(channel);
-      } catch {
-        // Best-effort: if Redis is down the disconnect() below still
-        // tears down the local connection.
-      }
-      subscriber.disconnect();
+      this.sseManager.unregister(bookingId, res);
       logger.info(
         { module: "booking-events-controller", bookingId, userId },
         "SSE booking-events stream closed",
       );
     };
 
-    req.on("close", () => {
-      void cleanup();
-    });
-    req.on("error", () => {
-      void cleanup();
-    });
+    req.on("close", cleanup);
+    req.on("error", cleanup);
   }
 }

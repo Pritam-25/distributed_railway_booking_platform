@@ -1,7 +1,15 @@
 import { Router } from "express";
-import { asyncHandler, validateSchema } from "@irctc/middleware";
+import {
+  asyncHandler,
+  validateSchema,
+  validateParams,
+} from "@irctc/middleware";
 import { PaymentContainer } from "@container";
-import { verifyPaymentSchema } from "@dto";
+import {
+  verifyPaymentSchema,
+  paymentOrderIdParamSchema,
+  refundPaymentRequestSchema,
+} from "@dto";
 
 const router: Router = Router();
 
@@ -14,6 +22,19 @@ router.post(
   validateSchema(verifyPaymentSchema),
   asyncHandler((req, res) =>
     PaymentContainer.getInstance().paymentController.verifyPayment(req, res),
+  ),
+);
+
+/**
+ * Initiate a payment refund directly via HTTP.
+ * Endpoint: POST /api/v1/payments/:paymentOrderId/refund
+ */
+router.post(
+  "/:paymentOrderId/refund",
+  validateParams(paymentOrderIdParamSchema),
+  validateSchema(refundPaymentRequestSchema),
+  asyncHandler((req, res) =>
+    PaymentContainer.getInstance().paymentController.refundPayment(req, res),
   ),
 );
 

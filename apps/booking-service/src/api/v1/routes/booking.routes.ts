@@ -1,5 +1,4 @@
 import { Router } from "express";
-
 import {
   trustGatewayHeaders,
   asyncHandler,
@@ -7,9 +6,7 @@ import {
   validateParams,
   validateSchema,
 } from "@irctc/middleware";
-
 import { bookingController } from "@container";
-
 import {
   bookingIdParamSchema,
   createBookingHeadersSchema,

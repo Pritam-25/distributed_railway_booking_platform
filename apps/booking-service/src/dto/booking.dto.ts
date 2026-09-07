@@ -1,5 +1,6 @@
 import "@irctc/openapi";
 import { PassengerGender, BookingStatus } from "@generated/prisma/client.js";
+import { RefundStatus } from "@irctc/contracts";
 import { z } from "zod";
 
 /**
@@ -127,3 +128,30 @@ export const payBookingResponseSchema = z
   .openapi("PayBookingResponse");
 
 export type PayBookingResponse = z.infer<typeof payBookingResponseSchema>;
+
+export const cancelBookingRefundSchema = z
+  .object({
+    id: z.string().nullable().optional().openapi({
+      example: "rfnd_mock_12345",
+      description: "Refund identifier if assigned",
+    }),
+    status: z.enum(RefundStatus).openapi({ example: RefundStatus.PENDING }),
+    amount: z.string().openapi({ example: "2450.00" }),
+    currency: z.string().default("INR").openapi({ example: "INR" }),
+  })
+  .openapi("CancelBookingRefund");
+
+export const cancelBookingResponseSchema = z
+  .object({
+    bookingId: uuidSchema("Booking ID"),
+    status: z.literal(BookingStatus.CANCELLED).openapi({
+      example: BookingStatus.CANCELLED,
+    }),
+    refund: cancelBookingRefundSchema.nullable().openapi({
+      description:
+        "Refund details if a captured payment existed, or null if no refund required",
+    }),
+  })
+  .openapi("CancelBookingResponse");
+
+export type CancelBookingResponse = z.infer<typeof cancelBookingResponseSchema>;
